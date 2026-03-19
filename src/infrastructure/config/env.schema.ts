@@ -6,6 +6,10 @@ export const envSchema = z.object({
     .enum(['development', 'test', 'production'])
     .default('development'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  CORS_ORIGINS: z.string().default('http://localhost:3000'),
+  LOG_LEVEL: z
+    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
+    .default('info'),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -37,4 +37,12 @@ export class ConfigService {
   get isDevelopment(): boolean {
     return this.env.NODE_ENV === 'development';
   }
+
+  get corsOrigins(): string[] {
+    return this.env.CORS_ORIGINS.split(',').map((o) => o.trim());
+  }
+
+  get logLevel(): string {
+    return this.env.LOG_LEVEL;
+  }
 }

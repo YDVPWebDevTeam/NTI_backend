@@ -12,6 +12,10 @@ async function bootstrap() {
     new FastifyAdapter(),
   );
 
+  app.enableCors({
+    origin: 'http://localhost:3000',
+  });
+
   const config = new DocumentBuilder()
     .setTitle('NTI Backend')
     .setDescription('NTI Backend API')

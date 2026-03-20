@@ -5,12 +5,15 @@ import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from './infrastructure/config';
 import { DatabaseModule } from './infrastructure/database';
 import { LoggerModule } from './infrastructure/logger/logger.module';
+import { QueueModule } from './infrastructure/queue';
+import { ProductsModule } from './products/products.module.js';
 
 @Module({
   imports: [
     ConfigModule,
     DatabaseModule,
     LoggerModule,
+    QueueModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -20,6 +23,7 @@ import { LoggerModule } from './infrastructure/logger/logger.module';
           : { ttl: 60_000, limit: 30000 },
       ],
     }),
+    ProductsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -11,7 +11,16 @@ import { ConfigModule, ConfigService } from '../config';
         pinoHttp: {
           level: config.logLevel,
           transport: config.isDevelopment
-            ? { target: 'pino-pretty', options: { singleLine: true } }
+            ? {
+                target: 'pino-pretty',
+                options: {
+                  colorize: true,
+                  singleLine: true,
+                  translateTime: 'SYS:HH:MM:ss',
+                  ignore: 'pid,hostname',
+                  messageFormat: '[{context}] {msg}',
+                },
+              }
             : undefined,
           customProps: (req: { headers: Record<string, unknown> }) => ({
             correlationId: req.headers['x-correlation-id'] as

@@ -1,12 +1,22 @@
 services:
   app:
-    build: .
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npx prisma generate && npx prisma migrate deploy && npm run start:dev"
     ports:
       - '3001:3001'
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/nti_db?schema=public
+      REDIS_HOST: redis
+    volumes:
+      - .:/app
+      - /app/node_modules
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   postgres:
@@ -25,5 +35,18 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
+  redis_data:

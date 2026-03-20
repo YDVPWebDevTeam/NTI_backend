@@ -1,5 +1,5 @@
-import { PrismaClient } from '../../../generated/prisma/client.js';
-import { PrismaService } from './prisma.service.js';
+import { PrismaClient } from '../../../generated/prisma/client';
+import { PrismaService } from './prisma.service';
 
 export type FindManyArgs<TWhereInput, TOrderByInput, TWhereUniqueInput> = {
   where?: TWhereInput;

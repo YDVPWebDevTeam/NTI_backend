@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from './infrastructure/config';
 import { DatabaseModule } from './infrastructure/database';
 import { LoggerModule } from './infrastructure/logger/logger.module';
+import { QueueModule } from './infrastructure/queue';
 import { ProductsModule } from './products/products.module.js';
 
 @Module({
@@ -12,6 +13,7 @@ import { ProductsModule } from './products/products.module.js';
     ConfigModule,
     DatabaseModule,
     LoggerModule,
+    QueueModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

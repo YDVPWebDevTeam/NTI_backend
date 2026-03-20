@@ -45,4 +45,12 @@ export class ConfigService {
   get logLevel(): string {
     return this.env.LOG_LEVEL;
   }
+
+  get redisHost(): string {
+    return this.env.REDIS_HOST;
+  }
+
+  get redisPort(): number {
+    return this.env.REDIS_PORT;
+  }
 }

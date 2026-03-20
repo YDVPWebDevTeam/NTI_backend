@@ -8,7 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ProductsService } from './products.service.js';
+import { ProductsService } from './products.service';
 import type {
   ProductCreateInput,
   ProductUpdateInput,

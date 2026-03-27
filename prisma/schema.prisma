@@ -11,12 +11,111 @@ datasource db {
   provider = "postgresql"
 }
 
-model Product {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  price       Decimal
-  stock       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+enum UserRole {
+  STUDENT
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
+model User {
+  id           String @id @default(uuid())
+  name         String
+  email        String @unique
+  passwordHash String
+
+  refreshTokens RefreshToken[]
+
+  role UserRole @default(STUDENT)
+
+  status UserStatus @default(PENDING)
+
+  isEmailConfirmed Boolean @default(false) @map("isConfirmed")
+
+  confirmationToken EmailVerificationToken?
+
+  isAdminConfirmed Boolean @default(false) @map("isAdminConfirmed")
+
+  teams TeamMember[]
+
+  leadOfTeams Team[] @relation("TeamLead")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TeamMember {
+  userId String
+  teamId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([userId, teamId])
+}
+
+model Team {
+  id   String @id @default(uuid())
+  name String
+
+  leaderId String
+  leader User @relation("TeamLead", fields: [leaderId], references: [id])
+
+  members TeamMember[]
+
+  invitations Invitation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lockedAt DateTime? // When a team is locked, it cannot be modified (e.g., members cannot be added or removed) 
+  archivedAt DateTime?
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+}
+
+model Invitation {
+  id    String @id @default(uuid())
+  email String
+
+  token String @unique
+
+  status InvitationStatus @default(PENDING)
+
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+}
+
+model EmailVerificationToken {
+  id    String @id @default(uuid())
+  token String @unique
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  acceptedAt DateTime?
+}
+
+model RefreshToken {
+  id    String @id @default(uuid())
+  token String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
 }

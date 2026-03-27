@@ -53,4 +53,24 @@ export class ConfigService {
   get redisPort(): number {
     return this.env.REDIS_PORT;
   }
+
+  get jwtAccessSecret(): string {
+    return this.env.JWT_ACCESS_SECRET;
+  }
+
+  get jwtRefreshSecret(): string {
+    return this.env.JWT_REFRESH_SECRET;
+  }
+
+  get jwtAccessExpiration(): string {
+    return this.env.JWT_ACCESS_EXPIRATION;
+  }
+
+  get jwtRefreshExpiration(): string {
+    return this.env.JWT_REFRESH_EXPIRATION;
+  }
+
+  get hashRounds(): number {
+    return this.env.HASH_ROUNDS;
+  }
 }

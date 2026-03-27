@@ -17,6 +17,21 @@ export const envSchema = z.object({
   SMTP_USER: z.string(),
   SMTP_PASSWORD: z.string(),
   SMTP_FROM: z.string(),
+  JWT_ACCESS_SECRET: z.string(),
+  JWT_REFRESH_SECRET: z.string(),
+  JWT_ACCESS_EXPIRATION: z
+    .string()
+    .regex(
+      /^\d+[smhd]$/,
+      'JWT_ACCESS_EXPIRATION must be a valid duration (e.g., 15m, 1h)',
+    ),
+  JWT_REFRESH_EXPIRATION: z
+    .string()
+    .regex(
+      /^\d+[smhd]$/,
+      'JWT_REFRESH_EXPIRATION must be a valid duration (e.g., 7d, 1h)',
+    ),
+  HASH_ROUNDS: z.coerce.number().int().positive().default(10),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -11,12 +11,101 @@ datasource db {
   provider = "postgresql"
 }
 
-model Product {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  price       Decimal
-  stock       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+enum UserRole {
+  STUDENT
+  STUDENT_LEAD
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
+model User {
+  id    String @id @default(uuid())
+  name  String
+  email String @unique
+  passwordHash String
+
+  refreshTokens RefreshToken[]
+
+  role UserRole @default(STUDENT)
+
+  status UserStatus @default(PENDING)
+
+  isEmailConfirmed Boolean @default(false) @map("isConfirmed")
+
+  confirmationToken EmailVerificationToken?
+
+  isAdminConfirmed Boolean @default(false) @map("isAdminConfirmed")
+
+  teamId String?
+  team Team? @relation("TeamMembers", fields: [teamId], references: [id])
+
+  leadOfTeam Team? @relation("TeamLead")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Team {
+  id   String @id @default(uuid())
+  name String
+
+  leaderId String @unique
+  leader User @relation("TeamLead", fields: [leaderId], references: [id])
+
+  members User[] @relation("TeamMembers")
+
+  invitations Invitation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+}
+
+model Invitation {
+  id String @id @default(uuid())
+  email String
+
+  token String @unique
+
+  status InvitationStatus @default(PENDING)
+
+  teamId String
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade) 
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP + INTERVAL '72 HOURS'"))
+  revokedAt DateTime?
+}
+
+model EmailVerificationToken {
+  id String @id @default(uuid())
+  token String @unique
+
+  userId String @unique
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP + INTERVAL '24 HOURS'"))
+  acceptedAt DateTime?
+}
+
+model RefreshToken {
+  id String @id @default(uuid())
+  token String @unique
+
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP + INTERVAL '7 DAYS'"))
+  revokedAt DateTime?
 }

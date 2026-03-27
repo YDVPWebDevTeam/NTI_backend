@@ -13,7 +13,6 @@ datasource db {
 
 enum UserRole {
   STUDENT
-  STUDENT_LEAD
   ADMIN
 }
 
@@ -24,9 +23,9 @@ enum UserStatus {
 }
 
 model User {
-  id    String @id @default(uuid())
-  name  String
-  email String @unique
+  id           String @id @default(uuid())
+  name         String
+  email        String @unique
   passwordHash String
 
   refreshTokens RefreshToken[]
@@ -41,28 +40,39 @@ model User {
 
   isAdminConfirmed Boolean @default(false) @map("isAdminConfirmed")
 
-  teamId String?
-  team Team? @relation("TeamMembers", fields: [teamId], references: [id])
+  teams TeamMember[]
 
-  leadOfTeam Team? @relation("TeamLead")
+  leadOfTeams Team[] @relation("TeamLead")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model TeamMember {
+  userId String
+  teamId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([userId, teamId])
 }
 
 model Team {
   id   String @id @default(uuid())
   name String
 
-  leaderId String @unique
+  leaderId String
   leader User @relation("TeamLead", fields: [leaderId], references: [id])
 
-  members User[] @relation("TeamMembers")
+  members TeamMember[]
 
   invitations Invitation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  lockedAt DateTime? // When a team is locked, it cannot be modified (e.g., members cannot be added or removed) 
+  archivedAt DateTime?
 }
 
 enum InvitationStatus {
@@ -71,7 +81,7 @@ enum InvitationStatus {
 }
 
 model Invitation {
-  id String @id @default(uuid())
+  id    String @id @default(uuid())
   email String
 
   token String @unique
@@ -79,33 +89,33 @@ model Invitation {
   status InvitationStatus @default(PENDING)
 
   teamId String
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade) 
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  expiresAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP + INTERVAL '72 HOURS'"))
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
   revokedAt DateTime?
 }
 
 model EmailVerificationToken {
-  id String @id @default(uuid())
+  id    String @id @default(uuid())
   token String @unique
 
   userId String @unique
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  expiresAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP + INTERVAL '24 HOURS'"))
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
   acceptedAt DateTime?
 }
 
 model RefreshToken {
-  id String @id @default(uuid())
+  id    String @id @default(uuid())
   token String @unique
 
   userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  expiresAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP + INTERVAL '7 DAYS'"))
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
   revokedAt DateTime?
 }

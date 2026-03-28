@@ -25,6 +25,7 @@ async function bootstrap() {
   await app.register((await import('@fastify/helmet')).default, {
     global: true,
   });
+  await app.register((await import('@fastify/cookie')).default);
 
   // CORS — origins from env (comma-separated)
   app.enableCors({

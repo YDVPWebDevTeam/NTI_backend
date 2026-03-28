@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { envSchema, type Env } from './env.schema.js';
+import { StringValue } from 'ms';
 
 @Injectable()
 export class ConfigService {
@@ -52,5 +53,25 @@ export class ConfigService {
 
   get redisPort(): number {
     return this.env.REDIS_PORT;
+  }
+
+  get jwtAccessSecret(): string {
+    return this.env.JWT_ACCESS_SECRET;
+  }
+
+  get jwtRefreshSecret(): string {
+    return this.env.JWT_REFRESH_SECRET;
+  }
+
+  get jwtAccessExpiration(): StringValue {
+    return this.env.JWT_ACCESS_EXPIRATION as StringValue;
+  }
+
+  get jwtRefreshExpirationDays(): StringValue {
+    return this.env.JWT_REFRESH_EXPIRATION_DAYS as StringValue;
+  }
+
+  get argon2TimeCost(): number {
+    return this.env.ARGON2_TIME_COST;
   }
 }

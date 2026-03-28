@@ -31,7 +31,7 @@ export const envSchema = z.object({
       /^\d+[smhd]$/,
       'JWT_REFRESH_EXPIRATION must be a valid duration (e.g., 7d, 1h)',
     ),
-  HASH_ROUNDS: z.coerce.number().int().positive().default(10),
+  ARGON2_TIME_COST: z.coerce.number().int().positive().default(3),
 });
 
 export type Env = z.infer<typeof envSchema>;

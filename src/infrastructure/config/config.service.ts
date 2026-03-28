@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { envSchema, type Env } from './env.schema.js';
+import { StringValue } from 'ms';
 
 @Injectable()
 export class ConfigService {
@@ -62,15 +63,15 @@ export class ConfigService {
     return this.env.JWT_REFRESH_SECRET;
   }
 
-  get jwtAccessExpiration(): string {
-    return this.env.JWT_ACCESS_EXPIRATION;
+  get jwtAccessExpiration(): StringValue {
+    return this.env.JWT_ACCESS_EXPIRATION as StringValue;
   }
 
-  get jwtRefreshExpiration(): string {
-    return this.env.JWT_REFRESH_EXPIRATION;
+  get jwtRefreshExpiration(): StringValue {
+    return this.env.JWT_REFRESH_EXPIRATION as StringValue;
   }
 
-  get hashRounds(): number {
-    return this.env.HASH_ROUNDS;
+  get argon2TimeCost(): number {
+    return this.env.ARGON2_TIME_COST;
   }
 }

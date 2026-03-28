@@ -25,11 +25,11 @@ export const envSchema = z.object({
       /^\d+[smhd]$/,
       'JWT_ACCESS_EXPIRATION must be a valid duration (e.g., 15m, 1h)',
     ),
-  JWT_REFRESH_EXPIRATION: z
+  JWT_REFRESH_EXPIRATION_DAYS: z
     .string()
     .regex(
-      /^\d+[smhd]$/,
-      'JWT_REFRESH_EXPIRATION must be a valid duration (e.g., 7d, 1h)',
+      /^\d+d$/,
+      'JWT_REFRESH_EXPIRATION_DAYS must be a valid duration (e.g., 7d)',
     ),
   ARGON2_TIME_COST: z.coerce.number().int().positive().default(3),
 });

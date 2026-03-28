@@ -67,8 +67,8 @@ export class ConfigService {
     return this.env.JWT_ACCESS_EXPIRATION as StringValue;
   }
 
-  get jwtRefreshExpiration(): StringValue {
-    return this.env.JWT_REFRESH_EXPIRATION as StringValue;
+  get jwtRefreshExpirationDays(): StringValue {
+    return this.env.JWT_REFRESH_EXPIRATION_DAYS as StringValue;
   }
 
   get argon2TimeCost(): number {

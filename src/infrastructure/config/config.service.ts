@@ -22,6 +22,26 @@ export class ConfigService {
     return this.env.PORT;
   }
 
+  get smtpHost(): string {
+    return this.env.SMTP_HOST;
+  }
+
+  get smtpPort(): number {
+    return this.env.SMTP_PORT;
+  }
+  get smtpUser(): string {
+    return this.env.SMTP_USER;
+  }
+  get smtpPassword(): string {
+    return this.env.SMTP_PASSWORD;
+  }
+  get smtpFrom(): string {
+    return this.env.SMTP_FROM;
+  }
+  get frontUrl(): string {
+    return this.env.FRONTEND_URL;
+  }
+
   get nodeEnv(): string {
     return this.env.NODE_ENV;
   }

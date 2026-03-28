@@ -6,6 +6,7 @@ import { ConfigModule, ConfigService } from './infrastructure/config';
 import { DatabaseModule } from './infrastructure/database';
 import { LoggerModule } from './infrastructure/logger/logger.module';
 import { QueueModule } from './infrastructure/queue';
+import { MailerModule } from './infrastructure/mailer/mailer.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { QueueModule } from './infrastructure/queue';
     DatabaseModule,
     LoggerModule,
     QueueModule,
+    MailerModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

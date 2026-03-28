@@ -6,6 +6,7 @@ import { ConfigModule, ConfigService } from './infrastructure/config';
 import { DatabaseModule } from './infrastructure/database';
 import { LoggerModule } from './infrastructure/logger/logger.module';
 import { QueueModule } from './infrastructure/queue';
+import { UserModule } from './user/user.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { QueueModule } from './infrastructure/queue';
           : { ttl: 60_000, limit: 30000 },
       ],
     }),
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],

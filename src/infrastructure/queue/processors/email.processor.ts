@@ -35,7 +35,7 @@ export class EmailProcessor extends WorkerHost {
     const handler = this.handlers[job.name as EmailJobName];
 
     if (!handler) {
-      throw new Error(`No handler found for job: ${job.name} `);
+      throw new Error(`No handler found for job: ${job.name}`);
     }
     await handler(job.data as never);
   }

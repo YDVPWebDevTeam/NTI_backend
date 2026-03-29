@@ -24,7 +24,7 @@ export type AuthTokensResponse = {
 
 @Injectable()
 export class AuthService {
-  public readonly refreshTokenValidyDays: number;
+  public readonly refreshTokenValidityDays: number;
 
   constructor(
     private readonly users: UserService,
@@ -33,7 +33,7 @@ export class AuthService {
     private readonly hashingService: HashingService,
     private readonly configService: ConfigService,
   ) {
-    this.refreshTokenValidyDays = parseInt(
+    this.refreshTokenValidityDays = parseInt(
       this.configService.jwtRefreshExpirationDays,
     );
   }

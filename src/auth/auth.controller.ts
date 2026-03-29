@@ -103,9 +103,9 @@ export class AuthController {
     reply.setCookie('refreshToken', refreshToken, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: this.configService.isProduction ? true : false,
+      secure: this.configService.isProduction,
       path: '/',
-      maxAge: this.authService.refreshTokenValidyDays * 24 * 60 * 60, // Convert to seconds
+      maxAge: this.authService.refreshTokenValidityDays * 24 * 60 * 60, // Convert to seconds
     });
   }
 }

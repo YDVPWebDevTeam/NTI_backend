@@ -4,7 +4,7 @@ import { AuthenticatedUserContext } from '../../common/types/auth-user-context.t
 export const GetUserContext = createParamDecorator<
   unknown,
   AuthenticatedUserContext
->((_data: number, executionContext: ExecutionContext) => {
+>((_data: unknown, executionContext: ExecutionContext) => {
   const request = executionContext
     .switchToHttp()
     .getRequest<{ user: AuthenticatedUserContext }>();

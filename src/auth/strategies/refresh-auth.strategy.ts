@@ -25,7 +25,7 @@ export class RefreshJwtStrategy extends PassportStrategy(
     private readonly userService: UserService,
     private readonly configService: ConfigService,
     private readonly refreshTokenService: RefreshTokenService,
-    private readonly HashingService: HashingService,
+    private readonly hashingService: HashingService,
   ) {
     super({
       jwtFromRequest: extractRefreshTokenFromCookie,
@@ -52,23 +52,6 @@ export class RefreshJwtStrategy extends PassportStrategy(
       throw new UnauthorizedException('Refresh token not found in cookies');
     }
 
-    const isTokenValid = await this.HashingService.verify(
-      refreshToken.tokenHash,
-      tokenFromCookie,
-    );
-
-    if (!isTokenValid) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-
-    if (refreshToken.revokedAt !== null) {
-      throw new UnauthorizedException('Refresh token has been revoked');
-    }
-
-    if (refreshToken.expiresAt < new Date()) {
-      throw new UnauthorizedException('Refresh token has expired');
-    }
-
     const user = await this.userService.findById(payload.sub);
 
     if (!user) {
@@ -81,6 +64,23 @@ export class RefreshJwtStrategy extends PassportStrategy(
 
     if (user.status === UserStatus.SUSPENDED) {
       throw new UnauthorizedException('User account is suspended');
+    }
+
+    if (refreshToken.revokedAt !== null) {
+      throw new UnauthorizedException('Refresh token has been revoked');
+    }
+
+    if (refreshToken.expiresAt < new Date()) {
+      throw new UnauthorizedException('Refresh token has expired');
+    }
+
+    const isTokenValid = await this.hashingService.verify(
+      refreshToken.tokenHash,
+      tokenFromCookie,
+    );
+
+    if (!isTokenValid) {
+      throw new UnauthorizedException('Invalid refresh token');
     }
 
     return {

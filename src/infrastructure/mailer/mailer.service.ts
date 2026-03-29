@@ -42,7 +42,7 @@ export class MailerService {
     const link = `${this.configService.frontUrl}/confirm?token=${token}`;
 
     const html = `
-        <h1>Hello, please confirm your email adress via this link </h1>
+        <h1>Hello, please confirm your email address via this link </h1>
         <p>click the link</p>
         <a href="${link}">${link}</a>
         `;

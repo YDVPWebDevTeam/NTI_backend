@@ -28,10 +28,15 @@ export class RefreshTokenRepository extends BaseRepository<
     return this.findUnique({ tokenHash });
   }
 
-  findActiveTokenByUserId(userId: string): Promise<RefreshToken | null> {
-    return this.findFirst({
-      userId,
-      revokedAt: null,
+  findActiveTokensByUserId(userId: string): Promise<RefreshToken[]> {
+    return this.findMany({
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
     });
   }
 

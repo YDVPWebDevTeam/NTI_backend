@@ -14,8 +14,8 @@ export class RefreshTokenService {
     return this.refreshTokens.findByTokenHash(tokenHash);
   }
 
-  findActiveByUserId(userId: string): Promise<RefreshToken | null> {
-    return this.refreshTokens.findActiveTokenByUserId(userId);
+  findActiveByUserId(userId: string): Promise<RefreshToken[]> {
+    return this.refreshTokens.findActiveTokensByUserId(userId);
   }
 
   create(data: Prisma.RefreshTokenUncheckedCreateInput): Promise<RefreshToken> {

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from './config.service';
 

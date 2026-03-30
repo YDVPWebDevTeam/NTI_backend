@@ -1,0 +1,111 @@
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { FastifyReply } from 'fastify';
+import { AuthService, AuthTokensResponse } from './auth.service';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RefreshJwtGuard } from './guards/refresh-auth.guard';
+import { GetUserContext } from './decorators/get-user-context.decorator';
+import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import { ConfigService } from '../infrastructure/config';
+
+type AuthHttpResponse = Omit<AuthTokensResponse, 'refreshToken'>;
+
+@Controller('auth')
+export class AuthController {
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  @Post('register')
+  async register(
+    @Body() dto: RegisterDto,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<AuthHttpResponse> {
+    const authResult = await this.authService.register(dto);
+    this.setRefreshTokenCookie(reply, authResult.refreshToken);
+
+    return this.toHttpAuthResponse(authResult);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('login')
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<AuthHttpResponse> {
+    const authResult = await this.authService.login(dto);
+    this.setRefreshTokenCookie(reply, authResult.refreshToken);
+
+    return this.toHttpAuthResponse(authResult);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  me(
+    @GetUserContext() authUser: AuthenticatedUserContext,
+  ): AuthenticatedUserContext {
+    return authUser;
+  }
+
+  @UseGuards(RefreshJwtGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('refresh')
+  async refresh(
+    @GetUserContext() authUser: AuthenticatedUserContext,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<AuthHttpResponse> {
+    const authResult = await this.authService.refresh(authUser);
+    this.setRefreshTokenCookie(reply, authResult.refreshToken);
+
+    return this.toHttpAuthResponse(authResult);
+  }
+
+  @UseGuards(RefreshJwtGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('logout')
+  async logout(
+    @GetUserContext() authUser: AuthenticatedUserContext,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<{ success: true }> {
+    if (authUser.refreshTokenId) {
+      await this.authService.logout(authUser.refreshTokenId);
+    }
+
+    reply.clearCookie('refreshToken', {
+      path: '/',
+    });
+
+    return { success: true };
+  }
+
+  private toHttpAuthResponse(authResult: AuthTokensResponse): AuthHttpResponse {
+    return {
+      accessToken: authResult.accessToken,
+      user: authResult.user,
+    };
+  }
+
+  private setRefreshTokenCookie(
+    reply: FastifyReply,
+    refreshToken: string,
+  ): void {
+    reply.setCookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: this.configService.isProduction,
+      path: '/',
+      maxAge: this.authService.refreshTokenValidityDays * 24 * 60 * 60, // Convert to seconds
+    });
+  }
+}

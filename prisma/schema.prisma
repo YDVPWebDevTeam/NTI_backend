@@ -71,7 +71,7 @@ model Team {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  lockedAt DateTime? // When a team is locked, it cannot be modified (e.g., members cannot be added or removed) 
+  lockedAt DateTime? // When a team is locked, it cannot be modified (e.g., members cannot be added or removed)
   archivedAt DateTime?
 }
 
@@ -110,7 +110,7 @@ model EmailVerificationToken {
 
 model RefreshToken {
   id    String @id @default(uuid())
-  token String @unique
+  tokenHash String @unique
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

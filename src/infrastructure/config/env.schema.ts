@@ -36,6 +36,7 @@ export const envSchema = z.object({
       'JWT_REFRESH_EXPIRATION_DAYS must be a valid duration (e.g., 7d)',
     ),
   ARGON2_TIME_COST: z.coerce.number().int().positive().default(3),
+  FRONTEND_URL: z.string(),
 });
 
 export type Env = z.infer<typeof envSchema>;

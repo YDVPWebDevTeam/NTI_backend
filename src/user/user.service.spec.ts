@@ -1,3 +1,7 @@
+jest.mock('./user.repository', () => ({
+  UserRepository: class UserRepository {},
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserService } from './user.service';
 import { UserRepository } from './user.repository';

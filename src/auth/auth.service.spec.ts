@@ -39,9 +39,8 @@ describe('AuthService', () => {
     signAsync: jest.Mock;
   };
   let hashingService: {
-    hashPassword: jest.Mock;
-    verifyPassword: jest.Mock;
     hash: jest.Mock;
+    verify: jest.Mock;
   };
 
   const user = {
@@ -78,9 +77,11 @@ describe('AuthService', () => {
         .mockResolvedValueOnce('refresh-token'),
     };
     hashingService = {
-      hashPassword: jest.fn().mockResolvedValue('password-hash'),
-      verifyPassword: jest.fn().mockResolvedValue(true),
-      hash: jest.fn().mockResolvedValue('refresh-token-hash'),
+      hash: jest
+        .fn()
+        .mockResolvedValueOnce('password-hash')
+        .mockResolvedValue('refresh-token-hash'),
+      verify: jest.fn().mockResolvedValue(true),
     };
 
     service = new AuthService(
@@ -110,7 +111,7 @@ describe('AuthService', () => {
     });
 
     expect(users.findByEmail).toHaveBeenCalledWith(user.email);
-    expect(hashingService.hashPassword).toHaveBeenCalledWith('strongpass123');
+    expect(hashingService.hash).toHaveBeenNthCalledWith(1, 'strongpass123');
     expect(users.create).toHaveBeenCalledWith({
       email: user.email,
       name: user.name,
@@ -149,9 +150,9 @@ describe('AuthService', () => {
       password: 'strongpass123',
     });
 
-    expect(hashingService.verifyPassword).toHaveBeenCalledWith(
-      'strongpass123',
+    expect(hashingService.verify).toHaveBeenCalledWith(
       user.passwordHash,
+      'strongpass123',
     );
     expect(result).toEqual({
       accessToken: 'access-token',
@@ -162,7 +163,7 @@ describe('AuthService', () => {
 
   it('throws on login when password is invalid', async () => {
     users.findByEmail.mockResolvedValue(user);
-    hashingService.verifyPassword.mockResolvedValue(false);
+    hashingService.verify.mockResolvedValue(false);
 
     await expect(
       service.login({

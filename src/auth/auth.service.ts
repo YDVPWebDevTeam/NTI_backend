@@ -5,7 +5,8 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
-import { User, UserStatus } from '../../generated/prisma/client';
+import type { User } from '../../generated/prisma/client';
+import { UserStatus } from '../../generated/prisma/enums';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
@@ -45,7 +46,7 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const passwordHash = await this.hashingService.hashPassword(dto.password);
+    const passwordHash = await this.hashingService.hash(dto.password);
     const user = await this.users.create({
       email: dto.email,
       name: dto.name,
@@ -64,9 +65,9 @@ export class AuthService {
 
     this.ensureUserCanAuthenticate(user);
 
-    const isPasswordValid = await this.hashingService.verifyPassword(
-      dto.password,
+    const isPasswordValid = await this.hashingService.verify(
       user.passwordHash,
+      dto.password,
     );
 
     if (!isPasswordValid) {

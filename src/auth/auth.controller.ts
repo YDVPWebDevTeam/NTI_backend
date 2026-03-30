@@ -16,7 +16,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshJwtGuard } from './guards/refresh-auth.guard';
 import { GetUserContext } from './decorators/get-user-context.decorator';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import { ConfigService } from 'src/infrastructure/config';
+import { ConfigService } from '../infrastructure/config';
 
 type AuthHttpResponse = Omit<AuthTokensResponse, 'refreshToken'>;
 

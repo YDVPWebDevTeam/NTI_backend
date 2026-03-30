@@ -1,14 +1,14 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
-import { ConfigService } from 'src/infrastructure/config/config.service';
-import { UserService } from 'src/user/user.service';
+import { ConfigService } from '../../infrastructure/config/config.service';
+import { UserService } from '../../user/user.service';
 import { RefreshTokenService } from '../refresh-token/refresh-token.service';
 import type { FastifyRequest } from 'fastify';
 import { RefreshJwtPayload } from '../types/refresh-jwt-payload.type';
-import { HashingService } from 'src/infrastructure/hashing';
+import { HashingService } from '../../infrastructure/hashing';
 import { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
-import { UserStatus } from 'generated/prisma/enums';
+import { UserStatus } from '../../../generated/prisma/enums';
 
 const extractRefreshTokenFromCookie = (req: FastifyRequest): string | null => {
   if (!req || !req.cookies) return null;

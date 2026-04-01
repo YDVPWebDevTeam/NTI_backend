@@ -1,4 +1,4 @@
-import { PrismaClient } from '../../../generated/prisma/client';
+import type { Prisma, PrismaClient } from '../../../generated/prisma/client';
 import { PrismaService } from './prisma.service';
 
 export type FindManyArgs<TWhereInput, TOrderByInput, TWhereUniqueInput> = {
@@ -40,6 +40,8 @@ export type PrismaDelegate<
   ): Promise<TModel>;
 };
 
+export type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
+
 export abstract class BaseRepository<
   TModel,
   TCreateInput,
@@ -50,7 +52,9 @@ export abstract class BaseRepository<
 > {
   constructor(protected readonly prisma: PrismaService) {}
 
-  protected abstract get delegate(): PrismaDelegate<
+  protected abstract getDelegate(
+    db?: PrismaDbClient,
+  ): PrismaDelegate<
     TModel,
     TCreateInput,
     TUpdateInput,
@@ -61,41 +65,52 @@ export abstract class BaseRepository<
 
   findMany(
     args?: FindManyArgs<TWhereInput, TOrderByInput, TWhereUniqueInput>,
+    db?: PrismaDbClient,
   ): Promise<TModel[]> {
-    return this.delegate.findMany(args);
+    return this.getDelegate(db).findMany(args);
   }
 
-  findUnique(where: TWhereUniqueInput): Promise<TModel | null> {
-    return this.delegate.findUnique({ where });
+  findUnique(
+    where: TWhereUniqueInput,
+    db?: PrismaDbClient,
+  ): Promise<TModel | null> {
+    return this.getDelegate(db).findUnique({ where });
   }
 
-  findFirst(where?: TWhereInput): Promise<TModel | null> {
-    return this.delegate.findFirst({ where });
+  findFirst(where?: TWhereInput, db?: PrismaDbClient): Promise<TModel | null> {
+    return this.getDelegate(db).findFirst({ where });
   }
 
-  create(data: TCreateInput): Promise<TModel> {
-    return this.delegate.create({ data });
+  create(data: TCreateInput, db?: PrismaDbClient): Promise<TModel> {
+    return this.getDelegate(db).create({ data });
   }
 
-  update(where: TWhereUniqueInput, data: TUpdateInput): Promise<TModel> {
-    return this.delegate.update({ where, data });
+  update(
+    where: TWhereUniqueInput,
+    data: TUpdateInput,
+    db?: PrismaDbClient,
+  ): Promise<TModel> {
+    return this.getDelegate(db).update({ where, data });
   }
 
-  delete(where: TWhereUniqueInput): Promise<TModel> {
-    return this.delegate.delete({ where });
+  delete(where: TWhereUniqueInput, db?: PrismaDbClient): Promise<TModel> {
+    return this.getDelegate(db).delete({ where });
   }
 
-  count(where?: TWhereInput): Promise<number> {
-    return this.delegate.count({ where });
+  count(where?: TWhereInput, db?: PrismaDbClient): Promise<number> {
+    return this.getDelegate(db).count({ where });
   }
 
   upsert(
     args: UpsertArgs<TWhereUniqueInput, TCreateInput, TUpdateInput>,
+    db?: PrismaDbClient,
   ): Promise<TModel> {
-    return this.delegate.upsert(args);
+    return this.getDelegate(db).upsert(args);
   }
 
-  transaction<T>(fn: (client: PrismaClient) => Promise<T>): Promise<T> {
+  transaction<T>(
+    fn: (client: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
     return this.prisma.client.$transaction(fn);
   }
 }

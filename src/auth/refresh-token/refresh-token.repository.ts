@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma, RefreshToken } from '../../../generated/prisma/client';
-import { BaseRepository } from '../../infrastructure/database/base.repository';
+import {
+  BaseRepository,
+  PrismaDbClient,
+} from '../../infrastructure/database/base.repository';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 @Injectable()
@@ -12,8 +15,8 @@ export class RefreshTokenRepository extends BaseRepository<
   Prisma.RefreshTokenWhereUniqueInput,
   Prisma.RefreshTokenOrderByWithRelationInput
 > {
-  protected get delegate() {
-    return this.prisma.client.refreshToken;
+  protected getDelegate(db?: PrismaDbClient) {
+    return (db ?? this.prisma.client).refreshToken;
   }
 
   constructor(prisma: PrismaService) {

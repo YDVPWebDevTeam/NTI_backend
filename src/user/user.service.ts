@@ -1,8 +1,8 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import type { Prisma, User } from '../../generated/prisma/client';
 import { UserRepository } from './user.repository';
-import { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
-import { PrismaDbClient } from 'src/infrastructure/database/base.repository';
+import { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import { PrismaDbClient } from '../infrastructure/database/base.repository';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
 
 @Injectable()

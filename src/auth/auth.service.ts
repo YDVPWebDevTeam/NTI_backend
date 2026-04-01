@@ -19,7 +19,7 @@ import type { AuthenticatedUserContext } from '../common/types/auth-user-context
 import type { JwtPayload } from './types/jwt-payload.type';
 import type { RefreshJwtPayload } from './types/refresh-jwt-payload.type';
 import { EmailVerificationService } from './email-verification/email-verification.service';
-import { MailerService } from 'src/infrastructure/mailer/mailer.service';
+import { MailerService } from '../infrastructure/mailer/mailer.service';
 
 export type AuthTokensResponse = {
   accessToken: string;

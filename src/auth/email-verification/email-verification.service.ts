@@ -5,8 +5,8 @@ import type {
 } from '../../../generated/prisma/client';
 import type { PrismaDbClient } from '../../infrastructure/database';
 import { EmailVerificationRepository } from './email-verification.repository';
-import { ConfigService } from 'src/infrastructure/config';
-import { HashingService } from 'src/infrastructure/hashing';
+import { ConfigService } from '../../infrastructure/config';
+import { HashingService } from '../../infrastructure/hashing';
 
 @Injectable()
 export class EmailVerificationService {

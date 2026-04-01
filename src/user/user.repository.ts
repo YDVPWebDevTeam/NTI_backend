@@ -23,25 +23,27 @@ export class UserRepository extends BaseRepository<
     super(prisma);
   }
 
-  findByEmail(email: string): Promise<User | null> {
-    return this.findUnique({ email });
+  findByEmail(email: string, db?: PrismaDbClient): Promise<User | null> {
+    return this.findUnique({ email }, db);
   }
 
-  markEmailConfirmed(userId: string): Promise<User> {
+  markEmailConfirmed(userId: string, db?: PrismaDbClient): Promise<User> {
     return this.update(
       { id: userId },
       {
         isEmailConfirmed: true,
       },
+      db,
     );
   }
 
-  markAdminConfirmed(userId: string): Promise<User> {
+  markAdminConfirmed(userId: string, db?: PrismaDbClient): Promise<User> {
     return this.update(
       { id: userId },
       {
         isAdminConfirmed: true,
       },
+      db,
     );
   }
 }

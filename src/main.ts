@@ -49,8 +49,30 @@ async function bootstrap() {
   // Swagger
   const swaggerConfig = new DocumentBuilder()
     .setTitle('NTI Backend')
-    .setDescription('NTI Backend API')
+    .setDescription(
+      'API for NTI platform workflows, authentication, and administrative operations.',
+    )
     .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description:
+          'Use the access token returned by the authentication endpoints.',
+      },
+      'access-token',
+    )
+    .addCookieAuth(
+      'refreshToken',
+      {
+        type: 'apiKey',
+        in: 'cookie',
+        description:
+          'HttpOnly refresh token cookie used by the refresh and logout endpoints.',
+      },
+      'refresh-token',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);

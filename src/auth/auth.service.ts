@@ -1,6 +1,8 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -16,10 +18,12 @@ import { UserService } from '../user/user.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import type { JwtPayload } from './types/jwt-payload.type';
 import type { RefreshJwtPayload } from './types/refresh-jwt-payload.type';
+import { EmailVerificationService } from './email-verification/email-verification.service';
+import { MailerService } from 'src/infrastructure/mailer/mailer.service';
 
 export type AuthTokensResponse = {
   accessToken: string;
-  refreshToken: string;
+  refreshToken: string | null;
   user: AuthenticatedUserContext;
 };
 
@@ -28,36 +32,59 @@ export class AuthService {
   public readonly refreshTokenValidityDays: number;
 
   constructor(
-    private readonly users: UserService,
-    private readonly refreshTokens: RefreshTokenService,
+    private readonly usersService: UserService,
+    private readonly refreshTokenService: RefreshTokenService,
     private readonly jwtService: JwtService,
     private readonly hashingService: HashingService,
     private readonly configService: ConfigService,
+    private readonly emailVerificationService: EmailVerificationService,
+    private readonly mailerService: MailerService,
   ) {
     this.refreshTokenValidityDays = parseInt(
       this.configService.jwtRefreshExpirationDays,
     );
   }
 
-  async register(dto: RegisterDto): Promise<AuthTokensResponse> {
-    const existingUser = await this.users.findByEmail(dto.email);
+  async register(dto: RegisterDto): Promise<AuthenticatedUserContext> {
+    const existingUser = await this.usersService.findByEmail(dto.email);
 
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
     }
 
     const passwordHash = await this.hashingService.hash(dto.password);
-    const user = await this.users.create({
-      email: dto.email,
-      name: dto.name,
-      passwordHash,
-    });
 
-    return this.issueAuthTokens(user);
+    const { user, verificationToken } = await this.usersService.transaction(
+      async (transaction) => {
+        const user = await this.usersService.create(
+          {
+            email: dto.email,
+            name: dto.name,
+            passwordHash,
+          },
+          transaction,
+        );
+
+        const verificationToken =
+          await this.emailVerificationService.createForUser(
+            user.id,
+            transaction,
+          );
+
+        return { user, verificationToken };
+      },
+    );
+
+    await this.mailerService.sendConfirmationEmail(
+      user.email,
+      verificationToken.token,
+    );
+
+    return this.usersService.bareSafeUser(user);
   }
 
   async login(dto: LoginDto): Promise<AuthTokensResponse> {
-    const user = await this.users.findByEmail(dto.email);
+    const user = await this.usersService.findByEmail(dto.email);
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
@@ -84,7 +111,7 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token context is required');
     }
 
-    const user = await this.users.findById(authUser.id);
+    const user = await this.usersService.findById(authUser.id);
 
     if (!user) {
       throw new UnauthorizedException('User not found');
@@ -92,52 +119,112 @@ export class AuthService {
 
     this.ensureUserCanAuthenticate(user);
 
-    await this.refreshTokens.revokeById(authUser.refreshTokenId);
+    await this.refreshTokenService.revokeById(authUser.refreshTokenId);
 
     return this.issueAuthTokens(user);
   }
 
   async logout(refreshTokenId: string): Promise<void> {
-    await this.refreshTokens.revokeById(refreshTokenId);
+    await this.refreshTokenService.revokeById(refreshTokenId);
   }
 
   private ensureUserCanAuthenticate(user: User): void {
     if (user.status === UserStatus.SUSPENDED) {
       throw new UnauthorizedException('User account is suspended');
     }
+
+    if (user.isEmailConfirmed === false) {
+      throw new UnauthorizedException('Email confirmation is required');
+    }
   }
 
-  private async issueAuthTokens(user: User): Promise<AuthTokensResponse> {
-    const safeUser = this.users.bareSafeUser(user);
-    const refreshTokenId = randomUUID();
+  async confirmEmail(token: string): Promise<AuthTokensResponse> {
+    const verificationToken =
+      await this.emailVerificationService.validateTokenOrThrow(token);
+    const user = await this.usersService.findById(verificationToken.userId);
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const confirmedUser = await this.usersService.transaction(
+      async (transaction) => {
+        const updatedUser = await this.usersService.markEmailConfirmed(
+          user.id,
+          transaction,
+        );
+        await this.emailVerificationService.markAccepted(
+          verificationToken.id,
+          transaction,
+        );
+        return updatedUser;
+      },
+    );
+
+    return this.issueAuthTokens(confirmedUser);
+  }
+
+  async resendConfirmationEmail(email: string): Promise<void> {
+    const user = await this.usersService.findByEmail(email);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.isEmailConfirmed) {
+      throw new BadRequestException('Email is already confirmed');
+    }
+
+    const verificationToken = await this.emailVerificationService.createForUser(
+      user.id,
+    );
+
+    await this.mailerService.sendConfirmationEmail(
+      user.email,
+      verificationToken.token,
+    );
+  }
+
+  private async issueAuthTokens(
+    user: User,
+    doRefresh: boolean = true,
+  ): Promise<AuthTokensResponse> {
+    const safeUser = this.usersService.bareSafeUser(user);
 
     const accessPayload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
     };
-    const refreshPayload: RefreshJwtPayload = {
-      sub: user.id,
-      email: user.email,
-      refreshTokenId,
-    };
 
     const accessToken = await this.jwtService.signAsync(accessPayload);
-    const refreshToken = await this.jwtService.signAsync(refreshPayload, {
-      secret: this.configService.jwtRefreshSecret,
-      expiresIn: this.configService.jwtRefreshExpirationDays,
-    });
 
-    const refreshTokenHash = await this.hashingService.hash(refreshToken);
+    let refreshToken: string | null = null;
+    if (doRefresh) {
+      const refreshTokenId = randomUUID();
 
-    await this.refreshTokens.create({
-      id: refreshTokenId,
-      userId: user.id,
-      tokenHash: refreshTokenHash,
-      expiresAt: this.resolveExpirationDate(
-        this.configService.jwtRefreshExpirationDays,
-      ),
-    });
+      const refreshPayload: RefreshJwtPayload = {
+        sub: user.id,
+        email: user.email,
+        refreshTokenId,
+      };
+
+      refreshToken = await this.jwtService.signAsync(refreshPayload, {
+        secret: this.configService.jwtRefreshSecret,
+        expiresIn: this.configService.jwtRefreshExpirationDays,
+      });
+
+      const refreshTokenHash = await this.hashingService.hash(refreshToken);
+
+      await this.refreshTokenService.create({
+        id: refreshTokenId,
+        userId: user.id,
+        tokenHash: refreshTokenHash,
+        expiresAt: this.resolveExpirationDate(
+          this.configService.jwtRefreshExpirationDays,
+        ),
+      });
+    }
 
     return {
       accessToken,

@@ -94,4 +94,12 @@ export class ConfigService {
   get argon2TimeCost(): number {
     return this.env.ARGON2_TIME_COST;
   }
+
+  get tokenByteLength(): number {
+    return this.env.TOKEN_BYTE_LENGTH;
+  }
+
+  get emailVerificationExpirationHours(): number {
+    return this.env.EMAIL_VERIFICATION_EXPIRATION_HOURS;
+  }
 }

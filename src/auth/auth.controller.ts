@@ -5,7 +5,6 @@ import {
   HttpCode,
   HttpStatus,
   Post,
-  Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -57,7 +56,7 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AuthHttpResponse> {
     const authResult = await this.authService.login(dto);
-    this.setRefreshTokenCookie(reply, authResult.refreshToken!);
+    this.setRefreshTokenCookie(reply, authResult.refreshToken);
 
     return this.toHttpAuthResponse(authResult);
   }
@@ -80,7 +79,7 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AuthHttpResponse> {
     const authResult = await this.authService.refresh(authUser);
-    this.setRefreshTokenCookie(reply, authResult.refreshToken!);
+    this.setRefreshTokenCookie(reply, authResult.refreshToken);
 
     return this.toHttpAuthResponse(authResult);
   }
@@ -106,13 +105,13 @@ export class AuthController {
 
   @ConfirmEmailApi()
   @HttpCode(HttpStatus.OK)
-  @Get('confirm-email')
+  @Post('confirm-email')
   async confirmEmail(
-    @Query() dto: ConfirmEmailDto,
+    @Body() dto: ConfirmEmailDto,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AuthHttpResponse> {
     const authResult = await this.authService.confirmEmail(dto.token);
-    this.setRefreshTokenCookie(reply, authResult.refreshToken!);
+    this.setRefreshTokenCookie(reply, authResult.refreshToken);
     return this.toHttpAuthResponse(authResult);
   }
 

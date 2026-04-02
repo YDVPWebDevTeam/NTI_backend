@@ -3,13 +3,12 @@ import {
   ApiBearerAuth,
   ApiConflictResponse,
   ApiCookieAuth,
-  ApiNotFoundResponse,
-  ApiQuery,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { createApiDecorator } from '../../infrastructure/api/api-factory';
 import { AuthResponseDto } from '../dto/auth-response.dto';
 import { AuthenticatedUserDto } from '../dto/authenticated-user.dto';
+import { ConfirmEmailDto } from '../dto/confirm-email.dto';
 import { LoginDto } from '../dto/login.dto';
 import { LogoutResponseDto } from '../dto/logout-response.dto';
 import { RegisterDto } from '../dto/register.dto';
@@ -119,16 +118,9 @@ export const ConfirmEmailApi = () =>
       type: AuthResponseDto,
       description: 'Email was confirmed successfully.',
     },
-    extraDecorators: [
-      ApiQuery({
-        name: 'token',
-        required: true,
-        type: String,
-        description: 'Email verification token sent to the user email address.',
-      }),
-    ],
+    body: ConfirmEmailDto,
     errors: [
-      ApiUnauthorizedResponse({
+      ApiBadRequestResponse({
         description: 'Verification token is missing, expired, or invalid.',
       }),
     ],
@@ -144,12 +136,4 @@ export const ResendConfirmationEmailApi = () =>
       status: 200,
       description: 'Confirmation email sent successfully.',
     },
-    errors: [
-      ApiBadRequestResponse({
-        description: 'Email is already confirmed.',
-      }),
-      ApiNotFoundResponse({
-        description: 'User not found.',
-      }),
-    ],
   });

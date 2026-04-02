@@ -1,8 +1,6 @@
 import {
-  BadRequestException,
   ConflictException,
   Injectable,
-  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -23,7 +21,7 @@ import { MailerService } from '../infrastructure/mailer/mailer.service';
 
 export type AuthTokensResponse = {
   accessToken: string;
-  refreshToken: string | null;
+  refreshToken: string;
   user: AuthenticatedUserContext;
 };
 
@@ -167,12 +165,9 @@ export class AuthService {
   async resendConfirmationEmail(email: string): Promise<void> {
     const user = await this.usersService.findByEmail(email);
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.isEmailConfirmed) {
-      throw new BadRequestException('Email is already confirmed');
+    // Avoid revealing whether the account exists or has already been confirmed.
+    if (!user || user.isEmailConfirmed) {
+      return;
     }
 
     const verificationToken = await this.emailVerificationService.createForUser(
@@ -185,10 +180,7 @@ export class AuthService {
     );
   }
 
-  private async issueAuthTokens(
-    user: User,
-    doRefresh: boolean = true,
-  ): Promise<AuthTokensResponse> {
+  private async issueAuthTokens(user: User): Promise<AuthTokensResponse> {
     const safeUser = this.usersService.bareSafeUser(user);
 
     const accessPayload: JwtPayload = {
@@ -199,32 +191,29 @@ export class AuthService {
 
     const accessToken = await this.jwtService.signAsync(accessPayload);
 
-    let refreshToken: string | null = null;
-    if (doRefresh) {
-      const refreshTokenId = randomUUID();
+    const refreshTokenId = randomUUID();
 
-      const refreshPayload: RefreshJwtPayload = {
-        sub: user.id,
-        email: user.email,
-        refreshTokenId,
-      };
+    const refreshPayload: RefreshJwtPayload = {
+      sub: user.id,
+      email: user.email,
+      refreshTokenId,
+    };
 
-      refreshToken = await this.jwtService.signAsync(refreshPayload, {
-        secret: this.configService.jwtRefreshSecret,
-        expiresIn: this.configService.jwtRefreshExpirationDays,
-      });
+    const refreshToken = await this.jwtService.signAsync(refreshPayload, {
+      secret: this.configService.jwtRefreshSecret,
+      expiresIn: this.configService.jwtRefreshExpirationDays,
+    });
 
-      const refreshTokenHash = await this.hashingService.hash(refreshToken);
+    const refreshTokenHash = await this.hashingService.hash(refreshToken);
 
-      await this.refreshTokenService.create({
-        id: refreshTokenId,
-        userId: user.id,
-        tokenHash: refreshTokenHash,
-        expiresAt: this.resolveExpirationDate(
-          this.configService.jwtRefreshExpirationDays,
-        ),
-      });
-    }
+    await this.refreshTokenService.create({
+      id: refreshTokenId,
+      userId: user.id,
+      tokenHash: refreshTokenHash,
+      expiresAt: this.resolveExpirationDate(
+        this.configService.jwtRefreshExpirationDays,
+      ),
+    });
 
     return {
       accessToken,

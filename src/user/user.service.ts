@@ -1,9 +1,8 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import type { Prisma, User } from '../../generated/prisma/client';
+import { Prisma, type User } from '../../generated/prisma/client';
 import { UserRepository } from './user.repository';
 import { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { PrismaDbClient } from '../infrastructure/database/base.repository';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
 
 @Injectable()
 export class UserService {
@@ -25,7 +24,7 @@ export class UserService {
       return await this.users.create(data, db);
     } catch (error) {
       if (
-        error instanceof PrismaClientKnownRequestError &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
         throw new ConflictException('User with this email already exists');

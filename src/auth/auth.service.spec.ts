@@ -22,12 +22,7 @@ jest.mock('../infrastructure/mailer/mailer.service', () => ({
   MailerService: class MailerService {},
 }));
 
-import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { PrismaDbClient } from '../infrastructure/database';
 import { UserRole, UserStatus } from '../../generated/prisma/enums';
@@ -295,19 +290,44 @@ describe('AuthService', () => {
     });
   });
 
-  it('throws on resend confirmation email for missing user', async () => {
+  it('resends confirmation email for an unconfirmed user', async () => {
+    users.findByEmail.mockResolvedValue(unconfirmedUser);
+    emailVerification.createForUser.mockResolvedValue({
+      id: 'verification-2',
+      userId: user.id,
+      token: 'new-verification-token',
+      expiresAt: new Date('2030-01-02T00:00:00.000Z'),
+      acceptedAt: null,
+    });
+
+    await expect(
+      service.resendConfirmationEmail(unconfirmedUser.email),
+    ).resolves.toBeUndefined();
+
+    expect(emailVerification.createForUser).toHaveBeenCalledWith(user.id);
+    expect(mailer.sendConfirmationEmail).toHaveBeenCalledWith(
+      unconfirmedUser.email,
+      'new-verification-token',
+    );
+  });
+
+  it('returns success without revealing missing accounts', async () => {
     users.findByEmail.mockResolvedValue(null);
 
     await expect(
       service.resendConfirmationEmail('missing@example.com'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).resolves.toBeUndefined();
+    expect(emailVerification.createForUser).not.toHaveBeenCalled();
+    expect(mailer.sendConfirmationEmail).not.toHaveBeenCalled();
   });
 
-  it('throws on resend confirmation email for confirmed user', async () => {
+  it('returns success without revealing confirmed accounts', async () => {
     users.findByEmail.mockResolvedValue(user);
 
     await expect(
       service.resendConfirmationEmail(user.email),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).resolves.toBeUndefined();
+    expect(emailVerification.createForUser).not.toHaveBeenCalled();
+    expect(mailer.sendConfirmationEmail).not.toHaveBeenCalled();
   });
 });

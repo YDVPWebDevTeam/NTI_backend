@@ -23,10 +23,14 @@ export class UserService {
     try {
       return await this.users.create(data, db);
     } catch (error) {
+<<<<<<< HEAD
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
+=======
+      if (this.isUniqueConstraintError(error)) {
+>>>>>>> dd52e2a (fix(auth): align email verification flow with review feedback)
         throw new ConflictException('User with this email already exists');
       }
       throw error;
@@ -60,5 +64,15 @@ export class UserService {
       status: user.status,
       role: user.role,
     };
+  }
+
+  private isUniqueConstraintError(error: unknown): error is { code: string } {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      typeof error.code === 'string' &&
+      error.code === 'P2002'
+    );
   }
 }

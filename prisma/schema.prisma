@@ -36,6 +36,7 @@ model User {
   passwordHash String
 
   refreshTokens RefreshToken[]
+  passwordResetToken PasswordResetToken?
 
   role UserRole @default(STUDENT)
 
@@ -90,7 +91,6 @@ enum InvitationStatus {
   ACCEPTED
   EXPIRED
   REVOKED
-  
 }
 
 model Invitation {
@@ -133,6 +133,18 @@ model RefreshToken {
   revokedAt DateTime?
 }
 
+model PasswordResetToken {
+  id    String @id @default(uuid())
+  token String @unique
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
 enum OrganizationStatus {
   PENDING
   ACTIVE
@@ -141,7 +153,7 @@ enum OrganizationStatus {
 
 model Organization {
   id          String @id         @default(uuid())
-  name        String     
+  name        String
   ico         String             @unique
   sector      String?
   description String?
@@ -150,12 +162,9 @@ model Organization {
   status      OrganizationStatus @default(PENDING)
   users       User[]
   invitations OrgInvitation[]
-  
 
   createdAt   DateTime           @default(now())
   updatedAt   DateTime?
-
-  
 }
 
 model OrgInvitation {

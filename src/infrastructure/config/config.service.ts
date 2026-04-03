@@ -102,4 +102,8 @@ export class ConfigService {
   get emailVerificationExpirationHours(): number {
     return this.env.EMAIL_VERIFICATION_EXPIRATION_HOURS;
   }
+
+  get passwordResetExpirationMinutes(): number {
+    return this.env.PASSWORD_RESET_EXPIRATION_MINUTES;
+  }
 }

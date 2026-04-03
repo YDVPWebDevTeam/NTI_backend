@@ -43,6 +43,11 @@ export const envSchema = z.object({
     .int()
     .positive()
     .default(24),
+  PASSWORD_RESET_EXPIRATION_MINUTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(30),
 });
 
 export type Env = z.infer<typeof envSchema>;

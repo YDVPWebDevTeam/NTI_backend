@@ -131,7 +131,7 @@ export class AuthService {
       throw new UnauthorizedException('User account is suspended');
     }
 
-    if (user.isEmailConfirmed === false) {
+    if (!user.isEmailConfirmed) {
       throw new UnauthorizedException('Email confirmation is required');
     }
   }

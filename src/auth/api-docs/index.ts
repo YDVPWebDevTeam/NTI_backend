@@ -6,4 +6,4 @@ export {
   RefreshApi,
   RegisterApi,
   ResendConfirmationEmailApi,
-} from './auth-api.decorators';
+} from './auth-api-docs.decorators';

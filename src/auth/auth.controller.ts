@@ -28,7 +28,7 @@ import {
   RefreshApi,
   RegisterApi,
   ResendConfirmationEmailApi,
-} from './api';
+} from './api-docs';
 
 type AuthHttpResponse = Omit<AuthTokensResponse, 'refreshToken'>;
 

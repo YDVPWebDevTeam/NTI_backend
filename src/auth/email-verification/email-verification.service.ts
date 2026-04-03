@@ -56,17 +56,18 @@ export class EmailVerificationService {
     db?: PrismaDbClient,
   ): Promise<EmailVerificationToken> {
     const verificationToken = await this.findByToken(token, db);
+    const invalidTokenMessage = 'Invalid or expired verification token';
 
     if (!verificationToken) {
-      throw new BadRequestException('Invalid verification token');
+      throw new BadRequestException(invalidTokenMessage);
     }
 
     if (verificationToken.acceptedAt) {
-      throw new BadRequestException('Verification token has already been used');
+      throw new BadRequestException(invalidTokenMessage);
     }
 
     if (verificationToken.expiresAt <= new Date()) {
-      throw new BadRequestException('Verification token has expired');
+      throw new BadRequestException(invalidTokenMessage);
     }
 
     return verificationToken;

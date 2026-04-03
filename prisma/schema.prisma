@@ -14,6 +14,13 @@ datasource db {
 enum UserRole {
   STUDENT
   ADMIN
+  COMPANY_OWNER
+  COMPANY_EMPLOYEE
+  MENTOR
+  EVALUATOR
+  CONTENT_EDITOR
+  SUPER_ADMIN
+
 }
 
 enum UserStatus {
@@ -43,6 +50,9 @@ model User {
   teams TeamMember[]
 
   leadOfTeams Team[] @relation("TeamLead")
+
+  organizationId String?
+  organization Organization? @relation(fields: [organizationId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -78,6 +88,9 @@ model Team {
 enum InvitationStatus {
   PENDING
   ACCEPTED
+  EXPIRED
+  REVOKED
+  
 }
 
 model Invitation {
@@ -118,4 +131,46 @@ model RefreshToken {
   createdAt DateTime  @default(now())
   expiresAt DateTime
   revokedAt DateTime?
+}
+
+enum OrganizationStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
+
+model Organization {
+  id          String @id         @default(uuid())
+  name        String     
+  ico         String             @unique
+  sector      String?
+  description String?
+  website     String?
+  logoUrl     String?
+  status      OrganizationStatus @default(PENDING)
+  users       User[]
+  invitations OrgInvitation[]
+  
+
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime?
+
+  
+}
+
+model OrgInvitation {
+  id             String        @id @default(uuid())
+  email          String
+  token          String        @unique
+
+  roleToAssign   UserRole
+  status         InvitationStatus @default(PENDING)
+
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+
+  createdAt      DateTime      @default(now())
+  expiresAt      DateTime
+  updatedAt      DateTime?
+  revokedAt      DateTime?
 }

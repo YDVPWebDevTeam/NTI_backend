@@ -17,7 +17,7 @@ import type { AuthenticatedUserContext } from '../common/types/auth-user-context
 import type { JwtPayload } from './types/jwt-payload.type';
 import type { RefreshJwtPayload } from './types/refresh-jwt-payload.type';
 import { EmailVerificationService } from './email-verification/email-verification.service';
-import { MailerService } from '../infrastructure/mailer/mailer.service';
+import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 
 export type AuthTokensResponse = {
   accessToken: string;
@@ -36,7 +36,7 @@ export class AuthService {
     private readonly hashingService: HashingService,
     private readonly configService: ConfigService,
     private readonly emailVerificationService: EmailVerificationService,
-    private readonly mailerService: MailerService,
+    private readonly queueService: QueueService,
   ) {
     this.refreshTokenValidityDays = parseInt(
       this.configService.jwtRefreshExpirationDays,
@@ -73,10 +73,10 @@ export class AuthService {
       },
     );
 
-    await this.mailerService.sendConfirmationEmail(
-      user.email,
-      verificationToken.token,
-    );
+    await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
+      email: user.email,
+      token: verificationToken.token,
+    });
 
     return this.usersService.bareSafeUser(user);
   }
@@ -174,10 +174,10 @@ export class AuthService {
       user.id,
     );
 
-    await this.mailerService.sendConfirmationEmail(
-      user.email,
-      verificationToken.token,
-    );
+    await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
+      email: user.email,
+      token: verificationToken.token,
+    });
   }
 
   private async issueAuthTokens(user: User): Promise<AuthTokensResponse> {

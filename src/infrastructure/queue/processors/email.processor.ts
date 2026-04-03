@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { QUEUE_NAMES } from '../queue.constants.js';
 import { EMAIL_JOBS, EmailJobData, EmailJobName } from '../queue.types.js';
@@ -10,6 +11,8 @@ type EmailJobHandlers = {
 
 @Processor(QUEUE_NAMES.EMAIL)
 export class EmailProcessor extends WorkerHost {
+  private readonly logger = new Logger(EmailProcessor.name);
+
   constructor(private readonly mailerService: MailerService) {
     super();
   }
@@ -37,6 +40,31 @@ export class EmailProcessor extends WorkerHost {
     if (!handler) {
       throw new Error(`No handler found for job: ${job.name}`);
     }
+
+    this.logger.log(`Processing email job "${job.name}" (${job.id})`);
     await handler(job.data as never);
+  }
+
+  @OnWorkerEvent('completed')
+  onCompleted(job: Job<EmailJobData[EmailJobName]>): void {
+    this.logger.log(`Completed email job "${job.name}" (${job.id})`);
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(
+    job: Job<EmailJobData[EmailJobName]> | undefined,
+    error: Error,
+  ): void {
+    const jobName = job?.name ?? 'unknown';
+    const jobId = job?.id ?? 'unknown';
+    this.logger.error(
+      `Failed email job "${jobName}" (${jobId}): ${error.message}`,
+      error.stack,
+    );
+  }
+
+  @OnWorkerEvent('error')
+  onError(error: Error): void {
+    this.logger.error(`Email worker error: ${error.message}`, error.stack);
   }
 }

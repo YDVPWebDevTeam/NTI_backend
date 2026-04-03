@@ -14,14 +14,25 @@ jest.mock('./refresh-token/refresh-token.service', () => ({
   RefreshTokenService: class RefreshTokenService {},
 }));
 
+jest.mock('./email-verification/email-verification.service', () => ({
+  EmailVerificationService: class EmailVerificationService {},
+}));
+
+jest.mock('../infrastructure/mailer/mailer.service', () => ({
+  MailerService: class MailerService {},
+}));
+
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { PrismaDbClient } from '../infrastructure/database';
 import { UserRole, UserStatus } from '../../generated/prisma/enums';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
+import { MailerService } from '../infrastructure/mailer/mailer.service';
 import { UserService } from '../user/user.service';
-import { RefreshTokenService } from './refresh-token/refresh-token.service';
+import { EmailVerificationService } from './email-verification/email-verification.service';
 import { AuthService } from './auth.service';
+import { RefreshTokenService } from './refresh-token/refresh-token.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -29,11 +40,21 @@ describe('AuthService', () => {
     findByEmail: jest.Mock;
     create: jest.Mock;
     findById: jest.Mock;
+    markEmailConfirmed: jest.Mock;
     bareSafeUser: jest.Mock;
+    transaction: jest.Mock;
   };
   let refreshTokens: {
     create: jest.Mock;
     revokeById: jest.Mock;
+  };
+  let emailVerification: {
+    createForUser: jest.Mock;
+    validateTokenOrThrow: jest.Mock;
+    markAccepted: jest.Mock;
+  };
+  let mailer: {
+    sendConfirmationEmail: jest.Mock;
   };
   let jwtService: {
     signAsync: jest.Mock;
@@ -50,6 +71,12 @@ describe('AuthService', () => {
     passwordHash: 'stored-hash',
     role: UserRole.STUDENT,
     status: UserStatus.PENDING,
+    isEmailConfirmed: true,
+  };
+
+  const unconfirmedUser = {
+    ...user,
+    isEmailConfirmed: false,
   };
 
   const safeUser = {
@@ -58,17 +85,32 @@ describe('AuthService', () => {
     role: UserRole.STUDENT,
     status: UserStatus.PENDING,
   };
+  const transactionClient = {} as PrismaDbClient;
 
   beforeEach(() => {
     users = {
       findByEmail: jest.fn(),
       create: jest.fn(),
       findById: jest.fn(),
+      markEmailConfirmed: jest.fn(),
       bareSafeUser: jest.fn().mockReturnValue(safeUser),
+      transaction: jest
+        .fn()
+        .mockImplementation((fn: (db: PrismaDbClient) => Promise<unknown>) =>
+          fn(transactionClient),
+        ),
     };
     refreshTokens = {
       create: jest.fn(),
       revokeById: jest.fn(),
+    };
+    emailVerification = {
+      createForUser: jest.fn(),
+      validateTokenOrThrow: jest.fn(),
+      markAccepted: jest.fn(),
+    };
+    mailer = {
+      sendConfirmationEmail: jest.fn().mockResolvedValue(undefined),
     };
     jwtService = {
       signAsync: jest
@@ -90,9 +132,11 @@ describe('AuthService', () => {
       jwtService as unknown as JwtService,
       hashingService as unknown as HashingService,
       {
-        jwtRefreshSecret: '1234567890123456',
+        jwtRefreshSecret: '12345678901234567890123456789012',
         jwtRefreshExpirationDays: '7d',
       } as unknown as ConfigService,
+      emailVerification as unknown as EmailVerificationService,
+      mailer as unknown as MailerService,
     );
   });
 
@@ -100,9 +144,16 @@ describe('AuthService', () => {
     expect(service).toBeDefined();
   });
 
-  it('registers a user and returns tokens', async () => {
+  it('registers a user and sends a verification email', async () => {
     users.findByEmail.mockResolvedValue(null);
-    users.create.mockResolvedValue(user);
+    users.create.mockResolvedValue(unconfirmedUser);
+    emailVerification.createForUser.mockResolvedValue({
+      id: 'verification-1',
+      userId: user.id,
+      token: 'verification-token',
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+      acceptedAt: null,
+    });
 
     const result = await service.register({
       email: user.email,
@@ -111,23 +162,25 @@ describe('AuthService', () => {
     });
 
     expect(users.findByEmail).toHaveBeenCalledWith(user.email);
-    expect(hashingService.hash).toHaveBeenNthCalledWith(1, 'strongpass123');
-    expect(users.create).toHaveBeenCalledWith({
-      email: user.email,
-      name: user.name,
-      passwordHash: 'password-hash',
-    });
-    expect(refreshTokens.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: user.id,
-        tokenHash: 'refresh-token-hash',
-      }),
+    expect(hashingService.hash).toHaveBeenCalledWith('strongpass123');
+    expect(users.transaction).toHaveBeenCalled();
+    expect(users.create).toHaveBeenCalledWith(
+      {
+        email: user.email,
+        name: user.name,
+        passwordHash: 'password-hash',
+      },
+      transactionClient,
     );
-    expect(result).toEqual({
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      user: safeUser,
-    });
+    expect(emailVerification.createForUser).toHaveBeenCalledWith(
+      user.id,
+      transactionClient,
+    );
+    expect(mailer.sendConfirmationEmail).toHaveBeenCalledWith(
+      user.email,
+      'verification-token',
+    );
+    expect(result).toEqual(safeUser);
   });
 
   it('throws on register when email is already taken', async () => {
@@ -142,7 +195,7 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('logs in a user and returns tokens', async () => {
+  it('logs in a confirmed user and returns tokens', async () => {
     users.findByEmail.mockResolvedValue(user);
 
     const result = await service.login({
@@ -173,6 +226,17 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
+  it('throws on login when email is not confirmed', async () => {
+    users.findByEmail.mockResolvedValue(unconfirmedUser);
+
+    await expect(
+      service.login({
+        email: user.email,
+        password: 'strongpass123',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('refreshes tokens and revokes the previous refresh token', async () => {
     users.findById.mockResolvedValue(user);
 
@@ -193,5 +257,77 @@ describe('AuthService', () => {
     await expect(service.refresh(safeUser)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
+  });
+
+  it('confirms email and returns tokens', async () => {
+    emailVerification.validateTokenOrThrow.mockResolvedValue({
+      id: 'verification-1',
+      userId: user.id,
+      token: 'verification-token',
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+      acceptedAt: null,
+    });
+    users.findById.mockResolvedValue(unconfirmedUser);
+    users.markEmailConfirmed.mockResolvedValue(user);
+
+    const result = await service.confirmEmail('verification-token');
+
+    expect(emailVerification.validateTokenOrThrow).toHaveBeenCalledWith(
+      'verification-token',
+    );
+    expect(users.markEmailConfirmed).toHaveBeenCalledWith(
+      user.id,
+      transactionClient,
+    );
+    expect(emailVerification.markAccepted).toHaveBeenCalledWith(
+      'verification-1',
+      transactionClient,
+    );
+    expect(result).toEqual({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      user: safeUser,
+    });
+  });
+
+  it('resends confirmation email for an unconfirmed user', async () => {
+    users.findByEmail.mockResolvedValue(unconfirmedUser);
+    emailVerification.createForUser.mockResolvedValue({
+      id: 'verification-2',
+      userId: user.id,
+      token: 'new-verification-token',
+      expiresAt: new Date('2030-01-02T00:00:00.000Z'),
+      acceptedAt: null,
+    });
+
+    await expect(
+      service.resendConfirmationEmail(unconfirmedUser.email),
+    ).resolves.toBeUndefined();
+
+    expect(emailVerification.createForUser).toHaveBeenCalledWith(user.id);
+    expect(mailer.sendConfirmationEmail).toHaveBeenCalledWith(
+      unconfirmedUser.email,
+      'new-verification-token',
+    );
+  });
+
+  it('returns success without revealing missing accounts', async () => {
+    users.findByEmail.mockResolvedValue(null);
+
+    await expect(
+      service.resendConfirmationEmail('missing@example.com'),
+    ).resolves.toBeUndefined();
+    expect(emailVerification.createForUser).not.toHaveBeenCalled();
+    expect(mailer.sendConfirmationEmail).not.toHaveBeenCalled();
+  });
+
+  it('returns success without revealing confirmed accounts', async () => {
+    users.findByEmail.mockResolvedValue(user);
+
+    await expect(
+      service.resendConfirmationEmail(user.email),
+    ).resolves.toBeUndefined();
+    expect(emailVerification.createForUser).not.toHaveBeenCalled();
+    expect(mailer.sendConfirmationEmail).not.toHaveBeenCalled();
   });
 });

@@ -11,6 +11,8 @@ import { JwtAuthStrategy } from './strategies/jwt-auth.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshJwtStrategy } from './strategies/refresh-auth.strategy';
 import { RefreshJwtGuard } from './guards/refresh-auth.guard';
+import { EmailVerificationRepository } from './email-verification/email-verification.repository';
+import { EmailVerificationService } from './email-verification/email-verification.service';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { RefreshJwtGuard } from './guards/refresh-auth.guard';
   controllers: [AuthController],
   providers: [
     AuthService,
+    EmailVerificationRepository,
+    EmailVerificationService,
     RefreshTokenRepository,
     RefreshTokenService,
     JwtAuthGuard,
@@ -37,6 +41,11 @@ import { RefreshJwtGuard } from './guards/refresh-auth.guard';
     JwtAuthStrategy,
     RefreshJwtStrategy,
   ],
-  exports: [AuthService, RefreshTokenService, JwtAuthGuard],
+  exports: [
+    AuthService,
+    EmailVerificationService,
+    RefreshTokenService,
+    JwtAuthGuard,
+  ],
 })
 export class AuthModule {}

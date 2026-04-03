@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma, User } from '../../generated/prisma/client';
-import { BaseRepository } from '../infrastructure/database/base.repository';
+import {
+  BaseRepository,
+  PrismaDbClient,
+} from '../infrastructure/database/base.repository';
 import { PrismaService } from '../infrastructure/database/prisma.service';
 
 @Injectable()
@@ -12,33 +15,35 @@ export class UserRepository extends BaseRepository<
   Prisma.UserWhereUniqueInput,
   Prisma.UserOrderByWithRelationInput
 > {
-  protected get delegate() {
-    return this.prisma.client.user;
+  protected getDelegate(db?: PrismaDbClient) {
+    return (db ?? this.prisma.client).user;
   }
 
   constructor(prisma: PrismaService) {
     super(prisma);
   }
 
-  findByEmail(email: string): Promise<User | null> {
-    return this.findUnique({ email });
+  findByEmail(email: string, db?: PrismaDbClient): Promise<User | null> {
+    return this.findUnique({ email }, db);
   }
 
-  markEmailConfirmed(userId: string): Promise<User> {
+  markEmailConfirmed(userId: string, db?: PrismaDbClient): Promise<User> {
     return this.update(
       { id: userId },
       {
         isEmailConfirmed: true,
       },
+      db,
     );
   }
 
-  markAdminConfirmed(userId: string): Promise<User> {
+  markAdminConfirmed(userId: string, db?: PrismaDbClient): Promise<User> {
     return this.update(
       { id: userId },
       {
         isAdminConfirmed: true,
       },
+      db,
     );
   }
 }

@@ -9,9 +9,12 @@ import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-facto
 import { AuthResponseDto } from '../dto/auth-response.dto';
 import { AuthenticatedUserDto } from '../dto/authenticated-user.dto';
 import { ConfirmEmailDto } from '../dto/confirm-email.dto';
+import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { LoginDto } from '../dto/login.dto';
 import { LogoutResponseDto } from '../dto/logout-response.dto';
+import { MessageResponseDto } from '../dto/message-response.dto';
 import { RegisterDto } from '../dto/register.dto';
+import { ResetPasswordDto } from '../dto/reset-password.dto';
 import { ResendEmailDto } from '../dto/resend-email.dto';
 
 export const RegisterApi = () =>
@@ -136,4 +139,36 @@ export const ResendConfirmationEmailApi = () =>
       status: 200,
       description: 'Confirmation email sent successfully.',
     },
+  });
+
+export const ForgotPasswordApi = () =>
+  createApiDecorator({
+    summary: 'Request password reset',
+    description:
+      'Accepts an email address and, if the account exists, enqueues a password reset email without revealing whether the email is registered.',
+    body: ForgotPasswordDto,
+    successResponse: {
+      status: 200,
+      type: MessageResponseDto,
+      description: 'Password reset request was accepted.',
+    },
+  });
+
+export const ResetPasswordApi = () =>
+  createApiDecorator({
+    summary: 'Reset password',
+    description:
+      'Resets the account password using a valid password reset token and revokes all active refresh tokens for the user.',
+    body: ResetPasswordDto,
+    successResponse: {
+      status: 200,
+      type: MessageResponseDto,
+      description: 'Password was reset successfully.',
+    },
+    errors: [
+      ApiBadRequestResponse({
+        description:
+          'Password reset token is missing, expired, used, or invalid.',
+      }),
+    ],
   });

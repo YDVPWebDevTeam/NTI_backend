@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
@@ -18,12 +19,22 @@ import type { JwtPayload } from './types/jwt-payload.type';
 import type { RefreshJwtPayload } from './types/refresh-jwt-payload.type';
 import { EmailVerificationService } from './email-verification/email-verification.service';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
+import { ResetTokenService } from './reset-token/reset-token.service';
 
 export type AuthTokensResponse = {
   accessToken: string;
   refreshToken: string;
   user: AuthenticatedUserContext;
 };
+
+export type MessageResponse = {
+  message: string;
+};
+
+const FORGOT_PASSWORD_SUCCESS_MESSAGE =
+  'If the email exists, a reset link was sent.';
+const RESET_PASSWORD_SUCCESS_MESSAGE = 'Password reset successfully.';
+const INVALID_RESET_TOKEN_MESSAGE = 'Invalid or expired password reset token';
 
 @Injectable()
 export class AuthService {
@@ -36,6 +47,7 @@ export class AuthService {
     private readonly hashingService: HashingService,
     private readonly configService: ConfigService,
     private readonly emailVerificationService: EmailVerificationService,
+    private readonly resetTokenService: ResetTokenService,
     private readonly queueService: QueueService,
   ) {
     this.refreshTokenValidityDays = parseInt(
@@ -178,6 +190,52 @@ export class AuthService {
       email: user.email,
       token: verificationToken.token,
     });
+  }
+
+  async forgotPassword(email: string): Promise<MessageResponse> {
+    const user = await this.usersService.findByEmail(email);
+
+    if (!user) {
+      return { message: FORGOT_PASSWORD_SUCCESS_MESSAGE };
+    }
+
+    const resetToken = await this.resetTokenService.createForUser(user.id);
+
+    await this.queueService.addEmail(EMAIL_JOBS.PASSWORD_RESET, {
+      userId: user.id,
+      email: user.email,
+      token: resetToken.token,
+    });
+
+    return { message: FORGOT_PASSWORD_SUCCESS_MESSAGE };
+  }
+
+  async resetPassword(
+    token: string,
+    newPassword: string,
+  ): Promise<MessageResponse> {
+    const resetToken = await this.resetTokenService.findByToken(token);
+
+    if (!resetToken) {
+      throw new BadRequestException(INVALID_RESET_TOKEN_MESSAGE);
+    }
+
+    await this.usersService.transaction(async (transaction) => {
+      await this.usersService.update(
+        resetToken.userId,
+        {
+          passwordHash: await this.hashingService.hash(newPassword),
+        },
+        transaction,
+      );
+      await this.resetTokenService.markUsed(resetToken.id, transaction);
+      await this.refreshTokenService.revokeAllActiveByUserId(
+        resetToken.userId,
+        transaction,
+      );
+    });
+
+    return { message: RESET_PASSWORD_SUCCESS_MESSAGE };
   }
 
   private async issueAuthTokens(user: User): Promise<AuthTokensResponse> {

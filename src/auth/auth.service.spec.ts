@@ -18,6 +18,10 @@ jest.mock('./email-verification/email-verification.service', () => ({
   EmailVerificationService: class EmailVerificationService {},
 }));
 
+jest.mock('./reset-token/reset-token.service', () => ({
+  ResetTokenService: class ResetTokenService {},
+}));
+
 jest.mock('../infrastructure/queue', () => ({
   EMAIL_JOBS: {
     PASSWORD_RESET: 'password-reset',
@@ -38,6 +42,7 @@ import { UserService } from '../user/user.service';
 import { EmailVerificationService } from './email-verification/email-verification.service';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
+import { ResetTokenService } from './reset-token/reset-token.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -57,6 +62,11 @@ describe('AuthService', () => {
     createForUser: jest.Mock;
     validateTokenOrThrow: jest.Mock;
     markAccepted: jest.Mock;
+  };
+  let resetTokens: {
+    createForUser: jest.Mock;
+    findByToken: jest.Mock;
+    markUsed: jest.Mock;
   };
   let queueService: {
     addEmail: jest.Mock;
@@ -114,6 +124,11 @@ describe('AuthService', () => {
       validateTokenOrThrow: jest.fn(),
       markAccepted: jest.fn(),
     };
+    resetTokens = {
+      createForUser: jest.fn(),
+      findByToken: jest.fn(),
+      markUsed: jest.fn(),
+    };
     queueService = {
       addEmail: jest.fn().mockResolvedValue(undefined),
     };
@@ -141,6 +156,7 @@ describe('AuthService', () => {
         jwtRefreshExpirationDays: '7d',
       } as unknown as ConfigService,
       emailVerification as unknown as EmailVerificationService,
+      resetTokens as unknown as ResetTokenService,
       queueService as unknown as QueueService,
     );
   });

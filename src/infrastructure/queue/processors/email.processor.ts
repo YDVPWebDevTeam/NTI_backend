@@ -28,9 +28,8 @@ export class EmailProcessor extends WorkerHost {
         data.token,
       );
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
     [EMAIL_JOBS.PASSWORD_RESET]: async (data) => {
-      console.log('[EmailProcessor] Sending password reset email:', data);
+      await this.mailerService.sendPasswordResetEmail(data.email, data.token);
     },
   };
 

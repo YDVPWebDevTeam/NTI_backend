@@ -43,12 +43,17 @@ export class RefreshTokenRepository extends BaseRepository<
     });
   }
 
-  revokeTokenById(id: string, revokedAt = new Date()): Promise<RefreshToken> {
+  revokeTokenById(
+    id: string,
+    revokedAt = new Date(),
+    db?: PrismaDbClient,
+  ): Promise<RefreshToken> {
     return this.update(
       { id },
       {
         revokedAt,
       },
+      db,
     );
   }
 

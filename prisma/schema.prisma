@@ -14,12 +14,12 @@ datasource db {
 enum UserRole {
   STUDENT
   ADMIN
-  Company_Owner
-  Company_Employee
-  Mentor
-  Evaluator
-  Content_Editor
-  Super_Admin
+  COMPANY_OWNER
+  COMPANY_EMPLOYEE
+  MENTOR
+  EVALUATOR
+  CONTENT_EDITOR
+  SUPER_ADMIN
 
 }
 
@@ -88,6 +88,9 @@ model Team {
 enum InvitationStatus {
   PENDING
   ACCEPTED
+  EXPIRED
+  REVOKED
+  
 }
 
 model Invitation {
@@ -140,13 +143,28 @@ model Organization {
   id          String @id         @default(uuid())
   name        String     
   ico         String             @unique
-  sector      String
-  description String
-  website     String
-  logoUrl     String
+  sector      String?
+  description String?
+  website     String?
+  logoUrl     String?
   status      OrganizationStatus @default(PENDING)
   users       User[]
 
+  createdAt   DateTime           @default(now())
+}
 
-  
+model OrgInvitation {
+  id             String        @id @default(uuid())
+  email          String
+  token          String        @unique
+
+  roleToAssign   UserRole
+  status         InvitationStatus
+
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+
+  createdAt      DateTime      @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
 }

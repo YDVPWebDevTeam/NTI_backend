@@ -149,9 +149,13 @@ model Organization {
   logoUrl     String?
   status      OrganizationStatus @default(PENDING)
   users       User[]
+  invitations OrgInvitation[]
+  
 
   createdAt   DateTime           @default(now())
   updatedAt   DateTime?
+
+  
 }
 
 model OrgInvitation {
@@ -167,5 +171,6 @@ model OrgInvitation {
 
   createdAt      DateTime      @default(now())
   expiresAt      DateTime
+  updatedAt      DateTime?
   revokedAt      DateTime?
 }

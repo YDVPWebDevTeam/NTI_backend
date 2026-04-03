@@ -25,4 +25,8 @@ export class RefreshTokenService {
   revokeById(id: string): Promise<RefreshToken> {
     return this.refreshTokens.revokeTokenById(id);
   }
+
+  revokeAllActiveByUserId(userId: string): Promise<number> {
+    return this.refreshTokens.revokeActiveTokensByUserId(userId);
+  }
 }

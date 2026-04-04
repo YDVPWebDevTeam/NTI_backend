@@ -73,6 +73,16 @@ async function bootstrap() {
       },
       'refresh-token',
     )
+    .addCookieAuth(
+      'requiresPasswordChangeToken',
+      {
+        type: 'apiKey',
+        in: 'cookie',
+        description:
+          'Short-lived HttpOnly cookie used only for forced password change flow.',
+      },
+      'password-change-token',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);

@@ -10,6 +10,10 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/nti_db?schema=public
       REDIS_HOST: redis
+      CHOKIDAR_USEPOLLING: 'true'
+      CHOKIDAR_INTERVAL: '1000'
+      WATCHPACK_POLLING: 'true'
+      TSC_WATCHFILE: UsePolling
     volumes:
       - .:/app
       - /app/node_modules

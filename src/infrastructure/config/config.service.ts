@@ -83,6 +83,10 @@ export class ConfigService {
     return this.env.JWT_REFRESH_SECRET;
   }
 
+  get jwtForcePasswordChangeSecret(): string {
+    return this.env.JWT_FORCE_PASSWORD_CHANGE_SECRET;
+  }
+
   get jwtAccessExpiration(): StringValue {
     return this.env.JWT_ACCESS_EXPIRATION as StringValue;
   }
@@ -101,5 +105,9 @@ export class ConfigService {
 
   get emailVerificationExpirationHours(): number {
     return this.env.EMAIL_VERIFICATION_EXPIRATION_HOURS;
+  }
+
+  get forcePasswordChangeTokenExpirationMinutes(): number {
+    return this.env.FORCE_PASSWORD_CHANGE_TOKEN_EXPIRATION_MINUTES;
   }
 }

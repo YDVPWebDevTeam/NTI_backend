@@ -40,6 +40,7 @@ describe('AuthService', () => {
     findByEmail: jest.Mock;
     create: jest.Mock;
     findById: jest.Mock;
+    update: jest.Mock;
     markEmailConfirmed: jest.Mock;
     bareSafeUser: jest.Mock;
     transaction: jest.Mock;
@@ -47,6 +48,7 @@ describe('AuthService', () => {
   let refreshTokens: {
     create: jest.Mock;
     revokeById: jest.Mock;
+    findActiveByUserId: jest.Mock;
   };
   let emailVerification: {
     createForUser: jest.Mock;
@@ -58,6 +60,7 @@ describe('AuthService', () => {
   };
   let jwtService: {
     signAsync: jest.Mock;
+    verifyAsync: jest.Mock;
   };
   let hashingService: {
     hash: jest.Mock;
@@ -72,6 +75,7 @@ describe('AuthService', () => {
     role: UserRole.STUDENT,
     status: UserStatus.PENDING,
     isEmailConfirmed: true,
+    mustChangePassword: false,
   };
 
   const unconfirmedUser = {
@@ -92,6 +96,7 @@ describe('AuthService', () => {
       findByEmail: jest.fn(),
       create: jest.fn(),
       findById: jest.fn(),
+      update: jest.fn(),
       markEmailConfirmed: jest.fn(),
       bareSafeUser: jest.fn().mockReturnValue(safeUser),
       transaction: jest
@@ -103,6 +108,7 @@ describe('AuthService', () => {
     refreshTokens = {
       create: jest.fn(),
       revokeById: jest.fn(),
+      findActiveByUserId: jest.fn().mockResolvedValue([]),
     };
     emailVerification = {
       createForUser: jest.fn(),
@@ -117,6 +123,7 @@ describe('AuthService', () => {
         .fn()
         .mockResolvedValueOnce('access-token')
         .mockResolvedValueOnce('refresh-token'),
+      verifyAsync: jest.fn(),
     };
     hashingService = {
       hash: jest
@@ -132,8 +139,11 @@ describe('AuthService', () => {
       jwtService as unknown as JwtService,
       hashingService as unknown as HashingService,
       {
+        jwtAccessSecret: '12345678901234567890123456789012',
         jwtRefreshSecret: '12345678901234567890123456789012',
+        jwtForcePasswordChangeSecret: 'abcdefghijklmnopqrstuvwxyz123456',
         jwtRefreshExpirationDays: '7d',
+        forcePasswordChangeTokenExpirationMinutes: 15,
       } as unknown as ConfigService,
       emailVerification as unknown as EmailVerificationService,
       mailer as unknown as MailerService,
@@ -214,6 +224,108 @@ describe('AuthService', () => {
     });
   });
 
+  it('rejects admin account on default login endpoint', async () => {
+    users.findByEmail.mockResolvedValue({
+      ...user,
+      role: UserRole.SUPER_ADMIN,
+      mustChangePassword: true,
+    });
+
+    await expect(
+      service.login({
+        email: 'admin@nti.sk',
+        password: 'TempPass123!',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('allows admin login only for admin roles', async () => {
+    users.findByEmail.mockResolvedValue(user);
+
+    await expect(
+      service.adminLogin({
+        email: user.email,
+        password: 'strongpass123',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('returns password-change challenge for admin users that require it', async () => {
+    users.findByEmail.mockResolvedValue({
+      ...user,
+      role: UserRole.SUPER_ADMIN,
+      email: 'admin@nti.sk',
+      mustChangePassword: true,
+    });
+    jwtService.signAsync.mockReset().mockResolvedValueOnce('challenge-token');
+
+    const result = await service.adminLogin({
+      email: 'admin@nti.sk',
+      password: 'TempPass123!',
+    });
+
+    expect(jwtService.signAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sub: 'user-1',
+        email: 'admin@nti.sk',
+        purpose: 'force_password_change',
+      }),
+      expect.objectContaining({
+        secret: 'abcdefghijklmnopqrstuvwxyz123456',
+      }),
+    );
+    expect(result).toEqual({
+      requiresPasswordChange: true,
+      requiresPasswordChangeToken: 'challenge-token',
+    });
+  });
+
+  it('force-changes password, clears flag, and returns auth tokens', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'user-1',
+      email: 'admin@nti.sk',
+      role: UserRole.SUPER_ADMIN,
+      purpose: 'force_password_change',
+    });
+    users.findById.mockResolvedValue({
+      ...user,
+      email: 'admin@nti.sk',
+      role: UserRole.SUPER_ADMIN,
+      mustChangePassword: true,
+    });
+    users.update.mockResolvedValue({
+      ...user,
+      email: 'admin@nti.sk',
+      role: UserRole.SUPER_ADMIN,
+      mustChangePassword: false,
+    });
+    refreshTokens.findActiveByUserId.mockResolvedValue([
+      { id: 'rt-1' },
+      { id: 'rt-2' },
+    ]);
+
+    const result = await service.forceChangePassword(
+      'temp-token',
+      'NewStrongPass123!',
+      'NewStrongPass123!',
+    );
+
+    expect(jwtService.verifyAsync).toHaveBeenCalledWith('temp-token', {
+      secret: 'abcdefghijklmnopqrstuvwxyz123456',
+    });
+    expect(users.update).toHaveBeenCalledWith('user-1', {
+      passwordHash: 'password-hash',
+      mustChangePassword: false,
+    });
+    expect(refreshTokens.revokeById).toHaveBeenCalledWith('rt-1');
+    expect(refreshTokens.revokeById).toHaveBeenCalledWith('rt-2');
+    expect(result).toEqual({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      user: safeUser,
+    });
+  });
+
   it('throws on login when password is invalid', async () => {
     users.findByEmail.mockResolvedValue(user);
     hashingService.verify.mockResolvedValue(false);
@@ -251,6 +363,23 @@ describe('AuthService', () => {
       refreshToken: 'refresh-token',
       user: safeUser,
     });
+  });
+
+  it('rejects refresh when forced password change is required', async () => {
+    users.findById.mockResolvedValue({
+      ...user,
+      role: UserRole.SUPER_ADMIN,
+      mustChangePassword: true,
+    });
+
+    await expect(
+      service.refresh({
+        ...safeUser,
+        refreshTokenId: 'refresh-token-id',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(refreshTokens.revokeById).toHaveBeenCalledWith('refresh-token-id');
   });
 
   it('throws on refresh when refresh token context is missing', async () => {

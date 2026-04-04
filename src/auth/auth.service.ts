@@ -62,7 +62,7 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const passwordHash = await this.hashingService.hash(dto.password);
+    const passwordHash = await this.hashingService.hashStrong(dto.password);
 
     const { user, verificationToken } = await this.usersService.transaction(
       async (transaction) => {
@@ -102,7 +102,7 @@ export class AuthService {
 
     this.ensureUserCanAuthenticate(user);
 
-    const isPasswordValid = await this.hashingService.verify(
+    const isPasswordValid = await this.hashingService.verifyStrong(
       user.passwordHash,
       dto.password,
     );
@@ -214,21 +214,23 @@ export class AuthService {
     token: string,
     newPassword: string,
   ): Promise<MessageResponse> {
-    const resetToken = await this.resetTokenService.findByToken(token);
-
-    if (!resetToken) {
-      throw new BadRequestException(INVALID_RESET_TOKEN_MESSAGE);
-    }
-
     await this.usersService.transaction(async (transaction) => {
+      const resetToken = await this.resetTokenService.consumeByToken(
+        token,
+        transaction,
+      );
+
+      if (!resetToken) {
+        throw new BadRequestException(INVALID_RESET_TOKEN_MESSAGE);
+      }
+
       await this.usersService.update(
         resetToken.userId,
         {
-          passwordHash: await this.hashingService.hash(newPassword),
+          passwordHash: await this.hashingService.hashStrong(newPassword),
         },
         transaction,
       );
-      await this.resetTokenService.markUsed(resetToken.id, transaction);
       await this.refreshTokenService.revokeAllActiveByUserId(
         resetToken.userId,
         transaction,
@@ -262,7 +264,7 @@ export class AuthService {
       expiresIn: this.configService.jwtRefreshExpirationDays,
     });
 
-    const refreshTokenHash = await this.hashingService.hash(refreshToken);
+    const refreshTokenHash = await this.hashingService.hashStrong(refreshToken);
 
     await this.refreshTokenService.create({
       id: refreshTokenId,

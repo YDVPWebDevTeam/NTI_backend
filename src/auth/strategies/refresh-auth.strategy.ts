@@ -74,7 +74,7 @@ export class RefreshJwtStrategy extends PassportStrategy(
       throw new UnauthorizedException('Refresh token has expired');
     }
 
-    const isTokenValid = await this.hashingService.verify(
+    const isTokenValid = await this.hashingService.verifyStrong(
       refreshToken.tokenHash,
       tokenFromCookie,
     );

@@ -135,7 +135,7 @@ model RefreshToken {
 
 model PasswordResetToken {
   id    String @id @default(uuid())
-  token String @unique
+  tokenHash String @unique
 
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

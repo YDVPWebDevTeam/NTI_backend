@@ -8,6 +8,11 @@ import { ConfigService } from '../../infrastructure/config';
 import { HashingService } from '../../infrastructure/hashing';
 import { ResetTokenRepository } from './reset-token.repository';
 
+export type PasswordResetTokenPayload = {
+  token: string;
+  resetToken: PasswordResetToken;
+};
+
 @Injectable()
 export class ResetTokenService {
   constructor(
@@ -20,7 +25,10 @@ export class ResetTokenService {
     token: string,
     db?: PrismaDbClient,
   ): Promise<PasswordResetToken | null> {
-    return this.resetTokenRepository.findByToken(token, db);
+    return this.resetTokenRepository.findByToken(
+      this.hashingService.hashToken(token),
+      db,
+    );
   }
 
   findByUserId(
@@ -40,19 +48,36 @@ export class ResetTokenService {
   createForUser(
     userId: string,
     db?: PrismaDbClient,
-  ): Promise<PasswordResetToken> {
-    return this.resetTokenRepository.createOrReplaceForUser(
-      {
-        userId,
-        token: this.generateToken(),
-        expiresAt: this.resolveExpirationDate(),
-      },
-      db,
-    );
+  ): Promise<PasswordResetTokenPayload> {
+    const token = this.generateToken();
+
+    // The raw token is only sent to the user once. We persist its hash so a
+    // read-only database leak does not immediately expose valid reset links.
+    return this.resetTokenRepository
+      .createOrReplaceForUser(
+        {
+          userId,
+          tokenHash: this.hashingService.hashToken(token),
+          expiresAt: this.resolveExpirationDate(),
+        },
+        db,
+      )
+      .then((resetToken) => ({ token, resetToken }));
   }
 
   markUsed(id: string, db?: PrismaDbClient): Promise<PasswordResetToken> {
     return this.resetTokenRepository.markUsed(id, new Date(), db);
+  }
+
+  consumeByToken(
+    token: string,
+    db?: PrismaDbClient,
+  ): Promise<PasswordResetToken | null> {
+    return this.resetTokenRepository.consumeByToken(
+      this.hashingService.hashToken(token),
+      new Date(),
+      db,
+    );
   }
 
   deleteByUserId(

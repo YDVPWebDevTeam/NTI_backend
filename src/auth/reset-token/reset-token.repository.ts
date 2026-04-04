@@ -24,12 +24,12 @@ export class ResetTokenRepository extends BaseRepository<
   }
 
   findByToken(
-    token: string,
+    tokenHash: string,
     db?: PrismaDbClient,
   ): Promise<PasswordResetToken | null> {
     return this.findFirst(
       {
-        token,
+        tokenHash,
         usedAt: null,
         expiresAt: {
           gt: new Date(),
@@ -57,7 +57,7 @@ export class ResetTokenRepository extends BaseRepository<
         },
         create: data,
         update: {
-          token: data.token,
+          tokenHash: data.tokenHash,
           expiresAt: data.expiresAt,
           usedAt: null,
         },
@@ -78,6 +78,33 @@ export class ResetTokenRepository extends BaseRepository<
       },
       db,
     );
+  }
+
+  async consumeByToken(
+    tokenHash: string,
+    usedAt = new Date(),
+    db?: PrismaDbClient,
+  ): Promise<PasswordResetToken | null> {
+    // Consume is conditional and atomic so the same reset token cannot be used
+    // successfully by two concurrent requests racing through validation.
+    const result = await this.getDelegate(db).updateMany({
+      where: {
+        tokenHash,
+        usedAt: null,
+        expiresAt: {
+          gt: usedAt,
+        },
+      },
+      data: {
+        usedAt,
+      },
+    });
+
+    if (result.count === 0) {
+      return null;
+    }
+
+    return this.findUnique({ tokenHash }, db);
   }
 
   deleteByUserId(

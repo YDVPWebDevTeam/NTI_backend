@@ -1,3 +1,6 @@
+jest.mock('../../generated/prisma/client', () => ({}), { virtual: true });
+jest.mock('@prisma/client', () => ({}), { virtual: true });
+
 jest.mock('../user/user.service', () => ({
   UserService: class UserService {},
 }));
@@ -28,7 +31,7 @@ import { UserService } from '../user/user.service';
 import { EmailVerificationService } from './email-verification/email-verification.service';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
-import { QueueService } from 'src/infrastructure/queue';
+import { QueueService } from '../infrastructure/queue';
 import { EMAIL_JOBS } from '../infrastructure/queue/queue.types';
 
 describe('AuthService', () => {

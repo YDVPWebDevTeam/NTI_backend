@@ -18,7 +18,7 @@ import type { AuthenticatedUserContext } from '../common/types/auth-user-context
 import type { JwtPayload } from './types/jwt-payload.type';
 import type { RefreshJwtPayload } from './types/refresh-jwt-payload.type';
 import { EmailVerificationService } from './email-verification/email-verification.service';
-import { EMAIL_JOBS, QueueService } from 'src/infrastructure/queue';
+import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { RegisterCompanyOwnerDto } from './dto/register-company-owner.dto';
 
 export type AuthTokensResponse = {

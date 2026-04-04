@@ -6,8 +6,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import type { User } from '../../generated/prisma/client';
-import { UserStatus } from '../../generated/prisma/enums';
-import { UserRole } from '../../generated/prisma/client';
+import { UserRole, UserStatus } from '../../generated/prisma/enums';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';

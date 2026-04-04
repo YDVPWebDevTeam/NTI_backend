@@ -6,9 +6,11 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
+import { AdminLoginResponseDto } from '../dto/admin-login-response.dto';
 import { AuthResponseDto } from '../dto/auth-response.dto';
 import { AuthenticatedUserDto } from '../dto/authenticated-user.dto';
 import { ConfirmEmailDto } from '../dto/confirm-email.dto';
+import { ForceChangePasswordDto } from '../dto/force-change-password.dto';
 import { LoginDto } from '../dto/login.dto';
 import { LogoutResponseDto } from '../dto/logout-response.dto';
 import { RegisterDto } from '../dto/register.dto';
@@ -37,20 +39,65 @@ export const LoginApi = () =>
   createApiDecorator({
     summary: 'Log in',
     description:
-      'Authenticates the user, returns an access token, and writes the refresh token into an HttpOnly cookie.',
+      'Authenticates non-admin users, returns an access token, and writes the refresh token into an HttpOnly cookie. Admin accounts must use `/auth/admin/login`.',
     body: LoginDto,
     successResponse: {
       status: 200,
-      type: AuthResponseDto,
+      type: AdminLoginResponseDto,
       description:
-        'Authentication succeeded. The refresh token is returned via the `refreshToken` cookie.',
+        'Authentication succeeded. The refresh token is returned via the `refreshToken` cookie only when full auth is granted.',
     },
     errors: [
       ApiUnauthorizedResponse({
         description:
-          'Credentials are invalid or the account cannot authenticate.',
+          'Credentials are invalid, account cannot authenticate, or an admin account is used on this endpoint.',
       }),
     ],
+  });
+
+export const AdminLoginApi = () =>
+  createApiDecorator({
+    summary: 'Log in as admin',
+    description:
+      'Authenticates ADMIN or SUPER_ADMIN accounts. If password rotation is required, returns `requiresPasswordChange=true` and sets short-lived HttpOnly `requiresPasswordChangeToken` cookie instead of issuing session tokens.',
+    body: LoginDto,
+    successResponse: {
+      status: 200,
+      type: AdminLoginResponseDto,
+      description:
+        'Authentication succeeded or password-change challenge was returned.',
+    },
+    errors: [
+      ApiUnauthorizedResponse({
+        description:
+          'Credentials are invalid, account cannot authenticate, or account is not an admin account.',
+      }),
+    ],
+    extraDecorators: [ApiCookieAuth('password-change-token')],
+  });
+
+export const ForceChangePasswordApi = () =>
+  createApiDecorator({
+    summary: 'Force change password',
+    description:
+      'Validates a short-lived password-change challenge token from HttpOnly `requiresPasswordChangeToken` cookie, updates password hash, clears forced-change flag, and issues normal auth tokens.',
+    body: ForceChangePasswordDto,
+    successResponse: {
+      status: 200,
+      type: AuthResponseDto,
+      description:
+        'Password was changed successfully. The refresh token is returned via the `refreshToken` cookie.',
+    },
+    errors: [
+      ApiBadRequestResponse({
+        description:
+          'Password input is invalid or password confirmation does not match.',
+      }),
+      ApiUnauthorizedResponse({
+        description: 'Password-change token is invalid, expired, or unusable.',
+      }),
+    ],
+    extraDecorators: [ApiCookieAuth('password-change-token')],
   });
 
 export const MeApi = () =>

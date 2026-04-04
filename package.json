@@ -96,6 +96,9 @@
   "lint-staged": {
     "**/*.{js,ts}": [
       "eslint --fix"
+    ],
+    "**/*.prisma": [
+      "prisma format --schema prisma/schema.prisma"
     ]
   },
   "config": {

@@ -20,7 +20,6 @@ enum UserRole {
   EVALUATOR
   CONTENT_EDITOR
   SUPER_ADMIN
-
 }
 
 enum UserStatus {
@@ -35,7 +34,7 @@ model User {
   email        String @unique
   passwordHash String
 
-  refreshTokens RefreshToken[]
+  refreshTokens      RefreshToken[]
   passwordResetToken PasswordResetToken?
 
   role UserRole @default(STUDENT)
@@ -53,10 +52,14 @@ model User {
   leadOfTeams Team[] @relation("TeamLead")
 
   organizationId String?
-  organization Organization? @relation(fields: [organizationId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([role, status])
+  @@index([status, createdAt])
 }
 
 model TeamMember {
@@ -67,6 +70,7 @@ model TeamMember {
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@id([userId, teamId])
+  @@index([teamId])
 }
 
 model Team {
@@ -74,16 +78,19 @@ model Team {
   name String
 
   leaderId String
-  leader User @relation("TeamLead", fields: [leaderId], references: [id])
+  leader   User   @relation("TeamLead", fields: [leaderId], references: [id])
 
   members TeamMember[]
 
   invitations Invitation[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  lockedAt DateTime? // When a team is locked, it cannot be modified (e.g., members cannot be added or removed)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  lockedAt   DateTime? // When a team is locked, it cannot be modified (e.g., members cannot be added or removed)
   archivedAt DateTime?
+
+  @@index([leaderId])
+  @@index([archivedAt])
 }
 
 enum InvitationStatus {
@@ -107,6 +114,9 @@ model Invitation {
   createdAt DateTime  @default(now())
   expiresAt DateTime
   revokedAt DateTime?
+
+  @@index([teamId, status, expiresAt])
+  @@index([email])
 }
 
 model EmailVerificationToken {
@@ -119,10 +129,12 @@ model EmailVerificationToken {
   createdAt  DateTime  @default(now())
   expiresAt  DateTime
   acceptedAt DateTime?
+
+  @@index([expiresAt])
 }
 
 model RefreshToken {
-  id    String @id @default(uuid())
+  id        String @id @default(uuid())
   tokenHash String @unique
 
   userId String
@@ -131,10 +143,13 @@ model RefreshToken {
   createdAt DateTime  @default(now())
   expiresAt DateTime
   revokedAt DateTime?
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([expiresAt])
 }
 
 model PasswordResetToken {
-  id    String @id @default(uuid())
+  id        String @id @default(uuid())
   tokenHash String @unique
 
   userId String @unique
@@ -142,17 +157,18 @@ model PasswordResetToken {
 
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 }
 
 enum OrganizationStatus {
   PENDING
   ACTIVE
   REJECTED
+  SUSPENDED
 }
 
 model Organization {
-  id          String @id         @default(uuid())
+  id          String             @id @default(uuid())
   name        String
   ico         String             @unique
   sector      String?
@@ -163,23 +179,31 @@ model Organization {
   users       User[]
   invitations OrgInvitation[]
 
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
 }
 
 model OrgInvitation {
-  id             String        @id @default(uuid())
-  email          String
-  token          String        @unique
+  id    String @id @default(uuid())
+  email String
+  token String @unique
 
-  roleToAssign   UserRole
-  status         InvitationStatus @default(PENDING)
+  roleToAssign UserRole
+  status       InvitationStatus @default(PENDING)
 
   organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  revokedById    String?
 
-  createdAt      DateTime      @default(now())
-  expiresAt      DateTime
-  updatedAt      DateTime?
-  revokedAt      DateTime?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  updatedAt  DateTime  @updatedAt
+  revokedAt  DateTime?
+
+  @@index([organizationId, status, expiresAt])
+  @@index([email, status, expiresAt])
+  @@index([expiresAt])
 }

@@ -28,7 +28,7 @@ import {
   MeApi,
   RefreshApi,
   RegisterApi,
-  RegisterCompanyOwner,
+  RegisterCompanyOwnerApi,
   ResendConfirmationEmailApi,
 } from './api-docs';
 

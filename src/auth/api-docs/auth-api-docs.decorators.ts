@@ -34,7 +34,7 @@ export const RegisterApi = () =>
     ],
   });
 
-export const RegisterCompanyOwner = () =>
+export const RegisterCompanyOwnerApi = () =>
   createApiDecorator({
     summary: 'Register a new company owner',
     description:

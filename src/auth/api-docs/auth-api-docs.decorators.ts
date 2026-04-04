@@ -13,6 +13,7 @@ import { LoginDto } from '../dto/login.dto';
 import { LogoutResponseDto } from '../dto/logout-response.dto';
 import { RegisterDto } from '../dto/register.dto';
 import { ResendEmailDto } from '../dto/resend-email.dto';
+import { RegisterCompanyOwnerDto } from '../dto/register-company-owner.dto';
 
 export const RegisterApi = () =>
   createApiDecorator({
@@ -20,6 +21,25 @@ export const RegisterApi = () =>
     description:
       'Creates a new account, sends an email verification link, and returns the authenticated user context. The account will be created with a pending status until the email is confirmed.',
     body: RegisterDto,
+    successResponse: {
+      status: 201,
+      type: AuthenticatedUserDto,
+      description:
+        'User was created successfully and email verification was sent.',
+    },
+    errors: [
+      ApiConflictResponse({
+        description: 'A user with this email already exists.',
+      }),
+    ],
+  });
+
+export const RegisterCompanyOwnerApi = () =>
+  createApiDecorator({
+    summary: 'Register a new company owner',
+    description:
+      'Creates a new account, sends an email verification link, and returns the authenticated user context. The account will be created with a pending status until the email is confirmed.',
+    body: RegisterCompanyOwnerDto,
     successResponse: {
       status: 201,
       type: AuthenticatedUserDto,

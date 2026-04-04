@@ -34,11 +34,13 @@ export type PasswordChangeRequiredResponse = {
 
 export type LoginResponse = AuthTokensResponse | PasswordChangeRequiredResponse;
 
+export const FORCE_PASSWORD_CHANGE_PURPOSE = 'force_password_change' as const;
+
 type ForcePasswordChangeTokenPayload = {
   sub: string;
   email: string;
   role: UserRole;
-  purpose: 'force_password_change';
+  purpose: typeof FORCE_PASSWORD_CHANGE_PURPOSE;
 };
 
 @Injectable()
@@ -337,7 +339,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
-      purpose: 'force_password_change',
+      purpose: FORCE_PASSWORD_CHANGE_PURPOSE,
     };
 
     const expiresIn =
@@ -363,7 +365,7 @@ export class AuthService {
           },
         );
 
-      if (payload.purpose !== 'force_password_change') {
+      if (payload.purpose !== FORCE_PASSWORD_CHANGE_PURPOSE) {
         throw new UnauthorizedException(
           'Invalid or expired password change token',
         );

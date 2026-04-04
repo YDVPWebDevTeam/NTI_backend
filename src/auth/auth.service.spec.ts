@@ -31,7 +31,7 @@ import { HashingService } from '../infrastructure/hashing';
 import { MailerService } from '../infrastructure/mailer/mailer.service';
 import { UserService } from '../user/user.service';
 import { EmailVerificationService } from './email-verification/email-verification.service';
-import { AuthService } from './auth.service';
+import { AuthService, FORCE_PASSWORD_CHANGE_PURPOSE } from './auth.service';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
 
 describe('AuthService', () => {
@@ -268,7 +268,7 @@ describe('AuthService', () => {
       expect.objectContaining({
         sub: 'user-1',
         email: 'admin@nti.sk',
-        purpose: 'force_password_change',
+        purpose: FORCE_PASSWORD_CHANGE_PURPOSE,
       }),
       expect.objectContaining({
         secret: 'abcdefghijklmnopqrstuvwxyz123456',
@@ -285,7 +285,7 @@ describe('AuthService', () => {
       sub: 'user-1',
       email: 'admin@nti.sk',
       role: UserRole.SUPER_ADMIN,
-      purpose: 'force_password_change',
+      purpose: FORCE_PASSWORD_CHANGE_PURPOSE,
     });
     users.findById.mockResolvedValue({
       ...user,

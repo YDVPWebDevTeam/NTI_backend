@@ -28,9 +28,9 @@ import {
   MeApi,
   RefreshApi,
   RegisterApi,
+  RegisterCompanyOwner,
   ResendConfirmationEmailApi,
 } from './api-docs';
-import { RegisterCompanyOwner } from './api-docs/auth-api-docs.decorators';
 
 type AuthHttpResponse = Omit<AuthTokensResponse, 'refreshToken'>;
 

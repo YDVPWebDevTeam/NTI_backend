@@ -66,8 +66,12 @@ export class AuthController {
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) reply: FastifyReply,
-  ): Promise<AuthHttpResponse | PasswordChangeRequiredHttpResponse> {
-    return this.handleLoginResponse(await this.authService.login(dto), reply);
+  ): Promise<AuthHttpResponse> {
+    const authResult = await this.authService.login(dto);
+    this.clearPasswordChangeTokenCookie(reply);
+    this.setRefreshTokenCookie(reply, authResult.refreshToken);
+
+    return this.toHttpAuthResponse(authResult);
   }
 
   @AdminLoginApi()

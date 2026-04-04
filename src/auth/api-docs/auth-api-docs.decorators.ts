@@ -43,7 +43,7 @@ export const LoginApi = () =>
     body: LoginDto,
     successResponse: {
       status: 200,
-      type: AdminLoginResponseDto,
+      type: AuthResponseDto,
       description:
         'Authentication succeeded. The refresh token is returned via the `refreshToken` cookie only when full auth is granted.',
     },
@@ -73,7 +73,6 @@ export const AdminLoginApi = () =>
           'Credentials are invalid, account cannot authenticate, or account is not an admin account.',
       }),
     ],
-    extraDecorators: [ApiCookieAuth('password-change-token')],
   });
 
 export const ForceChangePasswordApi = () =>

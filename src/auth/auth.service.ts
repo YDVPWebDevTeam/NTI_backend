@@ -99,11 +99,11 @@ export class AuthService {
     return this.usersService.bareSafeUser(user);
   }
 
-  async login(dto: LoginDto): Promise<LoginResponse> {
+  async login(dto: LoginDto): Promise<AuthTokensResponse> {
     const user = await this.authenticateByCredentials(dto);
     this.ensureRoleMatchesLoginEndpoint(user, { requireAdmin: false });
 
-    return this.resolveLoginResponse(user);
+    return this.issueAuthTokens(user);
   }
 
   async adminLogin(dto: LoginDto): Promise<LoginResponse> {

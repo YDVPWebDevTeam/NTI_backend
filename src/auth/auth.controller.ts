@@ -50,7 +50,7 @@ export class AuthController {
     return authResult;
   }
 
-  @RegisterCompanyOwner()
+  @RegisterCompanyOwnerApi()
   @Post('register-company-owner')
   @HttpCode(HttpStatus.CREATED)
   async registerCompanyOwner(

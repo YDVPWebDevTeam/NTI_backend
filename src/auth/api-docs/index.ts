@@ -8,4 +8,5 @@ export {
   RegisterApi,
   ResetPasswordApi,
   ResendConfirmationEmailApi,
+  RegisterCompanyOwnerApi,
 } from './auth-api-docs.decorators';

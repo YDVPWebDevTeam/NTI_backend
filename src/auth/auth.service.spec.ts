@@ -1,3 +1,6 @@
+jest.mock('../../generated/prisma/client', () => ({}), { virtual: true });
+jest.mock('@prisma/client', () => ({}), { virtual: true });
+
 jest.mock('../user/user.service', () => ({
   UserService: class UserService {},
 }));
@@ -30,7 +33,6 @@ jest.mock('../infrastructure/queue', () => ({
   },
   QueueService: class QueueService {},
 }));
-
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { PrismaDbClient } from '../infrastructure/database';

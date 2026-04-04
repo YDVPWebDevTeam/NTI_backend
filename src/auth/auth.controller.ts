@@ -20,6 +20,7 @@ import type { AuthenticatedUserContext } from '../common/types/auth-user-context
 import { ConfigService } from '../infrastructure/config';
 import { ResendEmailDto } from './dto/resend-email.dto';
 import { ConfirmEmailDto } from './dto/confirm-email.dto';
+import { RegisterCompanyOwnerDto } from './dto/register-company-owner.dto';
 import {
   ConfirmEmailApi,
   ForgotPasswordApi,
@@ -29,6 +30,7 @@ import {
   RefreshApi,
   RegisterApi,
   ResetPasswordApi,
+  RegisterCompanyOwnerApi,
   ResendConfirmationEmailApi,
 } from './api-docs';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -51,6 +53,15 @@ export class AuthController {
     const authResult = await this.authService.register(dto);
 
     return authResult;
+  }
+
+  @RegisterCompanyOwnerApi()
+  @Post('register-company-owner')
+  @HttpCode(HttpStatus.CREATED)
+  async registerCompanyOwner(
+    @Body() dto: RegisterCompanyOwnerDto,
+  ): Promise<AuthenticatedUserContext> {
+    return this.authService.registerCompanyOwner(dto);
   }
 
   @LoginApi()

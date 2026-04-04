@@ -7,7 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import type { User } from '../../generated/prisma/client';
-import { UserStatus } from '../../generated/prisma/enums';
+import { UserRole, UserStatus } from '../../generated/prisma/enums';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
@@ -20,6 +20,7 @@ import type { RefreshJwtPayload } from './types/refresh-jwt-payload.type';
 import { EmailVerificationService } from './email-verification/email-verification.service';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { ResetTokenService } from './reset-token/reset-token.service';
+import { RegisterCompanyOwnerDto } from './dto/register-company-owner.dto';
 
 export type AuthTokensResponse = {
   accessToken: string;
@@ -93,14 +94,55 @@ export class AuthService {
     return this.usersService.bareSafeUser(user);
   }
 
+  async registerCompanyOwner(
+    dto: RegisterCompanyOwnerDto,
+  ): Promise<AuthenticatedUserContext> {
+    const email = dto.email.toLowerCase().trim();
+    const existingUser = await this.usersService.findByEmail(email);
+
+    if (existingUser) {
+      throw new ConflictException('User with this email already exists');
+    }
+
+    const passwordHash = await this.hashingService.hashStrong(dto.password);
+
+    const { user, verificationToken } = await this.usersService.transaction(
+      async (transaction) => {
+        const user = await this.usersService.create(
+          {
+            email: email,
+            name: dto.name,
+            passwordHash,
+            role: UserRole.COMPANY_OWNER,
+            isEmailConfirmed: false,
+          },
+          transaction,
+        );
+
+        const verificationToken =
+          await this.emailVerificationService.createForUser(
+            user.id,
+            transaction,
+          );
+
+        return { user, verificationToken };
+      },
+    );
+
+    await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
+      email: user.email,
+      token: verificationToken.token,
+    });
+
+    return this.usersService.bareSafeUser(user);
+  }
+
   async login(dto: LoginDto): Promise<AuthTokensResponse> {
     const user = await this.usersService.findByEmail(dto.email);
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
     }
-
-    this.ensureUserCanAuthenticate(user);
 
     const isPasswordValid = await this.hashingService.verifyStrong(
       user.passwordHash,
@@ -110,6 +152,8 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    this.ensureUserCanAuthenticate(user);
 
     return this.issueAuthTokens(user);
   }

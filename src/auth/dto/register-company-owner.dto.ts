@@ -6,28 +6,28 @@ import {
   PasswordValidation,
 } from '../../common/validation/password.validation';
 
-export class RegisterDto {
+export class RegisterCompanyOwnerDto {
   @ApiProperty({
-    description: 'Email for the new account.',
-    example: 'new.student@nti.sk',
+    example: 'owner@example.com',
+    description: 'Company owner email address',
   })
   @IsEmail()
   email!: string;
 
   @ApiProperty({
-    description: 'Display name of the new user.',
-    example: 'Jan Novak',
+    example: 'John Doe',
+    description: 'Full name of the company owner',
     minLength: 2,
-    maxLength: 50,
+    maxLength: 100,
   })
   @IsString()
   @MinLength(2)
-  @MaxLength(50)
+  @MaxLength(100)
   name!: string;
 
   @ApiProperty({
-    description: 'Password for the new account.',
-    example: 'StrongPass123!',
+    example: 'strongpass123',
+    description: 'Password must contain letters and numbers',
     minLength: PASSWORD_MIN_LENGTH,
     maxLength: PASSWORD_MAX_LENGTH,
   })

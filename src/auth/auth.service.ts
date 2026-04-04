@@ -82,7 +82,9 @@ export class AuthService {
     return this.usersService.bareSafeUser(user);
   }
 
-  async registerCompanyOwner(dto: RegisterCompanyOwnerDto) {
+  async registerCompanyOwner(
+    dto: RegisterCompanyOwnerDto,
+  ): Promise<AuthenticatedUserContext> {
     const email = dto.email.toLowerCase().trim();
     const existingUser = await this.usersService.findByEmail(email);
 

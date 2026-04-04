@@ -231,6 +231,10 @@ export class AuthService {
         },
         transaction,
       );
+      await this.usersService.markEmailConfirmed(
+        resetToken.userId,
+        transaction,
+      );
       await this.refreshTokenService.revokeAllActiveByUserId(
         resetToken.userId,
         transaction,

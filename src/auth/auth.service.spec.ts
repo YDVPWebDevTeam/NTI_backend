@@ -18,21 +18,18 @@ jest.mock('./email-verification/email-verification.service', () => ({
   EmailVerificationService: class EmailVerificationService {},
 }));
 
-jest.mock('../infrastructure/mailer/mailer.service', () => ({
-  MailerService: class MailerService {},
-}));
-
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { PrismaDbClient } from '../infrastructure/database';
 import { UserRole, UserStatus } from '../../generated/prisma/enums';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
-import { MailerService } from '../infrastructure/mailer/mailer.service';
 import { UserService } from '../user/user.service';
 import { EmailVerificationService } from './email-verification/email-verification.service';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
+import { QueueService } from 'src/infrastructure/queue';
+import { EMAIL_JOBS } from '../infrastructure/queue/queue.types';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -53,15 +50,15 @@ describe('AuthService', () => {
     validateTokenOrThrow: jest.Mock;
     markAccepted: jest.Mock;
   };
-  let mailer: {
-    sendConfirmationEmail: jest.Mock;
-  };
   let jwtService: {
     signAsync: jest.Mock;
   };
   let hashingService: {
     hash: jest.Mock;
     verify: jest.Mock;
+  };
+  let queueService: {
+    addEmail: jest.Mock;
   };
 
   const user = {
@@ -109,9 +106,6 @@ describe('AuthService', () => {
       validateTokenOrThrow: jest.fn(),
       markAccepted: jest.fn(),
     };
-    mailer = {
-      sendConfirmationEmail: jest.fn().mockResolvedValue(undefined),
-    };
     jwtService = {
       signAsync: jest
         .fn()
@@ -126,6 +120,10 @@ describe('AuthService', () => {
       verify: jest.fn().mockResolvedValue(true),
     };
 
+    queueService = {
+      addEmail: jest.fn(),
+    };
+
     service = new AuthService(
       users as unknown as UserService,
       refreshTokens as unknown as RefreshTokenService,
@@ -136,7 +134,7 @@ describe('AuthService', () => {
         jwtRefreshExpirationDays: '7d',
       } as unknown as ConfigService,
       emailVerification as unknown as EmailVerificationService,
-      mailer as unknown as MailerService,
+      queueService as unknown as QueueService,
     );
   });
 
@@ -176,9 +174,12 @@ describe('AuthService', () => {
       user.id,
       transactionClient,
     );
-    expect(mailer.sendConfirmationEmail).toHaveBeenCalledWith(
-      user.email,
-      'verification-token',
+    expect(queueService.addEmail).toHaveBeenCalledWith(
+      EMAIL_JOBS.USER_CONFIRMATION,
+      {
+        email: user.email,
+        token: 'verification-token',
+      },
     );
     expect(result).toEqual(safeUser);
   });
@@ -305,9 +306,12 @@ describe('AuthService', () => {
     ).resolves.toBeUndefined();
 
     expect(emailVerification.createForUser).toHaveBeenCalledWith(user.id);
-    expect(mailer.sendConfirmationEmail).toHaveBeenCalledWith(
-      unconfirmedUser.email,
-      'new-verification-token',
+    expect(queueService.addEmail).toHaveBeenCalledWith(
+      EMAIL_JOBS.USER_CONFIRMATION,
+      {
+        email: unconfirmedUser.email,
+        token: 'new-verification-token',
+      },
     );
   });
 
@@ -318,7 +322,7 @@ describe('AuthService', () => {
       service.resendConfirmationEmail('missing@example.com'),
     ).resolves.toBeUndefined();
     expect(emailVerification.createForUser).not.toHaveBeenCalled();
-    expect(mailer.sendConfirmationEmail).not.toHaveBeenCalled();
+    expect(queueService.addEmail).not.toHaveBeenCalled();
   });
 
   it('returns success without revealing confirmed accounts', async () => {
@@ -328,6 +332,6 @@ describe('AuthService', () => {
       service.resendConfirmationEmail(user.email),
     ).resolves.toBeUndefined();
     expect(emailVerification.createForUser).not.toHaveBeenCalled();
-    expect(mailer.sendConfirmationEmail).not.toHaveBeenCalled();
+    expect(queueService.addEmail).not.toHaveBeenCalled();
   });
 });

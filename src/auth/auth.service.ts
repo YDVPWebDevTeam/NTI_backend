@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import type { User } from '../../generated/prisma/client';
 import { UserStatus } from '../../generated/prisma/enums';
+import { UserRole } from '../../generated/prisma/client';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
@@ -17,7 +18,8 @@ import type { AuthenticatedUserContext } from '../common/types/auth-user-context
 import type { JwtPayload } from './types/jwt-payload.type';
 import type { RefreshJwtPayload } from './types/refresh-jwt-payload.type';
 import { EmailVerificationService } from './email-verification/email-verification.service';
-import { MailerService } from '../infrastructure/mailer/mailer.service';
+import { EMAIL_JOBS, QueueService } from 'src/infrastructure/queue';
+import { RegisterCompanyOwnerDto } from './dto/register-company-owner.dto';
 
 export type AuthTokensResponse = {
   accessToken: string;
@@ -36,7 +38,7 @@ export class AuthService {
     private readonly hashingService: HashingService,
     private readonly configService: ConfigService,
     private readonly emailVerificationService: EmailVerificationService,
-    private readonly mailerService: MailerService,
+    private readonly queueService: QueueService,
   ) {
     this.refreshTokenValidityDays = parseInt(
       this.configService.jwtRefreshExpirationDays,
@@ -73,10 +75,51 @@ export class AuthService {
       },
     );
 
-    await this.mailerService.sendConfirmationEmail(
-      user.email,
-      verificationToken.token,
+    await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
+      email: user.email,
+      token: verificationToken.token,
+    });
+
+    return this.usersService.bareSafeUser(user);
+  }
+
+  async registerCompanyOwner(dto: RegisterCompanyOwnerDto) {
+    const email = dto.email.toLowerCase().trim();
+    const existingUser = await this.usersService.findByEmail(email);
+
+    if (existingUser) {
+      throw new ConflictException('User with this email already exists');
+    }
+
+    const passwordHash = await this.hashingService.hash(dto.password);
+
+    const { user, verificationToken } = await this.usersService.transaction(
+      async (transaction) => {
+        const user = await this.usersService.create(
+          {
+            email: email,
+            name: dto.name,
+            passwordHash,
+            role: UserRole.COMPANY_OWNER,
+            isEmailConfirmed: false,
+          },
+          transaction,
+        );
+
+        const verificationToken =
+          await this.emailVerificationService.createForUser(
+            user.id,
+            transaction,
+          );
+
+        return { user, verificationToken };
+      },
     );
+
+    await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
+      email: user.email,
+      token: verificationToken.token,
+    });
 
     return this.usersService.bareSafeUser(user);
   }
@@ -86,6 +129,10 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (!user.isEmailConfirmed) {
+      throw new UnauthorizedException('Email not verified');
     }
 
     this.ensureUserCanAuthenticate(user);
@@ -174,10 +221,10 @@ export class AuthService {
       user.id,
     );
 
-    await this.mailerService.sendConfirmationEmail(
-      user.email,
-      verificationToken.token,
-    );
+    await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
+      email: user.email,
+      token: verificationToken.token,
+    });
   }
 
   private async issueAuthTokens(user: User): Promise<AuthTokensResponse> {

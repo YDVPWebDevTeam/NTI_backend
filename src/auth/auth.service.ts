@@ -131,12 +131,7 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
     }
-
-    if (!user.isEmailConfirmed) {
-      throw new UnauthorizedException('Email not verified');
-    }
-
-    this.ensureUserCanAuthenticate(user);
+    
 
     const isPasswordValid = await this.hashingService.verify(
       user.passwordHash,
@@ -146,6 +141,9 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    
+    this.ensureUserCanAuthenticate(user);
 
     return this.issueAuthTokens(user);
   }

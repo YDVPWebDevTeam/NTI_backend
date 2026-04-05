@@ -1,5 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '../config';
+import { UserRole } from '../../../generated/prisma/enums';
 
 import nodemailer, { Transporter } from 'nodemailer';
 
@@ -82,5 +83,21 @@ export class MailerService {
         `;
 
     await this.sendEmail(email, 'Password reset', html);
+  }
+
+  async sendSystemInvite(
+    email: string,
+    token: string,
+    roleToAssign: UserRole,
+  ): Promise<void> {
+    const link = `${this.configService.frontUrl}/invite?token=${token}`;
+
+    const html = `
+        <h1>System invitation</h1>
+        <p>You have been invited as <b>${roleToAssign}</b>.</p>
+        <a href="${link}">Accept invitation</a>
+        `;
+
+    await this.sendEmail(email, 'System Invitation', html);
   }
 }

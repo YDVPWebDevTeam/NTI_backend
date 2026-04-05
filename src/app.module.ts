@@ -7,6 +7,7 @@ import { ConfigModule, ConfigService } from './infrastructure/config';
 import { DatabaseModule } from './infrastructure/database';
 import { LoggerModule } from './infrastructure/logger/logger.module';
 import { MailerModule } from './infrastructure/mailer/mailer.module';
+import { PdfModule } from './infrastructure/pdf';
 import { QueueModule } from './infrastructure/queue';
 import { UserModule } from './user/user.module';
 
@@ -18,6 +19,7 @@ import { UserModule } from './user/user.module';
     LoggerModule,
     QueueModule,
     MailerModule,
+    PdfModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

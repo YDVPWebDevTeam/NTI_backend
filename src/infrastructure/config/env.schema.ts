@@ -18,6 +18,14 @@ export const envSchema = z.object({
   SMTP_PASSWORD: z.string().min(1, 'SMTP_PASSWORD is required'),
   SMTP_FROM: z.string().min(1, 'SMTP_FROM is required'),
   FRONTEND_URL: z.string().min(1, 'FRONTEND_URL is required'),
+  PUPPETEER_EXECUTABLE_PATH: z.string().min(1).optional(),
+  PUPPETEER_HEADLESS: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+  PUPPETEER_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  PDF_JOB_WAIT_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  PDF_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(2),
   JWT_ACCESS_SECRET: z
     .string()
     .min(32, 'JWT_ACCESS_SECRET must be at least 32 characters long'),

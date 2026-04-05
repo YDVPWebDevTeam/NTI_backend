@@ -19,6 +19,30 @@ services:
       redis:
         condition: service_healthy
 
+  worker:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    command: sh -c "apt-get update && apt-get install -y --no-install-recommends chromium fonts-liberation ca-certificates && npm install && npx prisma generate && npm run start:worker:dev"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/nti_db?schema=public
+      REDIS_HOST: redis
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+      CHOKIDAR_USEPOLLING: 'true'
+      CHOKIDAR_INTERVAL: '1000'
+      WATCHPACK_POLLING: 'true'
+      TSC_WATCHFILE: UsePolling
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     ports:

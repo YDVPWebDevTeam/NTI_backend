@@ -43,6 +43,26 @@ export class ConfigService {
     return this.env.FRONTEND_URL;
   }
 
+  get puppeteerExecutablePath(): string | undefined {
+    return this.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+
+  get puppeteerHeadless(): boolean {
+    return this.env.PUPPETEER_HEADLESS;
+  }
+
+  get puppeteerTimeoutMs(): number {
+    return this.env.PUPPETEER_TIMEOUT_MS;
+  }
+
+  get pdfJobWaitTimeoutMs(): number {
+    return this.env.PDF_JOB_WAIT_TIMEOUT_MS;
+  }
+
+  get pdfWorkerConcurrency(): number {
+    return this.env.PDF_WORKER_CONCURRENCY;
+  }
+
   get nodeEnv(): string {
     return this.env.NODE_ENV;
   }

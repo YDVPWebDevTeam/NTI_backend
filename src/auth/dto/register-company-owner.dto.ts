@@ -1,11 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
 import {
-  IsEmail,
-  IsString,
-  MinLength,
-  MaxLength,
-  Matches,
-} from 'class-validator';
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PasswordValidation,
+} from '../../common/validation/password.validation';
 
 export class RegisterCompanyOwnerDto {
   @ApiProperty({
@@ -29,14 +28,9 @@ export class RegisterCompanyOwnerDto {
   @ApiProperty({
     example: 'strongpass123',
     description: 'Password must contain letters and numbers',
-    minLength: 8,
-    maxLength: 128,
+    minLength: PASSWORD_MIN_LENGTH,
+    maxLength: PASSWORD_MAX_LENGTH,
   })
-  @IsString()
-  @MinLength(8)
-  @MaxLength(128)
-  @Matches(/^(?=.*[A-Za-z])(?=.*\d).+$/, {
-    message: 'Password too weak',
-  })
+  @PasswordValidation()
   password!: string;
 }

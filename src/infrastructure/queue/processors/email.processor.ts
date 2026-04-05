@@ -28,6 +28,13 @@ export class EmailProcessor extends WorkerHost {
         data.token,
       );
     },
+    [EMAIL_JOBS.TEAM_INVITATION]: async (data) => {
+      await this.mailerService.sendTeamConfirm(
+        data.email,
+        data.teamName,
+        data.token,
+      );
+    },
     [EMAIL_JOBS.PASSWORD_RESET]: async (data) => {
       await this.mailerService.sendPasswordResetEmail(data.email, data.token);
     },

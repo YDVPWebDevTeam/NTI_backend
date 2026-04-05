@@ -21,18 +21,30 @@ jest.mock('./email-verification/email-verification.service', () => ({
   EmailVerificationService: class EmailVerificationService {},
 }));
 
+jest.mock('./reset-token/reset-token.service', () => ({
+  ResetTokenService: class ResetTokenService {},
+}));
+
+jest.mock('../infrastructure/queue', () => ({
+  EMAIL_JOBS: {
+    PASSWORD_RESET: 'password-reset',
+    USER_CONFIRMATION: 'user-confirmation',
+    TEAM_CONFIRMATION: 'team-confirmation',
+  },
+  QueueService: class QueueService {},
+}));
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { PrismaDbClient } from '../infrastructure/database';
 import { UserRole, UserStatus } from '../../generated/prisma/enums';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
+import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { UserService } from '../user/user.service';
 import { EmailVerificationService } from './email-verification/email-verification.service';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
-import { QueueService } from '../infrastructure/queue';
-import { EMAIL_JOBS } from '../infrastructure/queue/queue.types';
+import { ResetTokenService } from './reset-token/reset-token.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -53,15 +65,20 @@ describe('AuthService', () => {
     validateTokenOrThrow: jest.Mock;
     markAccepted: jest.Mock;
   };
+  let resetTokens: {
+    createForUser: jest.Mock;
+    findByToken: jest.Mock;
+    markUsed: jest.Mock;
+  };
+  let queueService: {
+    addEmail: jest.Mock;
+  };
   let jwtService: {
     signAsync: jest.Mock;
   };
   let hashingService: {
-    hash: jest.Mock;
-    verify: jest.Mock;
-  };
-  let queueService: {
-    addEmail: jest.Mock;
+    hashStrong: jest.Mock;
+    verifyStrong: jest.Mock;
   };
 
   const user = {
@@ -109,6 +126,14 @@ describe('AuthService', () => {
       validateTokenOrThrow: jest.fn(),
       markAccepted: jest.fn(),
     };
+    resetTokens = {
+      createForUser: jest.fn(),
+      findByToken: jest.fn(),
+      markUsed: jest.fn(),
+    };
+    queueService = {
+      addEmail: jest.fn().mockResolvedValue(undefined),
+    };
     jwtService = {
       signAsync: jest
         .fn()
@@ -116,15 +141,11 @@ describe('AuthService', () => {
         .mockResolvedValueOnce('refresh-token'),
     };
     hashingService = {
-      hash: jest
+      hashStrong: jest
         .fn()
         .mockResolvedValueOnce('password-hash')
         .mockResolvedValue('refresh-token-hash'),
-      verify: jest.fn().mockResolvedValue(true),
-    };
-
-    queueService = {
-      addEmail: jest.fn(),
+      verifyStrong: jest.fn().mockResolvedValue(true),
     };
 
     service = new AuthService(
@@ -137,6 +158,7 @@ describe('AuthService', () => {
         jwtRefreshExpirationDays: '7d',
       } as unknown as ConfigService,
       emailVerification as unknown as EmailVerificationService,
+      resetTokens as unknown as ResetTokenService,
       queueService as unknown as QueueService,
     );
   });
@@ -145,7 +167,7 @@ describe('AuthService', () => {
     expect(service).toBeDefined();
   });
 
-  it('registers a user and sends a verification email', async () => {
+  it('registers a user and enqueues a verification email', async () => {
     users.findByEmail.mockResolvedValue(null);
     users.create.mockResolvedValue(unconfirmedUser);
     emailVerification.createForUser.mockResolvedValue({
@@ -163,7 +185,7 @@ describe('AuthService', () => {
     });
 
     expect(users.findByEmail).toHaveBeenCalledWith(user.email);
-    expect(hashingService.hash).toHaveBeenCalledWith('strongpass123');
+    expect(hashingService.hashStrong).toHaveBeenCalledWith('strongpass123');
     expect(users.transaction).toHaveBeenCalled();
     expect(users.create).toHaveBeenCalledWith(
       {
@@ -207,7 +229,7 @@ describe('AuthService', () => {
       password: 'strongpass123',
     });
 
-    expect(hashingService.verify).toHaveBeenCalledWith(
+    expect(hashingService.verifyStrong).toHaveBeenCalledWith(
       user.passwordHash,
       'strongpass123',
     );
@@ -220,7 +242,7 @@ describe('AuthService', () => {
 
   it('throws on login when password is invalid', async () => {
     users.findByEmail.mockResolvedValue(user);
-    hashingService.verify.mockResolvedValue(false);
+    hashingService.verifyStrong.mockResolvedValue(false);
 
     await expect(
       service.login({

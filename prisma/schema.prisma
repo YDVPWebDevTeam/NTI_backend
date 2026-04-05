@@ -34,7 +34,8 @@ model User {
   email        String @unique
   passwordHash String
 
-  refreshTokens RefreshToken[]
+  refreshTokens      RefreshToken[]
+  passwordResetToken PasswordResetToken?
 
   role UserRole @default(STUDENT)
 
@@ -145,6 +146,18 @@ model RefreshToken {
 
   @@index([userId, revokedAt, expiresAt])
   @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String @id @default(uuid())
+  tokenHash String @unique
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 }
 
 enum OrganizationStatus {

@@ -23,14 +23,19 @@ import { ConfirmEmailDto } from './dto/confirm-email.dto';
 import { RegisterCompanyOwnerDto } from './dto/register-company-owner.dto';
 import {
   ConfirmEmailApi,
+  ForgotPasswordApi,
   LoginApi,
   LogoutApi,
   MeApi,
   RefreshApi,
   RegisterApi,
+  ResetPasswordApi,
   RegisterCompanyOwnerApi,
   ResendConfirmationEmailApi,
 } from './api-docs';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import type { MessageResponse } from './auth.service';
 
 type AuthHttpResponse = Omit<AuthTokensResponse, 'refreshToken'>;
 
@@ -131,6 +136,22 @@ export class AuthController {
   @Post('resend-confirmation-email')
   async resendConfirmationEmail(@Body() dto: ResendEmailDto): Promise<void> {
     await this.authService.resendConfirmationEmail(dto.email);
+  }
+
+  @ForgotPasswordApi()
+  @HttpCode(HttpStatus.OK)
+  @Post('forgot-password')
+  async forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+  ): Promise<MessageResponse> {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @ResetPasswordApi()
+  @HttpCode(HttpStatus.OK)
+  @Post('reset-password')
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<MessageResponse> {
+    return this.authService.resetPassword(dto.token, dto.password);
   }
 
   private toHttpAuthResponse(authResult: AuthTokensResponse): AuthHttpResponse {

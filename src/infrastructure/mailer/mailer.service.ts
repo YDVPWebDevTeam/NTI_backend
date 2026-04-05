@@ -68,4 +68,19 @@ export class MailerService {
 
     await this.sendEmail(email, 'Team Invitation', html);
   }
+
+  async sendPasswordResetEmail(email: string, token: string): Promise<void> {
+    const link = `${this.configService.frontUrl}/reset-password?token=${token}`;
+
+    const html = `
+        <h1>Password reset</h1>
+
+        <p>You requested a password reset for your account.</p>
+        <p>If this was you, use the link below to choose a new password:</p>
+
+        <a href="${link}">${link}</a>
+        `;
+
+    await this.sendEmail(email, 'Password reset', html);
+  }
 }

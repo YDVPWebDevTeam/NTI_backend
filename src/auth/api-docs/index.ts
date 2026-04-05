@@ -1,10 +1,12 @@
 export {
   ConfirmEmailApi,
+  ForgotPasswordApi,
   LoginApi,
   LogoutApi,
   MeApi,
   RefreshApi,
   RegisterApi,
+  ResetPasswordApi,
   ResendConfirmationEmailApi,
-  RegisterCompanyOwnerApi
+  RegisterCompanyOwnerApi,
 } from './auth-api-docs.decorators';

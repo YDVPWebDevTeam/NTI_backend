@@ -58,15 +58,11 @@ export class EmailVerificationService {
     const verificationToken = await this.findByToken(token, db);
     const invalidTokenMessage = 'Invalid or expired verification token';
 
-    if (!verificationToken) {
-      throw new BadRequestException(invalidTokenMessage);
-    }
-
-    if (verificationToken.acceptedAt) {
-      throw new BadRequestException(invalidTokenMessage);
-    }
-
-    if (verificationToken.expiresAt <= new Date()) {
+    if (
+      !verificationToken ||
+      verificationToken.expiresAt <= new Date() ||
+      verificationToken.acceptedAt
+    ) {
       throw new BadRequestException(invalidTokenMessage);
     }
 

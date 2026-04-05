@@ -13,6 +13,8 @@ import { RefreshJwtStrategy } from './strategies/refresh-auth.strategy';
 import { RefreshJwtGuard } from './guards/refresh-auth.guard';
 import { EmailVerificationRepository } from './email-verification/email-verification.repository';
 import { EmailVerificationService } from './email-verification/email-verification.service';
+import { ResetTokenRepository } from './reset-token/reset-token.repository';
+import { ResetTokenService } from './reset-token/reset-token.service';
 
 @Module({
   imports: [
@@ -34,6 +36,8 @@ import { EmailVerificationService } from './email-verification/email-verificatio
     AuthService,
     EmailVerificationRepository,
     EmailVerificationService,
+    ResetTokenRepository,
+    ResetTokenService,
     RefreshTokenRepository,
     RefreshTokenService,
     JwtAuthGuard,
@@ -44,6 +48,7 @@ import { EmailVerificationService } from './email-verification/email-verificatio
   exports: [
     AuthService,
     EmailVerificationService,
+    ResetTokenService,
     RefreshTokenService,
     JwtAuthGuard,
   ],

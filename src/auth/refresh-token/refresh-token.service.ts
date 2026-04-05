@@ -35,4 +35,15 @@ export class RefreshTokenService {
   revokeById(id: string, db?: PrismaDbClient): Promise<RefreshToken> {
     return this.refreshTokens.revokeTokenById(id, new Date(), db);
   }
+
+  revokeAllActiveByUserId(
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<number> {
+    return this.refreshTokens.revokeActiveTokensByUserId(
+      userId,
+      new Date(),
+      db,
+    );
+  }
 }

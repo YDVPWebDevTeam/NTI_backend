@@ -110,4 +110,8 @@ export class ConfigService {
   get forcePasswordChangeTokenExpirationMinutes(): number {
     return this.env.FORCE_PASSWORD_CHANGE_TOKEN_EXPIRATION_MINUTES;
   }
+
+  get passwordResetExpirationMinutes(): number {
+    return this.env.PASSWORD_RESET_EXPIRATION_MINUTES;
+  }
 }

@@ -33,7 +33,7 @@ describe('RefreshJwtStrategy', () => {
     findByTokenId: jest.Mock;
   };
   let hashingService: {
-    verify: jest.Mock;
+    verifyStrong: jest.Mock;
   };
 
   const user = {
@@ -59,7 +59,7 @@ describe('RefreshJwtStrategy', () => {
       findByTokenId: jest.fn().mockResolvedValue(refreshTokenRecord),
     };
     hashingService = {
-      verify: jest.fn().mockResolvedValue(true),
+      verifyStrong: jest.fn().mockResolvedValue(true),
     };
 
     strategy = new RefreshJwtStrategy(
@@ -85,7 +85,7 @@ describe('RefreshJwtStrategy', () => {
       refreshTokenId: 'refresh-token-id',
     });
 
-    expect(hashingService.verify).toHaveBeenCalledWith(
+    expect(hashingService.verifyStrong).toHaveBeenCalledWith(
       'refresh-token-hash',
       'refresh-token',
     );

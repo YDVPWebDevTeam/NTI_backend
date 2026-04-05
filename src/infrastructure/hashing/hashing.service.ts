@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as argon2 from 'argon2';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { ConfigService } from '../config';
 
 @Injectable()
@@ -14,7 +14,7 @@ export class HashingService {
     };
   }
 
-  hash(value: string): Promise<string> {
+  hashStrong(value: string): Promise<string> {
     return argon2.hash(value, this.hashingOptions);
   }
 
@@ -22,8 +22,12 @@ export class HashingService {
     return randomBytes(size).toString('hex');
   }
 
-  verify(hash: string, plainValue: string): Promise<boolean> {
+  verifyStrong(hash: string, plainValue: string): Promise<boolean> {
     return argon2.verify(hash, plainValue);
+  }
+
+  hashToken(value: string): string {
+    return createHash('sha256').update(value).digest('hex');
   }
 
   needsRehash(hash: string): boolean {

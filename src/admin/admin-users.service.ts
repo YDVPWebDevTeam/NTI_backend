@@ -24,6 +24,12 @@ export class AdminUsersService {
     targetUserId: string,
     status: ManageableUserStatus,
   ): Promise<AuthenticatedUserContext> {
+    if (actor.role !== UserRole.SUPER_ADMIN && actor.role !== UserRole.ADMIN) {
+      throw new ForbiddenException(
+        'Only administrators can manage user statuses',
+      );
+    }
+
     const targetUser = await this.userService.findById(targetUserId);
 
     if (!targetUser) {

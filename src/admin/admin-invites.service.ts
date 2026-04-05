@@ -77,6 +77,12 @@ export class AdminInvitesService {
     actorRole: UserRole,
     roleToAssign: SystemInvitableRole,
   ): void {
+    if (actorRole !== UserRole.SUPER_ADMIN && actorRole !== UserRole.ADMIN) {
+      throw new ForbiddenException(
+        'Only administrators can create system invitations',
+      );
+    }
+
     if (
       actorRole === UserRole.ADMIN &&
       roleToAssign === SYSTEM_INVITABLE_ROLES.ADMIN

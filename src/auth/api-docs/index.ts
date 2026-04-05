@@ -1,6 +1,8 @@
 export {
+  AdminLoginApi,
   ConfirmEmailApi,
   ForgotPasswordApi,
+  ForceChangePasswordApi,
   LoginApi,
   LogoutApi,
   MeApi,

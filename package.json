@@ -27,7 +27,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "prisma:reset": "prisma migrate reset"
+    "prisma:reset": "prisma migrate reset",
+    "prisma:seed": "prisma db seed"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
@@ -105,6 +106,9 @@
     "commitizen": {
       "path": "./node_modules/cz-conventional-changelog"
     }
+  },
+  "prisma": {
+    "seed": "node --experimental-strip-types --experimental-specifier-resolution=node prisma/seed/main.ts"
   },
   "jest": {
     "moduleFileExtensions": [

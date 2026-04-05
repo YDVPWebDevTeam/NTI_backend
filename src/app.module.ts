@@ -9,6 +9,7 @@ import { LoggerModule } from './infrastructure/logger/logger.module';
 import { MailerModule } from './infrastructure/mailer/mailer.module';
 import { QueueModule } from './infrastructure/queue';
 import { UserModule } from './user/user.module';
+import { OrganizationModule } from './organization/organization.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { UserModule } from './user/user.module';
     LoggerModule,
     QueueModule,
     MailerModule,
+    OrganizationModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

@@ -46,4 +46,18 @@ export class UserRepository extends BaseRepository<
       db,
     );
   }
+
+  updateOrganizationIfNotExists(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    organizationId: string,
+  ) {
+    return tx.user.updateMany({
+      where: {
+        id: userId,
+        organizationId: null,
+      },
+      data: { organizationId },
+    });
+  }
 }

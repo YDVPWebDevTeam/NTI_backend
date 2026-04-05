@@ -31,6 +31,11 @@ export class EmailProcessor extends WorkerHost {
     [EMAIL_JOBS.PASSWORD_RESET]: async (data) => {
       await this.mailerService.sendPasswordResetEmail(data.email, data.token);
     },
+    [EMAIL_JOBS.ORG_PENDING_REVIEW]: async (data) => {
+      this.logger.log(`Organization pending review: ${data.organizationId}`);
+      return Promise.resolve();
+      //future make notify admins
+    },
   };
 
   async process(job: Job<EmailJobData[EmailJobName]>): Promise<void> {

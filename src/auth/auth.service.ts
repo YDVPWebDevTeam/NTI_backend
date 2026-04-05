@@ -147,8 +147,6 @@ export class AuthService {
     const user = await this.authenticateByCredentials(dto);
     this.ensureRoleMatchesLoginEndpoint(user, { requireAdmin: false });
 
-    this.ensureUserCanAuthenticate(user);
-
     return this.issueAuthTokens(user);
   }
 
@@ -270,18 +268,31 @@ export class AuthService {
 
     const passwordHash = await this.hashingService.hash(newPassword);
 
-    const updatedUser = await this.usersService.update(user.id, {
-      passwordHash,
-      mustChangePassword: false,
-    });
+    const updatedUser = await this.usersService.transaction(
+      async (transaction) => {
+        const updatedUser = await this.usersService.update(
+          user.id,
+          {
+            passwordHash,
+            mustChangePassword: false,
+          },
+          transaction,
+        );
 
-    const activeRefreshTokens =
-      await this.refreshTokenService.findActiveByUserId(user.id);
+        const activeRefreshTokens =
+          await this.refreshTokenService.findActiveByUserId(
+            user.id,
+            transaction,
+          );
 
-    await Promise.all(
-      activeRefreshTokens.map((refreshToken) =>
-        this.refreshTokenService.revokeById(refreshToken.id),
-      ),
+        await Promise.all(
+          activeRefreshTokens.map((refreshToken) =>
+            this.refreshTokenService.revokeById(refreshToken.id, transaction),
+          ),
+        );
+
+        return updatedUser;
+      },
     );
 
     return this.issueAuthTokens(updatedUser);
@@ -336,8 +347,6 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    this.ensureUserCanAuthenticate(user);
-
     const isPasswordValid = await this.hashingService.verify(
       user.passwordHash,
       dto.password,
@@ -346,6 +355,8 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    this.ensureUserCanAuthenticate(user);
 
     return user;
   }

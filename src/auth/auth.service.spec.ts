@@ -317,12 +317,27 @@ describe('AuthService', () => {
     expect(jwtService.verifyAsync).toHaveBeenCalledWith('temp-token', {
       secret: 'abcdefghijklmnopqrstuvwxyz123456',
     });
-    expect(users.update).toHaveBeenCalledWith('user-1', {
-      passwordHash: 'password-hash',
-      mustChangePassword: false,
-    });
-    expect(refreshTokens.revokeById).toHaveBeenCalledWith('rt-1');
-    expect(refreshTokens.revokeById).toHaveBeenCalledWith('rt-2');
+    expect(users.transaction).toHaveBeenCalled();
+    expect(users.update).toHaveBeenCalledWith(
+      'user-1',
+      {
+        passwordHash: 'password-hash',
+        mustChangePassword: false,
+      },
+      transactionClient,
+    );
+    expect(refreshTokens.findActiveByUserId).toHaveBeenCalledWith(
+      'user-1',
+      transactionClient,
+    );
+    expect(refreshTokens.revokeById).toHaveBeenCalledWith(
+      'rt-1',
+      transactionClient,
+    );
+    expect(refreshTokens.revokeById).toHaveBeenCalledWith(
+      'rt-2',
+      transactionClient,
+    );
     expect(result).toEqual({
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
@@ -465,5 +480,22 @@ describe('AuthService', () => {
     ).resolves.toBeUndefined();
     expect(emailVerification.createForUser).not.toHaveBeenCalled();
     expect(queueService.addEmail).not.toHaveBeenCalled();
+  });
+
+  it('throws generic credentials error for unconfirmed users with wrong password', async () => {
+    users.findByEmail.mockResolvedValue(unconfirmedUser);
+    hashingService.verify.mockResolvedValue(false);
+
+    await expect(
+      service.login({
+        email: user.email,
+        password: 'wrongpass123',
+      }),
+    ).rejects.toThrow('Invalid email or password');
+
+    expect(hashingService.verify).toHaveBeenCalledWith(
+      unconfirmedUser.passwordHash,
+      'wrongpass123',
+    );
   });
 });

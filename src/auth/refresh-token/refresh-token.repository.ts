@@ -23,32 +23,46 @@ export class RefreshTokenRepository extends BaseRepository<
     super(prisma);
   }
 
-  findByTokenId(id: string): Promise<RefreshToken | null> {
-    return this.findUnique({ id });
+  findByTokenId(id: string, db?: PrismaDbClient): Promise<RefreshToken | null> {
+    return this.findUnique({ id }, db);
   }
 
-  findByTokenHash(tokenHash: string): Promise<RefreshToken | null> {
-    return this.findUnique({ tokenHash });
+  findByTokenHash(
+    tokenHash: string,
+    db?: PrismaDbClient,
+  ): Promise<RefreshToken | null> {
+    return this.findUnique({ tokenHash }, db);
   }
 
-  findActiveTokensByUserId(userId: string): Promise<RefreshToken[]> {
-    return this.findMany({
-      where: {
-        userId,
-        revokedAt: null,
-        expiresAt: {
-          gt: new Date(),
+  findActiveTokensByUserId(
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<RefreshToken[]> {
+    return this.findMany(
+      {
+        where: {
+          userId,
+          revokedAt: null,
+          expiresAt: {
+            gt: new Date(),
+          },
         },
       },
-    });
+      db,
+    );
   }
 
-  revokeTokenById(id: string, revokedAt = new Date()): Promise<RefreshToken> {
+  revokeTokenById(
+    id: string,
+    revokedAt = new Date(),
+    db?: PrismaDbClient,
+  ): Promise<RefreshToken> {
     return this.update(
       { id },
       {
         revokedAt,
       },
+      db,
     );
   }
 }

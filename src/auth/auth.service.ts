@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
+import type { StringValue } from 'ms';
 import type { User } from '../../generated/prisma/client';
 import { UserRole, UserStatus } from '../../generated/prisma/enums';
 import { ConfigService } from '../infrastructure/config';
@@ -26,6 +27,22 @@ export type AuthTokensResponse = {
   accessToken: string;
   refreshToken: string;
   user: AuthenticatedUserContext;
+};
+
+export type PasswordChangeRequiredResponse = {
+  requiresPasswordChange: true;
+  requiresPasswordChangeToken: string;
+};
+
+export type LoginResponse = AuthTokensResponse | PasswordChangeRequiredResponse;
+
+export const FORCE_PASSWORD_CHANGE_PURPOSE = 'force_password_change' as const;
+
+type ForcePasswordChangeTokenPayload = {
+  sub: string;
+  email: string;
+  role: UserRole;
+  purpose: typeof FORCE_PASSWORD_CHANGE_PURPOSE;
 };
 
 export type MessageResponse = {
@@ -138,24 +155,17 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<AuthTokensResponse> {
-    const user = await this.usersService.findByEmail(dto.email);
-
-    if (!user) {
-      throw new UnauthorizedException('Invalid email or password');
-    }
-
-    const isPasswordValid = await this.hashingService.verifyStrong(
-      user.passwordHash,
-      dto.password,
-    );
-
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid email or password');
-    }
-
-    this.ensureUserCanAuthenticate(user);
+    const user = await this.authenticateByCredentials(dto);
+    this.ensureRoleMatchesLoginEndpoint(user, { requireAdmin: false });
 
     return this.issueAuthTokens(user);
+  }
+
+  async adminLogin(dto: LoginDto): Promise<LoginResponse> {
+    const user = await this.authenticateByCredentials(dto);
+    this.ensureRoleMatchesLoginEndpoint(user, { requireAdmin: true });
+
+    return this.resolveLoginResponse(user);
   }
 
   async refresh(
@@ -172,6 +182,10 @@ export class AuthService {
     }
 
     this.ensureUserCanAuthenticate(user);
+    if (this.shouldRequirePasswordChange(user)) {
+      await this.refreshTokenService.revokeById(authUser.refreshTokenId);
+      throw new UnauthorizedException('Password change is required');
+    }
 
     await this.refreshTokenService.revokeById(authUser.refreshTokenId);
 
@@ -234,6 +248,58 @@ export class AuthService {
       email: user.email,
       token: verificationToken.token,
     });
+  }
+
+  async forceChangePassword(
+    tempToken: string,
+    newPassword: string,
+    confirmNewPassword: string,
+  ): Promise<AuthTokensResponse> {
+    if (newPassword !== confirmNewPassword) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
+    const tokenPayload =
+      await this.validateForcePasswordChangeTokenOrThrow(tempToken);
+    const user = await this.usersService.findById(tokenPayload.sub);
+
+    if (!user || user.email !== tokenPayload.email) {
+      throw new UnauthorizedException(
+        'Invalid or expired password change token',
+      );
+    }
+
+    if (!this.isAdminRole(user.role) || !user.mustChangePassword) {
+      throw new UnauthorizedException(
+        'Invalid or expired password change token',
+      );
+    }
+
+    this.ensureUserCanAuthenticate(user);
+
+    const passwordHash = await this.hashingService.hashStrong(newPassword);
+
+    const updatedUser = await this.usersService.transaction(
+      async (transaction) => {
+        const updatedUser = await this.usersService.update(
+          user.id,
+          {
+            passwordHash,
+            mustChangePassword: false,
+          },
+          transaction,
+        );
+
+        await this.refreshTokenService.revokeAllActiveByUserId(
+          user.id,
+          transaction,
+        );
+
+        return updatedUser;
+      },
+    );
+
+    return this.issueAuthTokens(updatedUser);
   }
 
   async forgotPassword(email: string): Promise<MessageResponse> {
@@ -328,6 +394,102 @@ export class AuthService {
       refreshToken,
       user: safeUser,
     };
+  }
+
+  private async authenticateByCredentials(dto: LoginDto): Promise<User> {
+    const user = await this.usersService.findByEmail(dto.email);
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const isPasswordValid = await this.hashingService.verifyStrong(
+      user.passwordHash,
+      dto.password,
+    );
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    this.ensureUserCanAuthenticate(user);
+
+    return user;
+  }
+
+  private async resolveLoginResponse(user: User): Promise<LoginResponse> {
+    if (!this.shouldRequirePasswordChange(user)) {
+      return this.issueAuthTokens(user);
+    }
+
+    return {
+      requiresPasswordChange: true,
+      requiresPasswordChangeToken:
+        await this.issueForcePasswordChangeToken(user),
+    };
+  }
+
+  private shouldRequirePasswordChange(user: User): boolean {
+    return this.isAdminRole(user.role) && user.mustChangePassword;
+  }
+
+  private isAdminRole(role: UserRole): boolean {
+    return role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
+  }
+
+  private ensureRoleMatchesLoginEndpoint(
+    user: User,
+    options: { requireAdmin: boolean },
+  ): void {
+    const isAdmin = this.isAdminRole(user.role);
+    if (options.requireAdmin !== isAdmin) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+  }
+
+  private issueForcePasswordChangeToken(user: User): Promise<string> {
+    const payload: ForcePasswordChangeTokenPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      purpose: FORCE_PASSWORD_CHANGE_PURPOSE,
+    };
+
+    const expiresIn =
+      `${this.configService.forcePasswordChangeTokenExpirationMinutes}m` as StringValue;
+
+    // Use a dedicated secret so this token cannot be replayed as a normal Bearer access token.
+    return this.jwtService.signAsync(payload, {
+      secret: this.configService.jwtForcePasswordChangeSecret,
+      expiresIn,
+    });
+  }
+
+  private async validateForcePasswordChangeTokenOrThrow(
+    token: string,
+  ): Promise<ForcePasswordChangeTokenPayload> {
+    try {
+      const payload =
+        await this.jwtService.verifyAsync<ForcePasswordChangeTokenPayload>(
+          token,
+          {
+            // Must match the dedicated signing secret used for password-change challenge tokens.
+            secret: this.configService.jwtForcePasswordChangeSecret,
+          },
+        );
+
+      if (payload.purpose !== FORCE_PASSWORD_CHANGE_PURPOSE) {
+        throw new UnauthorizedException(
+          'Invalid or expired password change token',
+        );
+      }
+
+      return payload;
+    } catch {
+      throw new UnauthorizedException(
+        'Invalid or expired password change token',
+      );
+    }
   }
 
   private resolveExpirationDate(duration: string): Date {

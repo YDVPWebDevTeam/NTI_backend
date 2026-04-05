@@ -42,7 +42,7 @@ import { HashingService } from '../infrastructure/hashing';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { UserService } from '../user/user.service';
 import { EmailVerificationService } from './email-verification/email-verification.service';
-import { AuthService } from './auth.service';
+import { AuthService, FORCE_PASSWORD_CHANGE_PURPOSE } from './auth.service';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
 import { ResetTokenService } from './reset-token/reset-token.service';
 
@@ -52,6 +52,7 @@ describe('AuthService', () => {
     findByEmail: jest.Mock;
     create: jest.Mock;
     findById: jest.Mock;
+    update: jest.Mock;
     markEmailConfirmed: jest.Mock;
     bareSafeUser: jest.Mock;
     transaction: jest.Mock;
@@ -59,6 +60,8 @@ describe('AuthService', () => {
   let refreshTokens: {
     create: jest.Mock;
     revokeById: jest.Mock;
+    findActiveByUserId: jest.Mock;
+    revokeAllActiveByUserId: jest.Mock;
   };
   let emailVerification: {
     createForUser: jest.Mock;
@@ -75,6 +78,7 @@ describe('AuthService', () => {
   };
   let jwtService: {
     signAsync: jest.Mock;
+    verifyAsync: jest.Mock;
   };
   let hashingService: {
     hashStrong: jest.Mock;
@@ -89,6 +93,7 @@ describe('AuthService', () => {
     role: UserRole.STUDENT,
     status: UserStatus.PENDING,
     isEmailConfirmed: true,
+    mustChangePassword: false,
   };
 
   const unconfirmedUser = {
@@ -109,6 +114,7 @@ describe('AuthService', () => {
       findByEmail: jest.fn(),
       create: jest.fn(),
       findById: jest.fn(),
+      update: jest.fn(),
       markEmailConfirmed: jest.fn(),
       bareSafeUser: jest.fn().mockReturnValue(safeUser),
       transaction: jest
@@ -120,6 +126,8 @@ describe('AuthService', () => {
     refreshTokens = {
       create: jest.fn(),
       revokeById: jest.fn(),
+      findActiveByUserId: jest.fn().mockResolvedValue([]),
+      revokeAllActiveByUserId: jest.fn().mockResolvedValue(undefined),
     };
     emailVerification = {
       createForUser: jest.fn(),
@@ -139,6 +147,7 @@ describe('AuthService', () => {
         .fn()
         .mockResolvedValueOnce('access-token')
         .mockResolvedValueOnce('refresh-token'),
+      verifyAsync: jest.fn(),
     };
     hashingService = {
       hashStrong: jest
@@ -154,8 +163,11 @@ describe('AuthService', () => {
       jwtService as unknown as JwtService,
       hashingService as unknown as HashingService,
       {
+        jwtAccessSecret: '12345678901234567890123456789012',
         jwtRefreshSecret: '12345678901234567890123456789012',
+        jwtForcePasswordChangeSecret: 'abcdefghijklmnopqrstuvwxyz123456',
         jwtRefreshExpirationDays: '7d',
+        forcePasswordChangeTokenExpirationMinutes: 15,
       } as unknown as ConfigService,
       emailVerification as unknown as EmailVerificationService,
       resetTokens as unknown as ResetTokenService,
@@ -240,6 +252,111 @@ describe('AuthService', () => {
     });
   });
 
+  it('rejects admin account on default login endpoint', async () => {
+    users.findByEmail.mockResolvedValue({
+      ...user,
+      role: UserRole.SUPER_ADMIN,
+      mustChangePassword: true,
+    });
+
+    await expect(
+      service.login({
+        email: 'admin@nti.sk',
+        password: 'TempPass123!',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('allows admin login only for admin roles', async () => {
+    users.findByEmail.mockResolvedValue(user);
+
+    await expect(
+      service.adminLogin({
+        email: user.email,
+        password: 'strongpass123',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('returns password-change challenge for admin users that require it', async () => {
+    users.findByEmail.mockResolvedValue({
+      ...user,
+      role: UserRole.SUPER_ADMIN,
+      email: 'admin@nti.sk',
+      mustChangePassword: true,
+    });
+    jwtService.signAsync.mockReset().mockResolvedValueOnce('challenge-token');
+
+    const result = await service.adminLogin({
+      email: 'admin@nti.sk',
+      password: 'TempPass123!',
+    });
+
+    expect(jwtService.signAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sub: 'user-1',
+        email: 'admin@nti.sk',
+        purpose: FORCE_PASSWORD_CHANGE_PURPOSE,
+      }),
+      expect.objectContaining({
+        secret: 'abcdefghijklmnopqrstuvwxyz123456',
+      }),
+    );
+    expect(result).toEqual({
+      requiresPasswordChange: true,
+      requiresPasswordChangeToken: 'challenge-token',
+    });
+  });
+
+  it('force-changes password, clears flag, and returns auth tokens', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'user-1',
+      email: 'admin@nti.sk',
+      role: UserRole.SUPER_ADMIN,
+      purpose: FORCE_PASSWORD_CHANGE_PURPOSE,
+    });
+    users.findById.mockResolvedValue({
+      ...user,
+      email: 'admin@nti.sk',
+      role: UserRole.SUPER_ADMIN,
+      mustChangePassword: true,
+    });
+    users.update.mockResolvedValue({
+      ...user,
+      email: 'admin@nti.sk',
+      role: UserRole.SUPER_ADMIN,
+      mustChangePassword: false,
+    });
+
+    const result = await service.forceChangePassword(
+      'temp-token',
+      'NewStrongPass123!',
+      'NewStrongPass123!',
+    );
+
+    expect(jwtService.verifyAsync).toHaveBeenCalledWith('temp-token', {
+      secret: 'abcdefghijklmnopqrstuvwxyz123456',
+    });
+    expect(users.transaction).toHaveBeenCalled();
+    expect(users.update).toHaveBeenCalledWith(
+      'user-1',
+      {
+        passwordHash: 'password-hash',
+        mustChangePassword: false,
+      },
+      transactionClient,
+    );
+    expect(refreshTokens.revokeAllActiveByUserId).toHaveBeenCalledWith(
+      'user-1',
+      transactionClient,
+    );
+    expect(result).toEqual({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      user: safeUser,
+    });
+  });
+
   it('throws on login when password is invalid', async () => {
     users.findByEmail.mockResolvedValue(user);
     hashingService.verifyStrong.mockResolvedValue(false);
@@ -277,6 +394,23 @@ describe('AuthService', () => {
       refreshToken: 'refresh-token',
       user: safeUser,
     });
+  });
+
+  it('rejects refresh when forced password change is required', async () => {
+    users.findById.mockResolvedValue({
+      ...user,
+      role: UserRole.SUPER_ADMIN,
+      mustChangePassword: true,
+    });
+
+    await expect(
+      service.refresh({
+        ...safeUser,
+        refreshTokenId: 'refresh-token-id',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(refreshTokens.revokeById).toHaveBeenCalledWith('refresh-token-id');
   });
 
   it('throws on refresh when refresh token context is missing', async () => {
@@ -358,5 +492,22 @@ describe('AuthService', () => {
     ).resolves.toBeUndefined();
     expect(emailVerification.createForUser).not.toHaveBeenCalled();
     expect(queueService.addEmail).not.toHaveBeenCalled();
+  });
+
+  it('throws generic credentials error for unconfirmed users with wrong password', async () => {
+    users.findByEmail.mockResolvedValue(unconfirmedUser);
+    hashingService.verifyStrong.mockResolvedValue(false);
+
+    await expect(
+      service.login({
+        email: user.email,
+        password: 'wrongpass123',
+      }),
+    ).rejects.toThrow('Invalid email or password');
+
+    expect(hashingService.verifyStrong).toHaveBeenCalledWith(
+      unconfirmedUser.passwordHash,
+      'wrongpass123',
+    );
   });
 });

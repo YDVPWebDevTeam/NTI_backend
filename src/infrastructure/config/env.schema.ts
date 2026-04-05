@@ -32,6 +32,12 @@ export const envSchema = z.object({
   JWT_REFRESH_SECRET: z
     .string()
     .min(32, 'JWT_REFRESH_SECRET must be at least 32 characters long'),
+  JWT_FORCE_PASSWORD_CHANGE_SECRET: z
+    .string()
+    .min(
+      32,
+      'JWT_FORCE_PASSWORD_CHANGE_SECRET must be at least 32 characters long',
+    ),
   JWT_ACCESS_EXPIRATION: z
     .string()
     .regex(
@@ -51,6 +57,11 @@ export const envSchema = z.object({
     .int()
     .positive()
     .default(24),
+  FORCE_PASSWORD_CHANGE_TOKEN_EXPIRATION_MINUTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15),
   PASSWORD_RESET_EXPIRATION_MINUTES: z.coerce
     .number()
     .int()

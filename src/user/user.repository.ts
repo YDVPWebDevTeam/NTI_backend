@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma, User } from '../../generated/prisma/client';
+import {
+  Prisma,
+  User,
+  UserRole,
+  UserStatus,
+} from '../../generated/prisma/client';
 import {
   BaseRepository,
   PrismaDbClient,
@@ -65,8 +70,8 @@ export class UserRepository extends BaseRepository<
     return this.findMany(
       {
         where: {
-          role: 'ADMIN',
-          status: 'ACTIVE',
+          role: UserRole.ADMIN,
+          status: UserStatus.ACTIVE,
         },
       },
       db,

@@ -40,14 +40,14 @@ export class EmailProcessor extends WorkerHost {
 
       const admins = await this.userRepository.findAdmins();
 
-      if (admins === null) {
+      if (!admins || admins.length === 0) {
         this.logger.warn('No admins found');
         return;
       }
 
       this.logger.log(`Notifying ${admins.length} admins`);
 
-      await Promise.all(
+      await Promise.allSettled(
         admins.map((admin) =>
           this.mailerService.sendOrgPendingReviewEmail(
             admin.email,

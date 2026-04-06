@@ -9,7 +9,7 @@ import { Organization, Prisma } from 'generated/prisma/client';
 @Injectable()
 export class OrganizationService {
   constructor(
-    private readonly orgRepo: OrganizationRepository,
+    private readonly organizationRepository: OrganizationRepository,
     private readonly userRepo: UserRepository,
     private readonly queueService: QueueService,
   ) {}
@@ -29,23 +29,29 @@ export class OrganizationService {
 
   async create(dto: CreateOrganizationDto, user: AuthenticatedUserContext) {
     try {
-      const organization = await this.orgRepo.transaction<Organization>(
-        async (tx) => {
-          const org = await this.orgRepo.create(this.mapCreateDto(dto), tx);
+      const organization =
+        await this.organizationRepository.transaction<Organization>(
+          async (tx) => {
+            const org = await this.organizationRepository.create(
+              this.mapCreateDto(dto),
+              tx,
+            );
 
-          const result = await this.userRepo.updateOrganizationIfNotExists(
-            tx,
-            user.id,
-            org.id,
-          );
+            const result = await this.userRepo.updateOrganizationIfNotExists(
+              tx,
+              user.id,
+              org.id,
+            );
 
-          if (result.count === 0) {
-            throw new ConflictException('User already linked to organization');
-          }
+            if (result.count === 0) {
+              throw new ConflictException(
+                'User already linked to organization',
+              );
+            }
 
-          return org;
-        },
-      );
+            return org;
+          },
+        );
 
       await this.queueService.addEmail(EMAIL_JOBS.ORG_PENDING_REVIEW, {
         organizationId: organization.id,

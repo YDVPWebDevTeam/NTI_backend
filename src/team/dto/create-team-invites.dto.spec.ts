@@ -32,4 +32,29 @@ describe('CreateTeamInvitesDto', () => {
     expect(errors).toHaveLength(1);
     expect(errors[0]?.constraints).toHaveProperty('isEmail');
   });
+
+  it('rejects duplicate emails after trimming and lowercasing', async () => {
+    const dto = plainToInstance(CreateTeamInvitesDto, {
+      emails: ['A@example.com ', ' a@example.com'],
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.constraints).toHaveProperty('arrayUnique');
+  });
+
+  it('rejects arrays larger than the maximum allowed size', async () => {
+    const dto = plainToInstance(CreateTeamInvitesDto, {
+      emails: Array.from(
+        { length: 101 },
+        (_, index) => `user${index}@example.com`,
+      ),
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.constraints).toHaveProperty('arrayMaxSize');
+  });
 });

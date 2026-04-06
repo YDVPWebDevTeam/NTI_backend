@@ -1,9 +1,8 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 jest.mock('../../generated/prisma/client', () => ({}), { virtual: true });
 jest.mock('@prisma/client', () => ({}), { virtual: true });
 
-jest.mock('../infrastructure/database/prisma.service', () => ({
-  PrismaService: class PrismaService {},
+jest.mock('./team.repository', () => ({
+  TeamRepository: class TeamRepository {},
 }));
 
 jest.mock('../infrastructure/hashing', () => ({
@@ -21,21 +20,12 @@ jest.mock('../infrastructure/queue', () => ({
   QueueService: class QueueService {},
 }));
 
+import type { PrismaDbClient } from '../infrastructure/database';
 import { ConfigService } from '../infrastructure/config';
-import { PrismaService } from '../infrastructure/database/prisma.service';
 import { HashingService } from '../infrastructure/hashing';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
+import { TeamRepository } from './team.repository';
 import { TeamService } from './team.service';
-
-type InvitationCreateArgs = {
-  data: {
-    email: string;
-    token: string;
-    teamId: string;
-    status: string;
-    expiresAt: Date;
-  };
-};
 
 type CreatedInvitation = {
   id: string;
@@ -43,28 +33,36 @@ type CreatedInvitation = {
   token: string;
 };
 
+type TransactionCallback = (db: PrismaDbClient) => Promise<CreatedInvitation[]>;
+
 describe('TeamService', () => {
   let service: TeamService;
-  let prismaService: {
-    client: {
-      $transaction: jest.Mock<
-        Promise<CreatedInvitation[]>,
-        [
-          (db: {
-            invitation: {
-              create: (
-                args: InvitationCreateArgs,
-              ) => Promise<CreatedInvitation>;
-            };
-          }) => Promise<CreatedInvitation[]>,
-        ]
-      >;
-    };
+  let teamRepository: {
+    transaction: jest.Mock<Promise<CreatedInvitation[]>, [TransactionCallback]>;
+    createInvitation: jest.Mock<
+      Promise<CreatedInvitation>,
+      [
+        {
+          email: string;
+          token: string;
+          teamId: string;
+          status: 'PENDING';
+          expiresAt: Date;
+        },
+        PrismaDbClient,
+      ]
+    >;
+    findActiveInvitationEmails: jest.Mock<
+      Promise<Array<{ email: string }>>,
+      [string, string[], Date, PrismaDbClient]
+    >;
+    findExistingMemberEmails: jest.Mock<
+      Promise<Array<{ user: { email: string } }>>,
+      [string, string[], PrismaDbClient]
+    >;
+    revokeInvitations: jest.Mock<Promise<{ count: number }>, [string[]]>;
   };
-  let invitationCreate: jest.Mock<
-    Promise<CreatedInvitation>,
-    [InvitationCreateArgs]
-  >;
+  let transactionClient: PrismaDbClient;
   let hashingService: {
     generateHexToken: jest.Mock<string, [number]>;
   };
@@ -76,44 +74,76 @@ describe('TeamService', () => {
   };
 
   beforeEach(() => {
-    invitationCreate = jest
-      .fn()
-      .mockResolvedValueOnce({
-        id: 'invite-1',
-        email: 'a@example.com',
-        token: 'token-1',
-      })
-      .mockResolvedValueOnce({
-        id: 'invite-2',
-        email: 'b@example.com',
-        token: 'token-2',
-      });
+    transactionClient = {} as PrismaDbClient;
 
-    prismaService = {
-      client: {
-        $transaction: jest.fn().mockImplementation((fn) =>
-          fn({
-            invitation: {
-              create: invitationCreate,
+    teamRepository = {
+      transaction: jest.fn<
+        Promise<CreatedInvitation[]>,
+        [TransactionCallback]
+      >(),
+      createInvitation: jest
+        .fn<
+          Promise<CreatedInvitation>,
+          [
+            {
+              email: string;
+              token: string;
+              teamId: string;
+              status: 'PENDING';
+              expiresAt: Date;
             },
-          }),
-        ),
-      },
+            PrismaDbClient,
+          ]
+        >()
+        .mockResolvedValueOnce({
+          id: 'invite-1',
+          email: 'a@example.com',
+          token: 'token-1',
+        })
+        .mockResolvedValueOnce({
+          id: 'invite-2',
+          email: 'b@example.com',
+          token: 'token-2',
+        }),
+      findActiveInvitationEmails: jest
+        .fn<
+          Promise<Array<{ email: string }>>,
+          [string, string[], Date, PrismaDbClient]
+        >()
+        .mockResolvedValue([]),
+      findExistingMemberEmails: jest
+        .fn<
+          Promise<Array<{ user: { email: string } }>>,
+          [string, string[], PrismaDbClient]
+        >()
+        .mockResolvedValue([]),
+      revokeInvitations: jest
+        .fn<Promise<{ count: number }>, [string[]]>()
+        .mockResolvedValue({ count: 0 }),
     };
+
+    teamRepository.transaction.mockImplementation((fn) =>
+      fn(transactionClient),
+    );
 
     hashingService = {
       generateHexToken: jest
-        .fn()
+        .fn<string, [number]>()
         .mockReturnValueOnce('token-1')
         .mockReturnValueOnce('token-2'),
     };
 
     queueService = {
-      addEmail: jest.fn().mockResolvedValue(undefined),
+      addEmail: jest
+        .fn<
+          Promise<void>,
+          [string, { email: string; teamName: string; token: string }]
+        >()
+        .mockResolvedValue(undefined),
     };
 
     service = new TeamService(
-      prismaService as unknown as PrismaService,
+      teamRepository as unknown as TeamRepository,
       hashingService as unknown as HashingService,
       {
         tokenByteLength: 32,
@@ -132,28 +162,37 @@ describe('TeamService', () => {
       [' A@example.com ', 'B@example.com'],
     );
 
-    expect(prismaService.client.$transaction).toHaveBeenCalled();
-    expect(invitationCreate).toHaveBeenNthCalledWith(
+    expect(teamRepository.transaction).toHaveBeenCalled();
+    expect(teamRepository.findActiveInvitationEmails).toHaveBeenCalledWith(
+      'team-1',
+      ['a@example.com', 'b@example.com'],
+      expect.any(Date),
+      transactionClient,
+    );
+    expect(teamRepository.findExistingMemberEmails).toHaveBeenCalledWith(
+      'team-1',
+      ['a@example.com', 'b@example.com'],
+      transactionClient,
+    );
+    expect(teamRepository.createInvitation).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        data: expect.objectContaining({
-          email: 'a@example.com',
-          token: 'token-1',
-          teamId: 'team-1',
-          status: 'PENDING',
-        }),
+        email: 'a@example.com',
+        token: 'token-1',
+        teamId: 'team-1',
+        status: 'PENDING',
       }),
+      transactionClient,
     );
-    expect(invitationCreate).toHaveBeenNthCalledWith(
+    expect(teamRepository.createInvitation).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        data: expect.objectContaining({
-          email: 'b@example.com',
-          token: 'token-2',
-          teamId: 'team-1',
-          status: 'PENDING',
-        }),
+        email: 'b@example.com',
+        token: 'token-2',
+        teamId: 'team-1',
+        status: 'PENDING',
       }),
+      transactionClient,
     );
     expect(queueService.addEmail).toHaveBeenNthCalledWith(
       1,
@@ -174,5 +213,64 @@ describe('TeamService', () => {
       },
     );
     expect(result).toEqual({ createdCount: 2 });
+  });
+
+  it('deduplicates normalized emails before creating invitations', async () => {
+    await service.createInvites(
+      {
+        id: 'team-1',
+        name: 'Alpha Team',
+      } as never,
+      ['A@example.com', ' a@example.com '],
+    );
+
+    expect(teamRepository.createInvitation).toHaveBeenCalledTimes(1);
+    expect(queueService.addEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips emails with active invitations or existing team membership', async () => {
+    teamRepository.findActiveInvitationEmails.mockResolvedValue([
+      { email: 'a@example.com' },
+    ]);
+    teamRepository.findExistingMemberEmails.mockResolvedValue([
+      { user: { email: 'b@example.com' } },
+    ]);
+
+    const result = await service.createInvites(
+      {
+        id: 'team-1',
+        name: 'Alpha Team',
+      } as never,
+      ['A@example.com', 'b@example.com', 'c@example.com'],
+    );
+
+    expect(teamRepository.createInvitation).toHaveBeenCalledTimes(1);
+    expect(teamRepository.createInvitation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'c@example.com',
+      }),
+      transactionClient,
+    );
+    expect(queueService.addEmail).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ createdCount: 1 });
+  });
+
+  it('revokes created invitations when queue enqueue fails', async () => {
+    queueService.addEmail.mockRejectedValueOnce(new Error('queue down'));
+
+    await expect(
+      service.createInvites(
+        {
+          id: 'team-1',
+          name: 'Alpha Team',
+        } as never,
+        ['A@example.com', 'b@example.com'],
+      ),
+    ).rejects.toThrow('Failed to enqueue invitation emails');
+
+    expect(teamRepository.revokeInvitations).toHaveBeenCalledWith([
+      'invite-1',
+      'invite-2',
+    ]);
   });
 });

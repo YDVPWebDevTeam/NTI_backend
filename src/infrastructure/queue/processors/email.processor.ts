@@ -17,24 +17,22 @@ export class EmailProcessor extends WorkerHost {
     super();
   }
 
+  private readonly handleTeamInviteEmail = async (
+    data: EmailJobData[typeof EMAIL_JOBS.TEAM_INVITATION],
+  ): Promise<void> => {
+    await this.mailerService.sendTeamConfirm(
+      data.email,
+      data.teamName,
+      data.token,
+    );
+  };
+
   private readonly handlers: EmailJobHandlers = {
     [EMAIL_JOBS.USER_CONFIRMATION]: async (data) => {
       await this.mailerService.sendConfirmationEmail(data.email, data.token);
     },
-    [EMAIL_JOBS.TEAM_CONFIRMATION]: async (data) => {
-      await this.mailerService.sendTeamConfirm(
-        data.email,
-        data.teamName,
-        data.token,
-      );
-    },
-    [EMAIL_JOBS.TEAM_INVITATION]: async (data) => {
-      await this.mailerService.sendTeamConfirm(
-        data.email,
-        data.teamName,
-        data.token,
-      );
-    },
+    [EMAIL_JOBS.TEAM_CONFIRMATION]: this.handleTeamInviteEmail,
+    [EMAIL_JOBS.TEAM_INVITATION]: this.handleTeamInviteEmail,
     [EMAIL_JOBS.PASSWORD_RESET]: async (data) => {
       await this.mailerService.sendPasswordResetEmail(data.email, data.token);
     },

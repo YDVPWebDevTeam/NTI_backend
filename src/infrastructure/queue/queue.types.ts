@@ -3,6 +3,7 @@ export const EMAIL_JOBS = {
   USER_CONFIRMATION: 'user-confirmation',
   TEAM_CONFIRMATION: 'team-confirmation',
   ORG_PENDING_REVIEW: 'org-pending-review',
+  TEAM_INVITATION: 'team-invitation',
 } as const;
 
 export type EmailJobName = (typeof EMAIL_JOBS)[keyof typeof EMAIL_JOBS];
@@ -15,7 +16,13 @@ export interface EmailJobData {
     teamName: string;
     token: string;
   };
+  [EMAIL_JOBS.TEAM_INVITATION]: {
+    email: string;
+    teamName: string;
+    token: string;
+  };
   [EMAIL_JOBS.ORG_PENDING_REVIEW]: {
     organizationId: string;
+    adminEmails: string[];
   };
 }

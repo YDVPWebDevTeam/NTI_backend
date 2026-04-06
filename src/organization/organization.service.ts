@@ -53,8 +53,13 @@ export class OrganizationService {
           },
         );
 
+      const adminEmails = ((await this.userRepo.findAdmins()) ?? []).map(
+        (admin) => admin.email,
+      );
+
       await this.queueService.addEmail(EMAIL_JOBS.ORG_PENDING_REVIEW, {
         organizationId: organization.id,
+        adminEmails,
       });
 
       return organization;

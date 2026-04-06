@@ -4,6 +4,7 @@ import { Job } from 'bullmq';
 import { QUEUE_NAMES } from '../queue.constants';
 import { EMAIL_JOBS, EmailJobData, EmailJobName } from '../queue.types';
 import { MailerService } from '../../mailer/mailer.service';
+import { UserRepository } from 'src/user/user.repository';
 
 type EmailJobHandlers = {
   [K in EmailJobName]: (data: EmailJobData[K]) => Promise<void>;
@@ -13,7 +14,10 @@ type EmailJobHandlers = {
 export class EmailProcessor extends WorkerHost {
   private readonly logger = new Logger(EmailProcessor.name);
 
-  constructor(private readonly mailerService: MailerService) {
+  constructor(
+    private readonly mailerService: MailerService,
+    private readonly userRepository: UserRepository,
+  ) {
     super();
   }
 
@@ -33,8 +37,24 @@ export class EmailProcessor extends WorkerHost {
     },
     [EMAIL_JOBS.ORG_PENDING_REVIEW]: async (data) => {
       this.logger.log(`Organization pending review: ${data.organizationId}`);
-      return Promise.resolve();
-      //future make notify admins
+
+      const admins = await this.userRepository.findAdmins();
+
+      if (admins === null) {
+        this.logger.warn('No admins found');
+        return;
+      }
+
+      this.logger.log(`Notifying ${admins.length} admins`);
+
+      await Promise.all(
+        admins.map((admin) =>
+          this.mailerService.sendOrgPendingReviewEmail(
+            admin.email,
+            data.organizationId,
+          ),
+        ),
+      );
     },
   };
 

@@ -60,4 +60,16 @@ export class UserRepository extends BaseRepository<
       data: { organizationId },
     });
   }
+
+  findAdmins(db?: PrismaDbClient): Promise<User[] | null> {
+    return this.findMany(
+      {
+        where: {
+          role: 'ADMIN',
+          status: 'ACTIVE',
+        },
+      },
+      db,
+    );
+  }
 }

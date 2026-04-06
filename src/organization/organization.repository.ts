@@ -1,16 +1,28 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from 'generated/prisma/client';
-import { PrismaService } from 'src/infrastructure/database';
+import { Organization, Prisma, PrismaClient } from 'generated/prisma/client';
+import {
+  BaseRepository,
+  PrismaService,
+  PrismaDbClient,
+} from 'src/infrastructure/database';
+
+type OrganizationDelegate = PrismaClient['organization'];
 
 @Injectable()
-export class OrganizationRepository {
-  constructor(private readonly prisma: PrismaService) {}
-
-  create(tx: Prisma.TransactionClient, data: Prisma.OrganizationCreateInput) {
-    return tx.organization.create({ data });
+export class OrganizationRepository extends BaseRepository<
+  Organization,
+  Prisma.OrganizationCreateInput,
+  Prisma.OrganizationUpdateInput,
+  Prisma.OrganizationWhereInput,
+  Prisma.OrganizationWhereUniqueInput,
+  Prisma.OrganizationOrderByWithRelationInput
+> {
+  constructor(prisma: PrismaService) {
+    super(prisma);
   }
 
-  delete(tx: Prisma.TransactionClient, id: string) {
-    return tx.organization.delete({ where: { id } });
+  protected getDelegate(db?: PrismaDbClient): OrganizationDelegate {
+    const client = db ?? this.prisma.client;
+    return client.organization;
   }
 }

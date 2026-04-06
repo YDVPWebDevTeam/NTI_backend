@@ -1,0 +1,13 @@
+import { Module } from '@nestjs/common';
+import { QueueModule } from 'src/infrastructure/queue';
+import { OrganizationController } from './organization.controller';
+import { OrganizationService } from './organization.service';
+import { OrganizationRepository } from './organization.repository';
+import { UserRepository } from 'src/user/user.repository';
+
+@Module({
+  imports: [QueueModule],
+  controllers: [OrganizationController],
+  providers: [OrganizationService, OrganizationRepository, UserRepository],
+})
+export class OrganizationModule {}

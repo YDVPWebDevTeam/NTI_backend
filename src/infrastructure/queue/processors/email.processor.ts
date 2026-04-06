@@ -36,6 +36,25 @@ export class EmailProcessor extends WorkerHost {
     [EMAIL_JOBS.PASSWORD_RESET]: async (data) => {
       await this.mailerService.sendPasswordResetEmail(data.email, data.token);
     },
+    [EMAIL_JOBS.ORG_PENDING_REVIEW]: async (data) => {
+      this.logger.log(`Organization pending review: ${data.organizationId}`);
+
+      if (!data.adminEmails || data.adminEmails.length === 0) {
+        this.logger.warn('No admins found');
+        return;
+      }
+
+      this.logger.log(`Notifying ${data.adminEmails.length} admins`);
+
+      await Promise.allSettled(
+        data.adminEmails.map((adminEmail) =>
+          this.mailerService.sendOrgPendingReviewEmail(
+            adminEmail,
+            data.organizationId,
+          ),
+        ),
+      );
+    },
   };
 
   async process(job: Job<EmailJobData[EmailJobName]>): Promise<void> {

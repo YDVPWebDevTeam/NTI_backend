@@ -15,6 +15,7 @@ describe('EmailProcessor', () => {
     sendConfirmationEmail: jest.Mock;
     sendTeamConfirm: jest.Mock;
     sendPasswordResetEmail: jest.Mock;
+    sendOrgPendingReviewEmail: jest.Mock;
   };
 
   beforeEach(() => {
@@ -22,6 +23,7 @@ describe('EmailProcessor', () => {
       sendConfirmationEmail: jest.fn().mockResolvedValue(undefined),
       sendTeamConfirm: jest.fn().mockResolvedValue(undefined),
       sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+      sendOrgPendingReviewEmail: jest.fn().mockResolvedValue(undefined),
     };
 
     processor = new EmailProcessor(mailerService as unknown as MailerService);
@@ -80,6 +82,37 @@ describe('EmailProcessor', () => {
       'invitee@example.com',
       'Alpha Team',
       'confirm-token',
+    );
+  });
+
+  it('sends ORG_PENDING_REVIEW to all provided admin emails', async () => {
+    const job: EmailProcessorJob = {
+      id: 'job-3',
+      name: EMAIL_JOBS.ORG_PENDING_REVIEW,
+      data: {
+        organizationId: 'org-1',
+        adminEmails: ['admin1@example.com', 'admin2@example.com'],
+      },
+    } as Job<
+      {
+        organizationId: string;
+        adminEmails: string[];
+      },
+      void,
+      typeof EMAIL_JOBS.ORG_PENDING_REVIEW
+    >;
+
+    await processor.process(job);
+
+    expect(mailerService.sendOrgPendingReviewEmail).toHaveBeenNthCalledWith(
+      1,
+      'admin1@example.com',
+      'org-1',
+    );
+    expect(mailerService.sendOrgPendingReviewEmail).toHaveBeenNthCalledWith(
+      2,
+      'admin2@example.com',
+      'org-1',
     );
   });
 });

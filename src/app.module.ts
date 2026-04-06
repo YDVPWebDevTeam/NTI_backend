@@ -10,6 +10,7 @@ import { MailerModule } from './infrastructure/mailer/mailer.module';
 import { QueueModule } from './infrastructure/queue';
 import { TeamModule } from './team/team.module';
 import { UserModule } from './user/user.module';
+import { OrganizationModule } from './organization/organization.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { UserModule } from './user/user.module';
     QueueModule,
     TeamModule,
     MailerModule,
+    OrganizationModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

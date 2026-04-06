@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma, User } from '../../generated/prisma/client';
+import {
+  Prisma,
+  User,
+  UserRole,
+  UserStatus,
+} from '../../generated/prisma/client';
 import {
   BaseRepository,
   PrismaDbClient,
@@ -42,6 +47,32 @@ export class UserRepository extends BaseRepository<
       { id: userId },
       {
         isAdminConfirmed: true,
+      },
+      db,
+    );
+  }
+
+  updateOrganizationIfNotExists(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    organizationId: string,
+  ) {
+    return tx.user.updateMany({
+      where: {
+        id: userId,
+        organizationId: null,
+      },
+      data: { organizationId },
+    });
+  }
+
+  findAdmins(db?: PrismaDbClient): Promise<User[] | null> {
+    return this.findMany(
+      {
+        where: {
+          role: UserRole.ADMIN,
+          status: UserStatus.ACTIVE,
+        },
       },
       db,
     );

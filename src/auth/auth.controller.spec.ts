@@ -17,6 +17,7 @@ describe('AuthController', () => {
   let controller: AuthController;
   let authService: {
     refreshTokenValidityDays: number;
+    registerViaInvite: jest.Mock;
     login: jest.Mock;
     adminLogin: jest.Mock;
     forceChangePassword: jest.Mock;
@@ -26,6 +27,7 @@ describe('AuthController', () => {
   beforeEach(() => {
     authService = {
       refreshTokenValidityDays: 7,
+      registerViaInvite: jest.fn(),
       login: jest.fn(),
       adminLogin: jest.fn(),
       forceChangePassword: jest.fn(),
@@ -88,6 +90,27 @@ describe('AuthController', () => {
         role: 'STUDENT',
         status: 'PENDING',
       },
+    });
+  });
+
+  it('delegates invite-based registration to the auth service', async () => {
+    authService.registerViaInvite.mockResolvedValue({
+      message: 'Registration via invite completed successfully.',
+    });
+
+    const result = await controller.registerViaInvite({
+      name: 'Jan Novak',
+      token: 'invite-token',
+      password: 'StrongPass123!',
+    });
+
+    expect(authService.registerViaInvite).toHaveBeenCalledWith({
+      name: 'Jan Novak',
+      token: 'invite-token',
+      password: 'StrongPass123!',
+    });
+    expect(result).toEqual({
+      message: 'Registration via invite completed successfully.',
     });
   });
 

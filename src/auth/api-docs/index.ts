@@ -8,6 +8,7 @@ export {
   MeApi,
   RefreshApi,
   RegisterApi,
+  RegisterViaInviteApi,
   ResetPasswordApi,
   ResendConfirmationEmailApi,
   RegisterCompanyOwnerApi,

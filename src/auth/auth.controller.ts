@@ -28,6 +28,7 @@ import { ConfigService } from '../infrastructure/config';
 import { ResendEmailDto } from './dto/resend-email.dto';
 import { ConfirmEmailDto } from './dto/confirm-email.dto';
 import { RegisterCompanyOwnerDto } from './dto/register-company-owner.dto';
+import { RegisterViaInviteDto } from './dto/register-via-invite.dto';
 import { ForceChangePasswordDto } from './dto/force-change-password.dto';
 import {
   AdminLoginApi,
@@ -39,6 +40,7 @@ import {
   MeApi,
   RefreshApi,
   RegisterApi,
+  RegisterViaInviteApi,
   ResetPasswordApi,
   RegisterCompanyOwnerApi,
   ResendConfirmationEmailApi,
@@ -74,6 +76,15 @@ export class AuthController {
     @Body() dto: RegisterCompanyOwnerDto,
   ): Promise<AuthenticatedUserContext> {
     return this.authService.registerCompanyOwner(dto);
+  }
+
+  @RegisterViaInviteApi()
+  @Post('register-via-invite')
+  @HttpCode(HttpStatus.CREATED)
+  registerViaInvite(
+    @Body() dto: RegisterViaInviteDto,
+  ): Promise<MessageResponse> {
+    return this.authService.registerViaInvite(dto);
   }
 
   @LoginApi()

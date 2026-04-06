@@ -22,6 +22,8 @@ import { EmailVerificationService } from './email-verification/email-verificatio
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { ResetTokenService } from './reset-token/reset-token.service';
 import { RegisterCompanyOwnerDto } from './dto/register-company-owner.dto';
+import { RegisterViaInviteDto } from './dto/register-via-invite.dto';
+import { InvitesService } from '../invites/invites.service';
 
 export type AuthTokensResponse = {
   accessToken: string;
@@ -53,6 +55,8 @@ const FORGOT_PASSWORD_SUCCESS_MESSAGE =
   'If the email exists, a reset link was sent.';
 const RESET_PASSWORD_SUCCESS_MESSAGE = 'Password reset successfully.';
 const INVALID_RESET_TOKEN_MESSAGE = 'Invalid or expired password reset token';
+const REGISTER_VIA_INVITE_SUCCESS_MESSAGE =
+  'Registration via invite completed successfully.';
 
 @Injectable()
 export class AuthService {
@@ -67,6 +71,7 @@ export class AuthService {
     private readonly emailVerificationService: EmailVerificationService,
     private readonly resetTokenService: ResetTokenService,
     private readonly queueService: QueueService,
+    private readonly invitesService: InvitesService,
   ) {
     this.refreshTokenValidityDays = parseInt(
       this.configService.jwtRefreshExpirationDays,
@@ -152,6 +157,44 @@ export class AuthService {
     });
 
     return this.usersService.bareSafeUser(user);
+  }
+
+  async registerViaInvite(dto: RegisterViaInviteDto): Promise<MessageResponse> {
+    const passwordHash = await this.hashingService.hashStrong(dto.password);
+
+    await this.usersService.transaction(async (transaction) => {
+      const invitation = await this.invitesService.validateTokenOrThrow(
+        dto.token,
+        transaction,
+      );
+      const existingUser = await this.usersService.findByEmail(
+        invitation.email,
+        transaction,
+      );
+
+      if (existingUser) {
+        throw new ConflictException('User with this email already exists');
+      }
+
+      const user = await this.usersService.create(
+        {
+          email: invitation.email,
+          name: dto.name,
+          passwordHash,
+          isEmailConfirmed: true,
+        },
+        transaction,
+      );
+
+      await this.invitesService.createTeamMember(
+        user.id,
+        invitation.teamId,
+        transaction,
+      );
+      await this.invitesService.markAccepted(invitation.id, transaction);
+    });
+
+    return { message: REGISTER_VIA_INVITE_SUCCESS_MESSAGE };
   }
 
   async login(dto: LoginDto): Promise<AuthTokensResponse> {

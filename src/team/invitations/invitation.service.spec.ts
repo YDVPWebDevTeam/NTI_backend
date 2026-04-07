@@ -9,10 +9,6 @@ jest.mock('../team.repository', () => ({
   TeamRepository: class TeamRepository {},
 }));
 
-jest.mock('../../user/user.service', () => ({
-  UserService: class UserService {},
-}));
-
 jest.mock('../../infrastructure/hashing', () => ({
   HashingService: class HashingService {},
 }));
@@ -24,7 +20,7 @@ jest.mock('../../infrastructure/config', () => ({
 import type { PrismaDbClient } from '../../infrastructure/database';
 import { ConfigService } from '../../infrastructure/config';
 import { HashingService } from '../../infrastructure/hashing';
-import { UserService } from '../../user/user.service';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { TeamRepository } from '../team.repository';
 import { InvitationRepository } from './invitation.repository';
 import { InvitationService } from './invitation.service';
@@ -43,11 +39,9 @@ describe('InvitationService', () => {
     revokeInvitations: jest.Mock;
   };
   let teamRepository: {
+    findById: jest.Mock;
     findMember: jest.Mock;
     addMember: jest.Mock;
-  };
-  let userService: {
-    findByEmail: jest.Mock;
   };
   let transactionClient: PrismaDbClient;
   let hashingService: {
@@ -104,17 +98,14 @@ describe('InvitationService', () => {
     };
 
     teamRepository = {
+      findById: jest.fn().mockResolvedValue({
+        id: 'team-1',
+        lockedAt: null,
+      }),
       findMember: jest.fn().mockResolvedValue(null),
       addMember: jest.fn().mockResolvedValue({
         userId: 'user-1',
         teamId: 'team-1',
-      }),
-    };
-
-    userService = {
-      findByEmail: jest.fn().mockResolvedValue({
-        id: 'user-1',
-        email: 'a@example.com',
       }),
     };
 
@@ -125,7 +116,6 @@ describe('InvitationService', () => {
     service = new InvitationService(
       invitationRepository as unknown as InvitationRepository,
       teamRepository as unknown as TeamRepository,
-      userService as unknown as UserService,
       hashingService as unknown as HashingService,
       {
         tokenByteLength: 32,
@@ -161,14 +151,20 @@ describe('InvitationService', () => {
   });
 
   it('accepts an invitation and adds the user to the team', async () => {
-    const result = await service.accept('token-1');
+    const authUser = {
+      id: 'user-1',
+      email: 'a@example.com',
+      role: 'STUDENT',
+      status: 'ACTIVE',
+    } as AuthenticatedUserContext;
+    const result = await service.accept('token-1', authUser);
 
     expect(invitationRepository.findByToken).toHaveBeenCalledWith(
       'token-1',
       transactionClient,
     );
-    expect(userService.findByEmail).toHaveBeenCalledWith(
-      'a@example.com',
+    expect(teamRepository.findById).toHaveBeenCalledWith(
+      'team-1',
       transactionClient,
     );
     expect(teamRepository.addMember).toHaveBeenCalledWith(
@@ -181,5 +177,40 @@ describe('InvitationService', () => {
       transactionClient,
     );
     expect(result).toEqual({ userId: 'user-1', teamId: 'team-1' });
+  });
+
+  it('rejects accepting an invitation for a different authenticated user', async () => {
+    const authUser = {
+      id: 'user-2',
+      email: 'other@example.com',
+      role: 'STUDENT',
+      status: 'ACTIVE',
+    } as AuthenticatedUserContext;
+
+    await expect(service.accept('token-1', authUser)).rejects.toThrow(
+      'Invitation token does not belong to the authenticated user',
+    );
+
+    expect(teamRepository.addMember).not.toHaveBeenCalled();
+  });
+
+  it('rejects accepting an invitation for a locked team', async () => {
+    teamRepository.findById.mockResolvedValueOnce({
+      id: 'team-1',
+      lockedAt: new Date(),
+    });
+    const authUser = {
+      id: 'user-1',
+      email: 'a@example.com',
+      role: 'STUDENT',
+      status: 'ACTIVE',
+    } as AuthenticatedUserContext;
+
+    await expect(service.accept('token-1', authUser)).rejects.toThrow(
+      'Team is locked',
+    );
+
+    expect(teamRepository.addMember).not.toHaveBeenCalled();
+    expect(invitationRepository.markAccepted).not.toHaveBeenCalled();
   });
 });

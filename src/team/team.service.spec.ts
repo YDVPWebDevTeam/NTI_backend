@@ -191,6 +191,32 @@ describe('TeamService', () => {
     });
   });
 
+  it('rejects create when filtering leaves fewer than two invitations', async () => {
+    invitationService.createInvites.mockResolvedValueOnce([
+      { id: 'invite-1', email: 'b@example.com', token: 'token-1' },
+    ]);
+
+    const user = {
+      id: 'user-1',
+      email: 'a@example.com',
+      role: 'STUDENT',
+      status: 'ACTIVE',
+    } as AuthenticatedUserContext;
+
+    await expect(
+      service.create(user, {
+        name: 'Alpha Team',
+        emails: ['a@example.com', 'b@example.com'],
+      }),
+    ).rejects.toThrow('At least 2 invitations must be created');
+
+    expect(invitationService.revokeInvitations).toHaveBeenCalledWith([
+      'invite-1',
+    ]);
+    expect(queueService.addEmail).not.toHaveBeenCalled();
+    expect(teamRepository.remove).toHaveBeenCalledWith({ id: 'team-1' });
+  });
+
   it('returns public team data without access check', async () => {
     const result = await service.findPublicById('team-1');
 

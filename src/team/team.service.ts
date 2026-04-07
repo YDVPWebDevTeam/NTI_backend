@@ -51,7 +51,9 @@ export class TeamService {
     });
 
     try {
-      await this.createInvites(team, dto.emails);
+      await this.createInvites(team, dto.emails, {
+        minimumCreatedCount: 2,
+      });
     } catch (error) {
       await this.teamRepository.remove({ id: team.id });
       throw error;
@@ -100,11 +102,27 @@ export class TeamService {
   async createInvites(
     team: Pick<Team, 'id' | 'name'>,
     emails: string[],
+    options?: {
+      minimumCreatedCount?: number;
+    },
   ): Promise<{ createdCount: number; invitations: CreatedInvitationDto[] }> {
     const invitations = await this.invitationService.createInvites(
       team.id,
       emails,
     );
+    const minimumCreatedCount = options?.minimumCreatedCount ?? 0;
+
+    if (invitations.length < minimumCreatedCount) {
+      if (invitations.length > 0) {
+        await this.invitationService.revokeInvitations(
+          invitations.map(({ id }) => id),
+        );
+      }
+
+      throw new ConflictException(
+        `At least ${minimumCreatedCount} invitations must be created`,
+      );
+    }
 
     try {
       await Promise.all(

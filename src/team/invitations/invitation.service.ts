@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   GoneException,
   Injectable,
   NotFoundException,
@@ -7,10 +8,10 @@ import {
 import { Prisma } from '../../../generated/prisma/client';
 import type { Invitation, TeamMember } from '../../../generated/prisma/client';
 import { InvitationStatus } from '../../../generated/prisma/enums';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { ConfigService } from '../../infrastructure/config';
 import type { PrismaDbClient } from '../../infrastructure/database';
 import { HashingService } from '../../infrastructure/hashing';
-import { UserService } from '../../user/user.service';
 import { TeamRepository } from '../team.repository';
 import { InvitationRepository } from './invitation.repository';
 
@@ -22,7 +23,6 @@ export class InvitationService {
   constructor(
     private readonly invitationRepository: InvitationRepository,
     private readonly teamRepository: TeamRepository,
-    private readonly userService: UserService,
     private readonly hashingService: HashingService,
     private readonly configService: ConfigService,
   ) {}
@@ -86,7 +86,10 @@ export class InvitationService {
     return this.invitationRepository.revokeById(invitation.id, new Date(), db);
   }
 
-  async accept(token: string): Promise<TeamMember> {
+  async accept(
+    token: string,
+    user: Pick<AuthenticatedUserContext, 'id' | 'email'>,
+  ): Promise<TeamMember> {
     return this.invitationRepository.transaction(async (db) => {
       const invitation = await this.invitationRepository.findByToken(token, db);
 
@@ -106,10 +109,20 @@ export class InvitationService {
         throw new GoneException('Invitation expired or revoked');
       }
 
-      const user = await this.userService.findByEmail(invitation.email, db);
+      if (invitation.email !== user.email) {
+        throw new ForbiddenException(
+          'Invitation token does not belong to the authenticated user',
+        );
+      }
 
-      if (!user) {
-        throw new NotFoundException('User not found for invitation email');
+      const team = await this.teamRepository.findById(invitation.teamId, db);
+
+      if (!team) {
+        throw new NotFoundException('Team not found');
+      }
+
+      if (team.lockedAt) {
+        throw new ConflictException('Team is locked');
       }
 
       const existingMember = await this.teamRepository.findMember(

@@ -163,7 +163,7 @@ export const AcceptInvitationApi = () =>
   createApiDecorator({
     summary: 'Accept invitation',
     description:
-      'Accepts a team invitation using the token from the email link and adds the current user to the team.',
+      'Accepts a team invitation using the token from the email link and adds the authenticated user to the team when the token email matches that user.',
     body: AcceptInvitationDto,
     successResponse: {
       status: 200,
@@ -172,16 +172,23 @@ export const AcceptInvitationApi = () =>
         'Invitation was accepted and the user was added to the team.',
     },
     errors: [
-      ApiNotFoundResponse({
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
         description:
-          'Invitation or user for the invitation email was not found.',
+          'The invitation token does not belong to the authenticated user.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Invitation or team was not found.',
       }),
       ApiConflictResponse({
         description:
-          'The invitation was already accepted or the user is already a team member.',
+          'The invitation was already accepted, the user is already a team member, or the team is locked.',
       }),
       ApiGoneResponse({
         description: 'The invitation has expired or was revoked.',
       }),
     ],
+    extraDecorators: [ApiBearerAuth('access-token')],
   });

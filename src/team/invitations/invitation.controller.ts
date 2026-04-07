@@ -9,8 +9,10 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Team } from '../../../generated/prisma/client';
+import { GetUserContext } from '../../auth/decorators/get-user-context.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { TeamLeadGuard } from '../../auth/guards/team-lead.guard';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import {
   AcceptInvitationApi,
   CreateTeamInvitesApi,
@@ -56,7 +58,11 @@ export class InvitationController {
 
   @AcceptInvitationApi()
   @Post('invitations/accept')
-  async accept(@Body() dto: AcceptInvitationDto) {
-    return this.invitationService.accept(dto.token);
+  @UseGuards(JwtAuthGuard)
+  async accept(
+    @Body() dto: AcceptInvitationDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ) {
+    return this.invitationService.accept(dto.token, user);
   }
 }

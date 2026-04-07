@@ -1,8 +1,22 @@
 import { Injectable } from '@nestjs/common';
-import type { Invitation, Prisma, Team } from '../../generated/prisma/client';
-import { InvitationStatus } from '../../generated/prisma/enums';
+import type { Prisma, Team, TeamMember } from '../../generated/prisma/client';
 import { BaseRepository, PrismaDbClient } from '../infrastructure/database';
 import { PrismaService } from '../infrastructure/database/prisma.service';
+
+export type TeamWithRelations = Prisma.TeamGetPayload<{
+  select: ReturnType<TeamRepository['teamRelationsSelect']>;
+}>;
+
+export type TeamPublicView = Pick<
+  Team,
+  | 'id'
+  | 'name'
+  | 'leaderId'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'lockedAt'
+  | 'archivedAt'
+>;
 
 @Injectable()
 export class TeamRepository extends BaseRepository<
@@ -21,66 +35,133 @@ export class TeamRepository extends BaseRepository<
     return (db ?? this.prisma.client).team;
   }
 
-  createInvitation(
-    data: Prisma.InvitationUncheckedCreateInput,
+  create(
+    data: Prisma.TeamUncheckedCreateInput,
     db?: PrismaDbClient,
-  ): Promise<Invitation> {
-    return (db ?? this.prisma.client).invitation.create({ data });
-  }
-
-  findActiveInvitationEmails(
-    teamId: string,
-    emails: string[],
-    now = new Date(),
-    db?: PrismaDbClient,
-  ): Promise<Array<{ email: string }>> {
-    return (db ?? this.prisma.client).invitation.findMany({
-      where: {
-        teamId,
-        email: { in: emails },
-        status: InvitationStatus.PENDING,
-        revokedAt: null,
-        expiresAt: { gt: now },
-      },
-      select: { email: true },
+  ): Promise<TeamWithRelations> {
+    return (db ?? this.prisma.client).team.create({
+      data,
+      select: this.teamRelationsSelect(),
     });
   }
 
-  findExistingMemberEmails(
-    teamId: string,
-    emails: string[],
+  findById(id: string, db?: PrismaDbClient): Promise<TeamWithRelations | null> {
+    return (db ?? this.prisma.client).team.findUnique({
+      where: { id },
+      select: this.teamRelationsSelect(),
+    });
+  }
+
+  findPublicById(
+    id: string,
     db?: PrismaDbClient,
-  ): Promise<Array<{ user: { email: string } }>> {
-    return (db ?? this.prisma.client).teamMember.findMany({
-      where: {
+  ): Promise<TeamPublicView | null> {
+    return (db ?? this.prisma.client).team.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        leaderId: true,
+        createdAt: true,
+        updatedAt: true,
+        lockedAt: true,
+        archivedAt: true,
+      },
+    });
+  }
+
+  update(
+    where: Prisma.TeamWhereUniqueInput,
+    data: Prisma.TeamUncheckedUpdateInput,
+    db?: PrismaDbClient,
+  ): Promise<TeamWithRelations> {
+    return (db ?? this.prisma.client).team.update({
+      where,
+      data,
+      select: this.teamRelationsSelect(),
+    });
+  }
+
+  remove(
+    where: Prisma.TeamWhereUniqueInput,
+    db?: PrismaDbClient,
+  ): Promise<Team> {
+    return (db ?? this.prisma.client).team.delete({
+      where,
+    });
+  }
+
+  addMember(
+    teamId: string,
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<TeamMember> {
+    return (db ?? this.prisma.client).teamMember.create({
+      data: {
         teamId,
-        user: {
-          email: { in: emails },
+        userId,
+      },
+    });
+  }
+
+  findMember(
+    teamId: string,
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<TeamMember | null> {
+    return (db ?? this.prisma.client).teamMember.findUnique({
+      where: {
+        userId_teamId: {
+          userId,
+          teamId,
         },
       },
-      select: {
-        user: {
-          select: {
-            email: true,
+    });
+  }
+
+  private teamRelationsSelect() {
+    return {
+      id: true,
+      name: true,
+      leaderId: true,
+      createdAt: true,
+      updatedAt: true,
+      lockedAt: true,
+      archivedAt: true,
+      leader: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
+          isEmailConfirmed: true,
+          isAdminConfirmed: true,
+          organizationId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+      members: {
+        select: {
+          userId: true,
+          teamId: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              status: true,
+              isEmailConfirmed: true,
+              isAdminConfirmed: true,
+              organizationId: true,
+              createdAt: true,
+              updatedAt: true,
+            },
           },
         },
       },
-    });
-  }
-
-  revokeInvitations(
-    invitationIds: string[],
-    revokedAt = new Date(),
-    db?: PrismaDbClient,
-  ): Promise<Prisma.BatchPayload> {
-    return (db ?? this.prisma.client).invitation.updateMany({
-      where: {
-        id: { in: invitationIds },
-      },
-      data: {
-        status: InvitationStatus.REVOKED,
-        revokedAt,
-      },
-    });
+    } as const;
   }
 }

@@ -1,27 +1,67 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import type { Team } from '../../generated/prisma/client';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { UserRole } from '../../generated/prisma/enums';
+import { GetUserContext } from '../auth/decorators/get-user-context.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { TeamLeadGuard } from '../auth/guards/team-lead.guard';
-import { CreateTeamInvitesDto } from './dto/create-team-invites.dto';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import {
+  CreateTeamApi,
+  DeleteTeamApi,
+  GetTeamApi,
+  UpdateTeamApi,
+} from './api-docs';
+import { CreateTeamWithInvitesDto } from './dto/create-team-with-invites.dto';
+import { UpdateTeamDto } from './dto/update-team.dto';
 import { TeamService } from './team.service';
 
-type TeamRequest = {
-  team: Team;
-};
-
 @ApiTags('Teams')
-@ApiBearerAuth('access-token')
 @Controller('teams')
 export class TeamController {
   constructor(private readonly teamService: TeamService) {}
 
-  @Post(':teamId/invites')
-  @UseGuards(JwtAuthGuard, TeamLeadGuard)
-  async createInvites(
-    @Body() dto: CreateTeamInvitesDto,
-    @Req() request: TeamRequest,
-  ): Promise<{ createdCount: number }> {
-    return this.teamService.createInvites(request.team, dto.emails);
+  @CreateTeamApi()
+  @Post()
+  @UseGuards(JwtAuthGuard)
+  create(
+    @Body() dto: CreateTeamWithInvitesDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ) {
+    return this.teamService.create(user, dto);
+  }
+
+  @GetTeamApi()
+  @Get(':id')
+  findById(@Param('id') id: string) {
+    return this.teamService.findPublicById(id);
+  }
+
+  @UpdateTeamApi()
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateTeamDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ) {
+    return this.teamService.update(id, user.id, dto);
+  }
+
+  @DeleteTeamApi()
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  remove(@Param('id') id: string) {
+    return this.teamService.remove(id);
   }
 }

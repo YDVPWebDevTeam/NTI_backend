@@ -62,6 +62,9 @@ export class EmailProcessor extends WorkerHost {
         ),
       );
     },
+    [EMAIL_JOBS.ORG_INVITE]: async (data) => {
+      await this.mailerService.sendOrgInviteEmail(data.email, data.token);
+    },
   };
 
   async process(job: Job<EmailJobData[EmailJobName]>): Promise<void> {

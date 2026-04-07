@@ -117,4 +117,16 @@ export class MailerService {
 
     await this.sendEmail(email, 'Organization pending review', html);
   }
+
+  async sendOrgInviteEmail(email: string, token: string): Promise<void> {
+    const link = `${this.configService.frontUrl}/org-invite?token=${token}`;
+
+    const html = `
+      <h1>Organization Invitation</h1>
+      <p>You have been invited to join an organization</p>
+      <a href="${link}">Accept invitation</a>
+    `;
+
+    await this.sendEmail(email, 'Organization Invitation', html);
+  }
 }

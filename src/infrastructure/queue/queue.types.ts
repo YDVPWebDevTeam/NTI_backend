@@ -5,6 +5,8 @@ export const EMAIL_JOBS = {
   USER_CONFIRMATION: 'user-confirmation',
   TEAM_CONFIRMATION: 'team-confirmation',
   SYSTEM_INVITE_SENT: 'system-invite-sent',
+  ORG_PENDING_REVIEW: 'org-pending-review',
+  TEAM_INVITATION: 'team-invitation',
 } as const;
 
 export type EmailJobName = (typeof EMAIL_JOBS)[keyof typeof EMAIL_JOBS];
@@ -21,5 +23,14 @@ export interface EmailJobData {
     email: string;
     token: string;
     roleToAssign: UserRole;
+  };
+  [EMAIL_JOBS.TEAM_INVITATION]: {
+    email: string;
+    teamName: string;
+    token: string;
+  };
+  [EMAIL_JOBS.ORG_PENDING_REVIEW]: {
+    organizationId: string;
+    adminEmails: string[];
   };
 }

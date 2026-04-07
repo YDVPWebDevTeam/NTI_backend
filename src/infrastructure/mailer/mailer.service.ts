@@ -100,4 +100,21 @@ export class MailerService {
 
     await this.sendEmail(email, 'System Invitation', html);
   }
+
+  async sendOrgPendingReviewEmail(
+    email: string,
+    organizationId: string,
+  ): Promise<void> {
+    const link = `${this.configService.frontUrl}/admin/organizations/${organizationId}`;
+
+    const html = `
+      <h1>New organization pending review</h1>
+
+      <p>A new organization has been created and requires review.</p>
+
+      <a href="${link}">Review organization</a>
+  `;
+
+    await this.sendEmail(email, 'Organization pending review', html);
+  }
 }

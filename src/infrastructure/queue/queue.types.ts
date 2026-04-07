@@ -1,7 +1,10 @@
+import { UserRole } from '../../../generated/prisma/enums';
+
 export const EMAIL_JOBS = {
   PASSWORD_RESET: 'password-reset',
   USER_CONFIRMATION: 'user-confirmation',
   TEAM_CONFIRMATION: 'team-confirmation',
+  SYSTEM_INVITE_SENT: 'system-invite-sent',
   ORG_PENDING_REVIEW: 'org-pending-review',
   TEAM_INVITATION: 'team-invitation',
 } as const;
@@ -15,6 +18,11 @@ export interface EmailJobData {
     email: string;
     teamName: string;
     token: string;
+  };
+  [EMAIL_JOBS.SYSTEM_INVITE_SENT]: {
+    email: string;
+    token: string;
+    roleToAssign: UserRole;
   };
   [EMAIL_JOBS.TEAM_INVITATION]: {
     email: string;

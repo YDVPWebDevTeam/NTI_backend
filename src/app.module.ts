@@ -3,6 +3,7 @@ import { AuthModule } from './auth/auth.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AdminModule } from './admin/admin.module';
 import { ConfigModule, ConfigService } from './infrastructure/config';
 import { DatabaseModule } from './infrastructure/database';
 import { LoggerModule } from './infrastructure/logger/logger.module';
@@ -14,6 +15,7 @@ import { OrganizationModule } from './organization/organization.module';
 
 @Module({
   imports: [
+    AdminModule,
     AuthModule,
     ConfigModule,
     DatabaseModule,

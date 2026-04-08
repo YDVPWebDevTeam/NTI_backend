@@ -16,6 +16,7 @@ import { EmailVerificationService } from './email-verification/email-verificatio
 import { ResetTokenRepository } from './reset-token/reset-token.repository';
 import { ResetTokenService } from './reset-token/reset-token.service';
 import { InvitesModule } from '../invites/invites.module';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { InvitesModule } from '../invites/invites.module';
     RefreshTokenService,
     JwtAuthGuard,
     RefreshJwtGuard,
+    RolesGuard,
     JwtAuthStrategy,
     RefreshJwtStrategy,
   ],
@@ -53,6 +55,7 @@ import { InvitesModule } from '../invites/invites.module';
     ResetTokenService,
     RefreshTokenService,
     JwtAuthGuard,
+    RolesGuard,
   ],
 })
 export class AuthModule {}

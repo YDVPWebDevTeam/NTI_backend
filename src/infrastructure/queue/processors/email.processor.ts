@@ -33,6 +33,13 @@ export class EmailProcessor extends WorkerHost {
     },
     [EMAIL_JOBS.TEAM_CONFIRMATION]: this.handleTeamInviteEmail,
     [EMAIL_JOBS.TEAM_INVITATION]: this.handleTeamInviteEmail,
+    [EMAIL_JOBS.SYSTEM_INVITE_SENT]: async (data) => {
+      await this.mailerService.sendSystemInvite(
+        data.email,
+        data.token,
+        data.roleToAssign,
+      );
+    },
     [EMAIL_JOBS.PASSWORD_RESET]: async (data) => {
       await this.mailerService.sendPasswordResetEmail(data.email, data.token);
     },

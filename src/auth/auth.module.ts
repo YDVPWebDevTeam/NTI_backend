@@ -15,12 +15,14 @@ import { EmailVerificationRepository } from './email-verification/email-verifica
 import { EmailVerificationService } from './email-verification/email-verification.service';
 import { ResetTokenRepository } from './reset-token/reset-token.repository';
 import { ResetTokenService } from './reset-token/reset-token.service';
+import { InvitesModule } from '../invites/invites.module';
 import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
     UserModule,
     HashingModule,
+    InvitesModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

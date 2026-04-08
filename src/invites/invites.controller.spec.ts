@@ -25,7 +25,7 @@ describe('InvitesController', () => {
   });
 
   it('delegates token validation to the invites service', async () => {
-    const result = await controller.validateToken('invite-token');
+    const result = await controller.validateToken({ token: 'invite-token' });
 
     expect(invitesService.validateToken).toHaveBeenCalledWith('invite-token');
     expect(result).toEqual({

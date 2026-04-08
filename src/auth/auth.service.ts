@@ -160,8 +160,6 @@ export class AuthService {
   }
 
   async registerViaInvite(dto: RegisterViaInviteDto): Promise<MessageResponse> {
-    const passwordHash = await this.hashingService.hashStrong(dto.password);
-
     await this.usersService.transaction(async (transaction) => {
       const invitation = await this.invitesService.validateTokenOrThrow(
         dto.token,
@@ -176,6 +174,7 @@ export class AuthService {
         throw new ConflictException('User with this email already exists');
       }
 
+      const passwordHash = await this.hashingService.hashStrong(dto.password);
       const user = await this.usersService.create(
         {
           email: invitation.email,

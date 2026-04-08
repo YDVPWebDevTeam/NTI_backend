@@ -1,5 +1,15 @@
 import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import type { Team } from '../../generated/prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TeamLeadGuard } from '../auth/guards/team-lead.guard';
@@ -16,6 +26,39 @@ type TeamRequest = {
 export class TeamController {
   constructor(private readonly teamService: TeamService) {}
 
+  @ApiOperation({
+    summary: 'Create team invites',
+    description:
+      'Creates invitation records for the specified team and enqueues invitation emails for the provided addresses.',
+  })
+  @ApiParam({
+    name: 'teamId',
+    description: 'Identifier of the team that will receive the invitations.',
+    example: 'team-1',
+  })
+  @ApiBody({ type: CreateTeamInvitesDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Invitations were created successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        createdCount: {
+          type: 'number',
+          example: 2,
+        },
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'Current user is not the leader of the requested team.',
+  })
+  @ApiNotFoundResponse({
+    description: 'Team was not found.',
+  })
   @Post(':teamId/invites')
   @UseGuards(JwtAuthGuard, TeamLeadGuard)
   async createInvites(

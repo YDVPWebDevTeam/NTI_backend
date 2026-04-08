@@ -8,7 +8,6 @@ import { DatabaseModule } from './infrastructure/database';
 import { LoggerModule } from './infrastructure/logger/logger.module';
 import { MailerModule } from './infrastructure/mailer/mailer.module';
 import { QueueModule } from './infrastructure/queue';
-import { InvitesModule } from './invites/invites.module';
 import { TeamModule } from './team/team.module';
 import { UserModule } from './user/user.module';
 import { OrganizationModule } from './organization/organization.module';
@@ -20,7 +19,6 @@ import { OrganizationModule } from './organization/organization.module';
     DatabaseModule,
     LoggerModule,
     QueueModule,
-    InvitesModule,
     TeamModule,
     MailerModule,
     OrganizationModule,

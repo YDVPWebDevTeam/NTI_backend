@@ -3,6 +3,7 @@ import {
   ApiBearerAuth,
   ApiConflictResponse,
   ApiCookieAuth,
+  ApiNotFoundResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
@@ -19,6 +20,8 @@ import { RegisterDto } from '../dto/register.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
 import { ResendEmailDto } from '../dto/resend-email.dto';
 import { RegisterCompanyOwnerDto } from '../dto/register-company-owner.dto';
+import { RegisterViaInviteDto } from '../dto/register-via-invite.dto';
+import { RegisterViaInviteResponseDto } from '../dto/register-via-invite-response.dto';
 
 export const RegisterApi = () =>
   createApiDecorator({
@@ -54,6 +57,31 @@ export const RegisterCompanyOwnerApi = () =>
     errors: [
       ApiConflictResponse({
         description: 'A user with this email already exists.',
+      }),
+    ],
+  });
+
+export const RegisterViaInviteApi = () =>
+  createApiDecorator({
+    summary: 'Register via invite',
+    description:
+      'Creates a confirmed user account from a valid invitation token, joins the invited team, and marks the invitation as accepted.',
+    body: RegisterViaInviteDto,
+    successResponse: {
+      status: 201,
+      type: RegisterViaInviteResponseDto,
+      description: 'Invited user was registered successfully.',
+    },
+    errors: [
+      ApiNotFoundResponse({
+        description: 'Invitation token was not found.',
+      }),
+      ApiBadRequestResponse({
+        description:
+          'Invitation token is expired, revoked, or already accepted.',
+      }),
+      ApiConflictResponse({
+        description: 'A user with the invited email already exists.',
       }),
     ],
   });

@@ -173,6 +173,10 @@ export class ConfigService {
     return this.env.EMAIL_VERIFICATION_EXPIRATION_HOURS;
   }
 
+  get systemInvitationExpirationHours(): number {
+    return this.env.SYSTEM_INVITATION_EXPIRATION_HOURS;
+  }
+
   get forcePasswordChangeTokenExpirationMinutes(): number {
     return this.env.FORCE_PASSWORD_CHANGE_TOKEN_EXPIRATION_MINUTES;
   }

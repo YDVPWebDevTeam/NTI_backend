@@ -18,19 +18,50 @@ export class EmailProcessor extends WorkerHost {
     super();
   }
 
+  private readonly handleTeamInviteEmail = async (
+    data: EmailJobData[typeof EMAIL_JOBS.TEAM_INVITATION],
+  ): Promise<void> => {
+    await this.mailerService.sendTeamConfirm(
+      data.email,
+      data.teamName,
+      data.token,
+    );
+  };
+
   private readonly handlers: EmailJobHandlers = {
     [EMAIL_JOBS.USER_CONFIRMATION]: async (data) => {
       await this.mailerService.sendConfirmationEmail(data.email, data.token);
     },
-    [EMAIL_JOBS.TEAM_CONFIRMATION]: async (data) => {
-      await this.mailerService.sendTeamConfirm(
+    [EMAIL_JOBS.TEAM_CONFIRMATION]: this.handleTeamInviteEmail,
+    [EMAIL_JOBS.TEAM_INVITATION]: this.handleTeamInviteEmail,
+    [EMAIL_JOBS.SYSTEM_INVITE_SENT]: async (data) => {
+      await this.mailerService.sendSystemInvite(
         data.email,
-        data.teamName,
         data.token,
+        data.roleToAssign,
       );
     },
     [EMAIL_JOBS.PASSWORD_RESET]: async (data) => {
       await this.mailerService.sendPasswordResetEmail(data.email, data.token);
+    },
+    [EMAIL_JOBS.ORG_PENDING_REVIEW]: async (data) => {
+      this.logger.log(`Organization pending review: ${data.organizationId}`);
+
+      if (!data.adminEmails || data.adminEmails.length === 0) {
+        this.logger.warn('No admins found');
+        return;
+      }
+
+      this.logger.log(`Notifying ${data.adminEmails.length} admins`);
+
+      await Promise.allSettled(
+        data.adminEmails.map((adminEmail) =>
+          this.mailerService.sendOrgPendingReviewEmail(
+            adminEmail,
+            data.organizationId,
+          ),
+        ),
+      );
     },
   };
 

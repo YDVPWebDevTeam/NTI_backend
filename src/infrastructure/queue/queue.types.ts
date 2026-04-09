@@ -1,5 +1,5 @@
-import { PdfTemplateRenderOptions } from '../pdf';
-import { DemoPdfTemplateData } from '../pdf/templates/demo-pdf.template';
+import type { DemoPdfTemplateData } from '../pdf/templates/demo-pdf.template';
+import type { PdfTemplateRenderOptions } from '../pdf/pdf.types';
 
 export const EMAIL_JOBS = {
   PASSWORD_RESET: 'password-reset',
@@ -35,12 +35,16 @@ export interface PdfTemplateDataByName {
   [PDF_TEMPLATES.DEMO]: DemoPdfTemplateData;
 }
 
-export interface PdfJobData {
-  [PDF_JOBS.RENDER_TEMPLATE]: {
-    template: PdfTemplateName;
-    data: PdfTemplateDataByName[PdfTemplateName];
+type RenderTemplatePdfJobData = {
+  [K in PdfTemplateName]: {
+    template: K;
+    data: PdfTemplateDataByName[K];
     options?: PdfTemplateRenderOptions;
   };
+}[PdfTemplateName];
+
+export interface PdfJobData {
+  [PDF_JOBS.RENDER_TEMPLATE]: RenderTemplatePdfJobData;
 }
 
 export interface PdfJobResult {

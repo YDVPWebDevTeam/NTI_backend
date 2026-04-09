@@ -2,7 +2,8 @@ import { Logger } from '@nestjs/common';
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { QUEUE_NAMES } from '../queue.constants';
-import { EMAIL_JOBS, EmailJobData, EmailJobName } from '../queue.types';
+import { EMAIL_JOBS } from '../queue.types';
+import type { EmailJobData, EmailJobName } from '../queue.types';
 import { MailerService } from '../../mailer/mailer.service';
 
 type EmailJobHandlers = {

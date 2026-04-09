@@ -4,12 +4,8 @@ import { Job } from 'bullmq';
 import { ConfigService } from '../../config';
 import { PdfService, PdfTemplateRegistryService } from '../../pdf';
 import { QUEUE_NAMES } from '../queue.constants';
-import {
-  PDF_JOBS,
-  type PdfJobData,
-  type PdfJobName,
-  type PdfJobResult,
-} from '../queue.types';
+import { PDF_JOBS } from '../queue.types';
+import type { PdfJobData, PdfJobName, PdfJobResult } from '../queue.types';
 
 type PdfJobHandlers = {
   [K in PdfJobName]: (data: PdfJobData[K]) => Promise<PdfJobResult[K]>;
@@ -73,5 +69,10 @@ export class PdfProcessor extends WorkerHost {
       `Failed PDF job "${jobName}" (${jobId}): ${error.message}`,
       error.stack,
     );
+  }
+
+  @OnWorkerEvent('error')
+  onError(error: Error): void {
+    this.logger.error(`PDF worker error: ${error.message}`, error.stack);
   }
 }

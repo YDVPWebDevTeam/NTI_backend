@@ -8,6 +8,8 @@ import { EmailVerificationRepository } from './email-verification.repository';
 import { ConfigService } from '../../infrastructure/config';
 import { HashingService } from '../../infrastructure/hashing';
 
+const DEV_EMAIL_BYPASS_TOKEN = '123456';
+
 @Injectable()
 export class EmailVerificationService {
   constructor(
@@ -55,7 +57,26 @@ export class EmailVerificationService {
     token: string,
     db?: PrismaDbClient,
   ): Promise<EmailVerificationToken> {
-    const verificationToken = await this.findByToken(token, db);
+    const verificationToken =
+      this.configService.isDevelopment && token === DEV_EMAIL_BYPASS_TOKEN
+        ? ((
+            await this.emailVerificationRepository.findMany(
+              {
+                where: {
+                  acceptedAt: null,
+                  expiresAt: {
+                    gt: new Date(),
+                  },
+                },
+                orderBy: {
+                  createdAt: 'desc',
+                },
+                take: 1,
+              },
+              db,
+            )
+          )[0] ?? null)
+        : await this.findByToken(token, db);
     const invalidTokenMessage = 'Invalid or expired verification token';
 
     if (

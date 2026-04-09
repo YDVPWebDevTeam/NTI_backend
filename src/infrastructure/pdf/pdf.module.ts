@@ -1,15 +1,14 @@
-import { Global, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
+import { FilesModule } from '../../files';
 import { QueueModule } from '../queue';
 import { PdfDemoController } from './pdf-demo.controller';
+import { PdfCoreModule } from './pdf-core.module';
 import { PdfQueueService } from './pdf-queue.service';
-import { PdfService } from './pdf.service';
-import { PdfTemplateRegistryService } from './pdf-template-registry.service';
 
-@Global()
 @Module({
-  imports: [QueueModule],
+  imports: [PdfCoreModule, QueueModule, FilesModule],
   controllers: [PdfDemoController],
-  providers: [PdfService, PdfQueueService, PdfTemplateRegistryService],
-  exports: [PdfService, PdfQueueService, PdfTemplateRegistryService],
+  providers: [PdfQueueService],
+  exports: [PdfCoreModule, PdfQueueService],
 })
 export class PdfModule {}

@@ -9,7 +9,9 @@ import { LoggerModule } from './infrastructure/logger/logger.module';
 import { MailerModule } from './infrastructure/mailer/mailer.module';
 import { PdfModule } from './infrastructure/pdf';
 import { QueueModule } from './infrastructure/queue';
+import { StorageModule } from './infrastructure/storage';
 import { UserModule } from './user/user.module';
+import { FilesModule } from './files';
 
 @Module({
   imports: [
@@ -20,6 +22,7 @@ import { UserModule } from './user/user.module';
     QueueModule,
     MailerModule,
     PdfModule,
+    StorageModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -30,6 +33,7 @@ import { UserModule } from './user/user.module';
       ],
     }),
     UserModule,
+    FilesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

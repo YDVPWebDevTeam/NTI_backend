@@ -43,6 +43,52 @@ export class ConfigService {
     return this.env.FRONTEND_URL;
   }
 
+  get r2Endpoint(): string {
+    return this.env.R2_ENDPOINT;
+  }
+
+  get r2BucketName(): string {
+    return this.env.R2_BUCKET_NAME;
+  }
+
+  get r2AccessKeyId(): string {
+    return this.env.R2_ACCESS_KEY_ID;
+  }
+
+  get r2SecretAccessKey(): string {
+    return this.env.R2_SECRET_ACCESS_KEY;
+  }
+
+  get r2Region(): string {
+    return this.env.R2_REGION;
+  }
+
+  get r2PublicBaseUrl(): string | undefined {
+    return this.env.R2_PUBLIC_BASE_URL;
+  }
+
+  get fileUploadPresignExpiresSeconds(): number {
+    return this.env.FILE_UPLOAD_PRESIGN_EXPIRES_SECONDS;
+  }
+
+  get fileDownloadPresignExpiresSeconds(): number {
+    return this.env.FILE_DOWNLOAD_PRESIGN_EXPIRES_SECONDS;
+  }
+
+  get fileUploadMaxSizeBytes(): number {
+    return this.env.FILE_UPLOAD_MAX_SIZE_BYTES;
+  }
+
+  get fileUploadAllowedMimeTypes(): string[] {
+    return this.env.FILE_UPLOAD_ALLOWED_MIME_TYPES.split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
+  get fileUploadVerifyObjectOnComplete(): boolean {
+    return this.env.FILE_UPLOAD_VERIFY_OBJECT_ON_COMPLETE;
+  }
+
   get puppeteerExecutablePath(): string | undefined {
     return this.env.PUPPETEER_EXECUTABLE_PATH;
   }

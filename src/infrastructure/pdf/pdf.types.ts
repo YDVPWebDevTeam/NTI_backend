@@ -1,4 +1,4 @@
-import type { PDFOptions } from 'puppeteer';
+import type { PDFOptions } from 'puppeteer-core';
 
 export type PdfTemplateRenderOptions = Pick<
   PDFOptions,

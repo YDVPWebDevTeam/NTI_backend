@@ -1,4 +1,4 @@
-jest.mock('puppeteer', () => ({
+jest.mock('puppeteer-core', () => ({
   __esModule: true,
   default: {
     launch: jest.fn(),
@@ -10,7 +10,7 @@ jest.mock('../config', () => ({
 }));
 
 import { InternalServerErrorException } from '@nestjs/common';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
 import { ConfigService } from '../config';
 import { PdfService } from './pdf.service';
 

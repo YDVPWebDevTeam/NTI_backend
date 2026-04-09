@@ -4,7 +4,7 @@ import {
   Logger,
   OnModuleDestroy,
 } from '@nestjs/common';
-import puppeteer, { type Browser, type LaunchOptions } from 'puppeteer';
+import puppeteer, { type Browser, type LaunchOptions } from 'puppeteer-core';
 import { ConfigService } from '../config';
 import type {
   PdfGenerateFromHtmlInput,

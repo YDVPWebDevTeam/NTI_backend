@@ -11,6 +11,7 @@ jest.mock('../queue/queue.connection', () => ({
 
 jest.mock('bullmq', () => ({
   QueueEvents: jest.fn().mockImplementation(() => ({
+    waitUntilReady: jest.fn().mockResolvedValue(undefined),
     close: jest.fn().mockResolvedValue(undefined),
   })),
 }));
@@ -23,6 +24,7 @@ import { PdfQueueService } from './pdf-queue.service';
 describe('PdfQueueService', () => {
   const waitUntilFinished = jest.fn();
   const add = jest.fn();
+  const waitUntilReady = jest.fn().mockResolvedValue(undefined);
   const close = jest.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
@@ -33,6 +35,7 @@ describe('PdfQueueService', () => {
       bufferBase64: Buffer.from('pdf').toString('base64'),
     });
     (QueueEvents as unknown as jest.Mock).mockImplementation(() => ({
+      waitUntilReady,
       close,
     }));
   });

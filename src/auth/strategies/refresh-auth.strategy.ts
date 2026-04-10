@@ -38,6 +38,9 @@ export class RefreshJwtStrategy extends PassportStrategy(
     req: FastifyRequest,
     payload: RefreshJwtPayload,
   ): Promise<AuthenticatedUserContext> {
+    if (!payload.refreshTokenId) {
+      throw new UnauthorizedException('Invalid refresh token payload');
+    }
     const refreshToken = await this.refreshTokenService.findByTokenId(
       payload.refreshTokenId,
     );

@@ -75,11 +75,6 @@ export class FilesService {
     const uploadUrl = await this.storageService.createPresignedUploadUrl({
       key,
       contentType: dto.mimeType,
-      contentLength: dto.size,
-      metadata: {
-        fileId: file.id,
-        ownerId: authUser.id,
-      },
     });
 
     return {
@@ -184,17 +179,6 @@ export class FilesService {
       downloadUrl,
       visibility,
       expiresAt: expiresAt.toISOString(),
-    };
-  }
-
-  async listMyFilesDemo(
-    authUser: AuthenticatedUserContext,
-  ): Promise<{ items: UploadedFileDto[]; total: number }> {
-    const files = await this.filesRepository.findRecentByOwner(authUser.id);
-
-    return {
-      items: files.map((file) => this.toUploadedFileDto(file)),
-      total: files.length,
     };
   }
 

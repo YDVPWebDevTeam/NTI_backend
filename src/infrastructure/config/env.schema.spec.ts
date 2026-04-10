@@ -26,5 +26,7 @@ describe('envSchema', () => {
     expect(parsed.PDF_JOB_WAIT_TIMEOUT_MS).toBe(60000);
     expect(parsed.PDF_WORKER_CONCURRENCY).toBe(2);
     expect(parsed.PUPPETEER_EXECUTABLE_PATH).toBeUndefined();
+    expect(parsed.DEV_EMAIL_VERIFICATION_BYPASS_ENABLED).toBe(false);
+    expect(parsed.DEV_EMAIL_VERIFICATION_BYPASS_TOKEN).toBeUndefined();
   });
 });

@@ -49,20 +49,14 @@ describe('PdfQueueService', () => {
       } as ConfigService,
     );
 
-    const result = await service.renderTemplate(PDF_TEMPLATES.DEMO, {
-      title: 'Demo',
-      subtitle: 'Subtitle',
-      generatedAt: '2026-04-05T00:00:00.000Z',
-      sections: [],
+    const result = await service.renderTemplate(PDF_TEMPLATES.REPORT, {
+      html: '<html><body>Report</body></html>',
     });
 
     expect(add).toHaveBeenCalledWith('render-template', {
-      template: 'demo',
+      template: 'report',
       data: {
-        title: 'Demo',
-        subtitle: 'Subtitle',
-        generatedAt: '2026-04-05T00:00:00.000Z',
-        sections: [],
+        html: '<html><body>Report</body></html>',
       },
       options: undefined,
     });

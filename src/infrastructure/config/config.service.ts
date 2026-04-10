@@ -173,6 +173,14 @@ export class ConfigService {
     return this.env.EMAIL_VERIFICATION_EXPIRATION_HOURS;
   }
 
+  get devEmailVerificationBypassEnabled(): boolean {
+    return this.env.DEV_EMAIL_VERIFICATION_BYPASS_ENABLED;
+  }
+
+  get devEmailVerificationBypassToken(): string | undefined {
+    return this.env.DEV_EMAIL_VERIFICATION_BYPASS_TOKEN;
+  }
+
   get systemInvitationExpirationHours(): number {
     return this.env.SYSTEM_INVITATION_EXPIRATION_HOURS;
   }

@@ -22,7 +22,6 @@ describe('FilesService', () => {
   let service: FilesService;
   let filesRepository: {
     create: jest.Mock;
-    findRecentByOwner: jest.Mock;
     findByIdForOwner: jest.Mock;
     markFailed: jest.Mock;
     markUploaded: jest.Mock;
@@ -56,7 +55,6 @@ describe('FilesService', () => {
   beforeEach(() => {
     filesRepository = {
       create: jest.fn(),
-      findRecentByOwner: jest.fn(),
       findByIdForOwner: jest.fn(),
       markFailed: jest.fn().mockResolvedValue(undefined),
       markUploaded: jest.fn(),
@@ -263,42 +261,6 @@ describe('FilesService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('returns recent files for the authenticated user in demo list endpoint', async () => {
-    filesRepository.findRecentByOwner.mockResolvedValue([
-      {
-        id: 'file-1',
-        ownerId: 'user-1',
-        key: 'users/user-1/pdf-demo/2026-04-09/file-1.pdf',
-        originalName: 'file-1.pdf',
-        mimeType: 'application/pdf',
-        size: 1234,
-        visibility: 'PRIVATE',
-        status: 'UPLOADED',
-        uploadedAt: new Date('2026-04-09T18:00:00.000Z'),
-      },
-      {
-        id: 'file-2',
-        ownerId: 'user-1',
-        key: 'users/user-1/avatar/2026-04-09/file-2.png',
-        originalName: 'file-2.png',
-        mimeType: 'image/png',
-        size: 4567,
-        visibility: 'PUBLIC',
-        status: 'UPLOADED',
-        uploadedAt: new Date('2026-04-09T18:05:00.000Z'),
-      },
-    ]);
-
-    const response = await service.listMyFilesDemo(authUser);
-
-    expect(filesRepository.findRecentByOwner).toHaveBeenCalledWith('user-1');
-    expect(response.total).toBe(2);
-    expect(response.items).toHaveLength(2);
-    expect(response.items[1]?.publicUrl).toBe(
-      'https://cdn.example.com/users/user-1/avatar/2026-04-09/file-2.png',
-    );
-  });
-
   it('persists a server generated file and marks it as uploaded', async () => {
     const buffer = Buffer.from('pdf-binary');
 
@@ -308,7 +270,7 @@ describe('FilesService', () => {
     filesRepository.markUploaded.mockResolvedValue({
       id: 'file-1',
       ownerId: 'user-1',
-      key: 'users/user-1/pdf-demo/2026-04-08/file.pdf',
+      key: 'users/user-1/report/2026-04-08/file.pdf',
       originalName: 'report.pdf',
       mimeType: 'application/pdf',
       size: buffer.length,
@@ -321,9 +283,9 @@ describe('FilesService', () => {
       filename: 'report.pdf',
       mimeType: 'application/pdf',
       buffer,
-      purpose: 'pdf-demo',
-      entityType: 'pdf-template',
-      entityId: 'demo',
+      purpose: 'report',
+      entityType: 'report',
+      entityId: 'report-1',
     });
 
     expect(filesRepository.create).toHaveBeenCalledWith(
@@ -332,13 +294,13 @@ describe('FilesService', () => {
         originalName: 'report.pdf',
         mimeType: 'application/pdf',
         size: buffer.length,
-        purpose: 'pdf-demo',
+        purpose: 'report',
       }),
     );
     expect(storageService.putObject).toHaveBeenCalledTimes(1);
     const putObjectInput = storageService.putObject.mock.calls[0]?.[0];
     expect(putObjectInput).toBeDefined();
-    expect(putObjectInput?.key).toContain('users/user-1/pdf-demo/');
+    expect(putObjectInput?.key).toContain('users/user-1/report/');
     expect(putObjectInput?.body).toBe(buffer);
     expect(putObjectInput?.contentType).toBe('application/pdf');
     expect(filesRepository.markUploaded).toHaveBeenCalledWith('file-1');
@@ -356,7 +318,7 @@ describe('FilesService', () => {
         filename: 'report.pdf',
         mimeType: 'application/pdf',
         buffer: Buffer.from('pdf-binary'),
-        purpose: 'pdf-demo',
+        purpose: 'report',
       }),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
 
@@ -377,7 +339,7 @@ describe('FilesService', () => {
         filename: 'report.pdf',
         mimeType: 'application/pdf',
         buffer: Buffer.from('pdf-binary'),
-        purpose: 'pdf-demo',
+        purpose: 'report',
       }),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
 

@@ -16,13 +16,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import {
   CompleteUploadApi,
-  ListMyFilesDemoApi,
   RequestDownloadUrlApi,
   RequestUploadUrlApi,
 } from './api-docs';
 import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { DownloadUrlDto } from './dto/download-url.dto';
-import { ListMyFilesDemoDto } from './dto/list-my-files-demo.dto';
 import { RequestDownloadUrlDto } from './dto/request-download-url.dto';
 import { RequestUploadDto } from './dto/request-upload.dto';
 import { UploadedFileDto } from './dto/uploaded-file.dto';
@@ -58,15 +56,6 @@ export class FilesController {
       fileId,
       query.disposition,
     );
-  }
-
-  @ListMyFilesDemoApi()
-  @HttpCode(HttpStatus.OK)
-  @Get('me/demo')
-  listMyFilesDemo(
-    @GetUserContext() authUser: AuthenticatedUserContext,
-  ): Promise<ListMyFilesDemoDto> {
-    return this.filesService.listMyFilesDemo(authUser);
   }
 
   @CompleteUploadApi()

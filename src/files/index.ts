@@ -14,5 +14,4 @@ export {
   type FileVisibilityDto,
 } from './dto/request-upload.dto';
 export { UploadInstructionsDto } from './dto/upload-instructions.dto';
-export { ListMyFilesDemoDto } from './dto/list-my-files-demo.dto';
 export { UploadedFileDto } from './dto/uploaded-file.dto';

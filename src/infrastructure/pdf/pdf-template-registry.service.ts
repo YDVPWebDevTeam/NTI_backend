@@ -4,7 +4,6 @@ import {
   type PdfTemplateDataByName,
   type PdfTemplateName,
 } from '../queue';
-import { demoPdfTemplate } from './templates/demo-pdf.template';
 
 type PdfTemplateHandler<K extends PdfTemplateName> = {
   render: (data: PdfTemplateDataByName[K]) => string;
@@ -18,9 +17,9 @@ type PdfTemplateRegistry = {
 @Injectable()
 export class PdfTemplateRegistryService {
   private readonly registry: PdfTemplateRegistry = {
-    [PDF_TEMPLATES.DEMO]: {
-      render: (data) => demoPdfTemplate.render(data),
-      fileName: 'reusable-pdf-demo.pdf',
+    [PDF_TEMPLATES.REPORT]: {
+      render: (data) => data.html,
+      fileName: 'report.pdf',
     },
   };
 

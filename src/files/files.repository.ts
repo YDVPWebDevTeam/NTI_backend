@@ -41,21 +41,6 @@ export class FilesRepository extends BaseRepository<
     );
   }
 
-  findRecentByOwner(
-    ownerId: string,
-    take = 20,
-    db?: PrismaDbClient,
-  ): Promise<UploadedFile[]> {
-    return this.findMany(
-      {
-        where: { ownerId },
-        orderBy: { createdAt: 'desc' },
-        take,
-      },
-      db,
-    );
-  }
-
   markUploaded(
     id: string,
     uploadedAt = new Date(),

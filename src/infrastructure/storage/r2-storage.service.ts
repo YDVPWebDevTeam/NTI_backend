@@ -12,8 +12,6 @@ import { ConfigService } from '../config';
 export type PresignedUploadInput = {
   key: string;
   contentType: string;
-  contentLength: number;
-  metadata?: Record<string, string>;
 };
 
 export type PresignedDownloadInput = {
@@ -50,8 +48,6 @@ export class R2StorageService {
       Bucket: this.configService.r2BucketName,
       Key: input.key,
       ContentType: input.contentType,
-      ContentLength: input.contentLength,
-      Metadata: input.metadata,
     });
 
     return getSignedUrl(this.client, command, {

@@ -1,4 +1,3 @@
-import type { DemoPdfTemplateData } from '../pdf/templates/demo-pdf.template';
 import type { PdfTemplateRenderOptions } from '../pdf/pdf.types';
 
 import { UserRole } from '../../../generated/prisma/enums';
@@ -43,7 +42,7 @@ export const PDF_JOBS = {
 } as const;
 
 export const PDF_TEMPLATES = {
-  DEMO: 'demo',
+  REPORT: 'report',
 } as const;
 
 export type PdfJobName = (typeof PDF_JOBS)[keyof typeof PDF_JOBS];
@@ -51,7 +50,7 @@ export type PdfTemplateName =
   (typeof PDF_TEMPLATES)[keyof typeof PDF_TEMPLATES];
 
 export interface PdfTemplateDataByName {
-  [PDF_TEMPLATES.DEMO]: DemoPdfTemplateData;
+  [PDF_TEMPLATES.REPORT]: { html: string };
 }
 
 type RenderTemplatePdfJobData = {

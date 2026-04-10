@@ -87,6 +87,11 @@ export const envSchema = z.object({
     .int()
     .positive()
     .default(24),
+  DEV_EMAIL_VERIFICATION_BYPASS_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  DEV_EMAIL_VERIFICATION_BYPASS_TOKEN: z.string().min(1).optional(),
   FORCE_PASSWORD_CHANGE_TOKEN_EXPIRATION_MINUTES: z.coerce
     .number()
     .int()

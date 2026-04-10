@@ -12,7 +12,6 @@ import { FileVisibility, UploadStatus } from '../../../generated/prisma/enums';
 import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
 import { CompleteUploadDto } from '../dto/complete-upload.dto';
 import { DownloadUrlDto } from '../dto/download-url.dto';
-import { ListMyFilesDemoDto } from '../dto/list-my-files-demo.dto';
 import { FILE_URL_DISPOSITIONS } from '../dto/request-download-url.dto';
 import { RequestUploadDto } from '../dto/request-upload.dto';
 import { UploadInstructionsDto } from '../dto/upload-instructions.dto';
@@ -219,45 +218,6 @@ export const RequestDownloadUrlApi = () =>
       }),
       ApiBadRequestResponse({
         description: 'Request parameters are invalid.',
-      }),
-    ],
-  });
-
-export const ListMyFilesDemoApi = () =>
-  createApiDecorator({
-    summary: 'List my recent files (demo)',
-    description:
-      'Returns recent file records for the authenticated user. This is a demo endpoint to help frontend development.',
-    successResponse: {
-      status: 200,
-      type: ListMyFilesDemoDto,
-      description: 'Recent files were fetched successfully.',
-      examples: {
-        demoList: {
-          summary: 'Recent files response',
-          value: {
-            items: [
-              {
-                id: 'a16947f8-8f55-4a70-906d-f5dd15c92256',
-                ownerId: 'fae01d73-b528-4af1-9765-f22ba9cf6e02',
-                key: 'users/fae01d73-b528-4af1-9765-f22ba9cf6e02/pdf-demo/2026-04-09/reusable-pdf-demo.pdf',
-                originalName: 'reusable-pdf-demo.pdf',
-                mimeType: 'application/pdf',
-                size: 48217,
-                visibility: FileVisibility.PRIVATE,
-                status: UploadStatus.UPLOADED,
-                uploadedAt: '2026-04-09T18:45:12.000Z',
-              },
-            ],
-            total: 1,
-          },
-        },
-      },
-    },
-    extraDecorators: [ApiBearerAuth('access-token')],
-    errors: [
-      ApiUnauthorizedResponse({
-        description: 'Bearer token is missing or invalid.',
       }),
     ],
   });

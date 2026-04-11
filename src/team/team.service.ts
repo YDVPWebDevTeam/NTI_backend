@@ -100,12 +100,16 @@ export class TeamService {
   }
 
   async createInvites(
-    team: Pick<Team, 'id' | 'name'>,
+    team: Pick<Team, 'id' | 'name' | 'lockedAt'>,
     emails: string[],
     options?: {
       minimumCreatedCount?: number;
     },
   ): Promise<{ createdCount: number; invitations: CreatedInvitationDto[] }> {
+    if (team.lockedAt) {
+      throw new ConflictException('Team is locked');
+    }
+
     const invitations = await this.invitationService.createInvites(
       team.id,
       emails,

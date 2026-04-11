@@ -1,3 +1,5 @@
+/// <reference types="jest" />
+
 jest.mock('../../../generated/prisma/client', () => ({}), { virtual: true });
 jest.mock('@prisma/client', () => ({}), { virtual: true });
 
@@ -211,6 +213,26 @@ describe('InvitationService', () => {
     );
 
     expect(teamRepository.addMember).not.toHaveBeenCalled();
+    expect(invitationRepository.markAccepted).not.toHaveBeenCalled();
+  });
+
+  it('maps team member unique violations to conflict on accept', async () => {
+    teamRepository.addMember.mockRejectedValueOnce({
+      code: 'P2002',
+      meta: { target: ['userId', 'teamId'] },
+    });
+
+    const authUser = {
+      id: 'user-1',
+      email: 'a@example.com',
+      role: 'STUDENT',
+      status: 'ACTIVE',
+    } as AuthenticatedUserContext;
+
+    await expect(service.accept('token-1', authUser)).rejects.toThrow(
+      'User is already a team member',
+    );
+
     expect(invitationRepository.markAccepted).not.toHaveBeenCalled();
   });
 });

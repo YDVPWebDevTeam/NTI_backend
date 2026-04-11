@@ -22,6 +22,8 @@ import {
   UpdateTeamApi,
 } from './api-docs';
 import { CreateTeamWithInvitesDto } from './dto/create-team-with-invites.dto';
+import { TeamDetailDto } from './dto/team-detail.dto';
+import { TeamPublicDto } from './dto/team-public.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { TeamService } from './team.service';
 
@@ -36,13 +38,13 @@ export class TeamController {
   create(
     @Body() dto: CreateTeamWithInvitesDto,
     @GetUserContext() user: AuthenticatedUserContext,
-  ) {
+  ): Promise<TeamDetailDto> {
     return this.teamService.create(user, dto);
   }
 
   @GetTeamApi()
   @Get(':id')
-  findById(@Param('id') id: string) {
+  findById(@Param('id') id: string): Promise<TeamPublicDto> {
     return this.teamService.findPublicById(id);
   }
 
@@ -53,7 +55,7 @@ export class TeamController {
     @Param('id') id: string,
     @Body() dto: UpdateTeamDto,
     @GetUserContext() user: AuthenticatedUserContext,
-  ) {
+  ): Promise<TeamDetailDto> {
     return this.teamService.update(id, user.id, dto);
   }
 
@@ -61,7 +63,7 @@ export class TeamController {
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  remove(@Param('id') id: string) {
+  remove(@Param('id') id: string): Promise<TeamPublicDto> {
     return this.teamService.remove(id);
   }
 }

@@ -135,11 +135,21 @@ export class InvitationService {
         throw new ConflictException('User is already a team member');
       }
 
-      const membership = await this.teamRepository.addMember(
-        invitation.teamId,
-        user.id,
-        db,
-      );
+      let membership: TeamMember;
+
+      try {
+        membership = await this.teamRepository.addMember(
+          invitation.teamId,
+          user.id,
+          db,
+        );
+      } catch (error: unknown) {
+        if (this.isTeamMemberUniqueConstraintError(error)) {
+          throw new ConflictException('User is already a team member');
+        }
+
+        throw error;
+      }
 
       await this.invitationRepository.markAccepted(invitation.id, db);
 
@@ -230,5 +240,38 @@ export class InvitationService {
       candidate.code === 'P2002' &&
       (Array.isArray(target) ? target.includes('token') : target === 'token')
     );
+  }
+
+  private isTeamMemberUniqueConstraintError(
+    error: unknown,
+  ): error is { code: string; meta?: { target?: string | string[] } } {
+    if (typeof error !== 'object' || error === null) {
+      return false;
+    }
+
+    const candidate = error as {
+      code?: unknown;
+      meta?: { target?: unknown };
+    };
+
+    if (candidate.code !== 'P2002') {
+      return false;
+    }
+
+    const target = candidate.meta?.target;
+
+    if (Array.isArray(target)) {
+      return target.includes('userId') && target.includes('teamId');
+    }
+
+    if (typeof target === 'string') {
+      return (
+        target.includes('userId_teamId') ||
+        (target.includes('userId') && target.includes('teamId')) ||
+        target.includes('TeamMember')
+      );
+    }
+
+    return false;
   }
 }

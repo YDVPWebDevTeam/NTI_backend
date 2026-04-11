@@ -15,6 +15,7 @@ import { UpdateTeamDto } from '../dto/update-team.dto';
 import { AcceptInvitationDto } from '../invitations/dto/accept-invitation.dto';
 import { CreateTeamInvitesResponseDto } from '../invitations/dto/create-team-invites-response.dto';
 import { CreateTeamInvitesDto } from '../invitations/dto/create-team-invites.dto';
+import { RevokedInvitationDto } from '../invitations/dto/revoked-invitation.dto';
 import { TeamMemberDto } from '../invitations/dto/team-member.dto';
 
 export const CreateTeamApi = () =>
@@ -32,6 +33,10 @@ export const CreateTeamApi = () =>
     errors: [
       ApiUnauthorizedResponse({
         description: 'Bearer token is missing or invalid.',
+      }),
+      ApiConflictResponse({
+        description:
+          'At least two invitations could not be created for the provided emails.',
       }),
     ],
   });
@@ -78,6 +83,12 @@ export const UpdateTeamApi = () =>
       ApiForbiddenResponse({
         description: 'Only the team leader may update this team.',
       }),
+      ApiNotFoundResponse({
+        description: 'Team not found.',
+      }),
+      ApiConflictResponse({
+        description: 'Team is locked.',
+      }),
     ],
   });
 
@@ -88,6 +99,7 @@ export const DeleteTeamApi = () =>
       'Deletes a team. This endpoint is restricted to administrators.',
     successResponse: {
       status: 200,
+      type: TeamPublicDto,
       description: 'Team was deleted successfully.',
     },
     extraDecorators: [
@@ -100,6 +112,9 @@ export const DeleteTeamApi = () =>
       }),
       ApiForbiddenResponse({
         description: 'Only administrators may delete teams.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Team not found.',
       }),
     ],
   });
@@ -126,6 +141,13 @@ export const CreateTeamInvitesApi = () =>
       ApiForbiddenResponse({
         description: 'Only the team leader may create invitations.',
       }),
+      ApiConflictResponse({
+        description:
+          'Team is locked or no new invitations could be created for the provided emails.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Team not found.',
+      }),
     ],
   });
 
@@ -136,6 +158,7 @@ export const RevokeTeamInvitationApi = () =>
       'Revokes a pending team invitation so the token can no longer be used.',
     successResponse: {
       status: 200,
+      type: RevokedInvitationDto,
       description: 'Invitation was revoked successfully.',
     },
     extraDecorators: [
@@ -155,6 +178,9 @@ export const RevokeTeamInvitationApi = () =>
       }),
       ApiNotFoundResponse({
         description: 'Invitation not found.',
+      }),
+      ApiConflictResponse({
+        description: 'Invitation is not active.',
       }),
     ],
   });

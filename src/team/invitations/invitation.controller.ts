@@ -22,6 +22,8 @@ import { TeamService } from '../team.service';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CreateTeamInvitesResponseDto } from './dto/create-team-invites-response.dto';
 import { CreateTeamInvitesDto } from './dto/create-team-invites.dto';
+import { RevokedInvitationDto } from './dto/revoked-invitation.dto';
+import { TeamMemberDto } from './dto/team-member.dto';
 import { InvitationService } from './invitation.service';
 
 type TeamRequest = {
@@ -52,8 +54,18 @@ export class InvitationController {
   async revokeInvitation(
     @Param('invitationId') invitationId: string,
     @Req() request: TeamRequest,
-  ) {
-    return this.invitationService.revoke(request.team.id, invitationId);
+  ): Promise<RevokedInvitationDto> {
+    const invitation = await this.invitationService.revoke(
+      request.team.id,
+      invitationId,
+    );
+
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      status: 'REVOKED',
+      revokedAt: invitation.revokedAt!,
+    };
   }
 
   @AcceptInvitationApi()
@@ -62,7 +74,7 @@ export class InvitationController {
   async accept(
     @Body() dto: AcceptInvitationDto,
     @GetUserContext() user: AuthenticatedUserContext,
-  ) {
+  ): Promise<TeamMemberDto> {
     return this.invitationService.accept(dto.token, user);
   }
 }

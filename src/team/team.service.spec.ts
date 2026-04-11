@@ -27,7 +27,7 @@ type TeamRecord = {
   id: string;
   name: string;
   leaderId: string;
-  lockedAt?: Date | null;
+  lockedAt: Date | null;
 };
 
 describe('TeamService', () => {
@@ -165,6 +165,7 @@ describe('TeamService', () => {
       {
         id: 'team-1',
         name: 'Alpha Team',
+        lockedAt: null,
       } as TeamRecord,
       ['a@example.com', 'b@example.com'],
     );
@@ -189,6 +190,22 @@ describe('TeamService', () => {
         { id: 'invite-2', email: 'b@example.com' },
       ],
     });
+  });
+
+  it('rejects creating invites for a locked team', async () => {
+    await expect(
+      service.createInvites(
+        {
+          id: 'team-1',
+          name: 'Alpha Team',
+          lockedAt: new Date(),
+        } as TeamRecord,
+        ['a@example.com'],
+      ),
+    ).rejects.toThrow('Team is locked');
+
+    expect(invitationService.createInvites).not.toHaveBeenCalled();
+    expect(queueService.addEmail).not.toHaveBeenCalled();
   });
 
   it('rejects create when filtering leaves fewer than two invitations', async () => {

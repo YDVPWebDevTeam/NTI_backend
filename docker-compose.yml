@@ -3,6 +3,7 @@ services:
     image: node:22-alpine
     working_dir: /app
     command: sh -c "npm install && npx prisma generate && npx prisma migrate deploy && npm run start:dev"
+    restart: unless-stopped
     ports:
       - '3001:3001'
     env_file:
@@ -10,6 +11,34 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/nti_db?schema=public
       REDIS_HOST: redis
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+      CHOKIDAR_USEPOLLING: 'true'
+      CHOKIDAR_INTERVAL: '1000'
+      WATCHPACK_POLLING: 'true'
+      TSC_WATCHFILE: UsePolling
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    working_dir: /app
+    command: sh -c "npx prisma generate && npm run start:worker:dev"
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/nti_db?schema=public
+      REDIS_HOST: redis
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
       CHOKIDAR_USEPOLLING: 'true'
       CHOKIDAR_INTERVAL: '1000'
       WATCHPACK_POLLING: 'true'

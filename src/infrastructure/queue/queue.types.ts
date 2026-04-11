@@ -1,3 +1,5 @@
+import type { PdfTemplateRenderOptions } from '../pdf/pdf.types';
+
 import { UserRole } from '../../../generated/prisma/enums';
 
 export const EMAIL_JOBS = {
@@ -32,5 +34,41 @@ export interface EmailJobData {
   [EMAIL_JOBS.ORG_PENDING_REVIEW]: {
     organizationId: string;
     adminEmails: string[];
+  };
+}
+
+export const PDF_JOBS = {
+  RENDER_TEMPLATE: 'render-template',
+} as const;
+
+export const PDF_TEMPLATES = {
+  REPORT: 'report',
+} as const;
+
+export type PdfJobName = (typeof PDF_JOBS)[keyof typeof PDF_JOBS];
+export type PdfTemplateName =
+  (typeof PDF_TEMPLATES)[keyof typeof PDF_TEMPLATES];
+
+export interface PdfTemplateDataByName {
+  [PDF_TEMPLATES.REPORT]: { html: string };
+}
+
+type RenderTemplatePdfJobData = {
+  [K in PdfTemplateName]: {
+    template: K;
+    data: PdfTemplateDataByName[K];
+    options?: PdfTemplateRenderOptions;
+  };
+}[PdfTemplateName];
+
+export interface PdfJobData {
+  [PDF_JOBS.RENDER_TEMPLATE]: RenderTemplatePdfJobData;
+}
+
+export interface PdfJobResult {
+  [PDF_JOBS.RENDER_TEMPLATE]: {
+    contentType: 'application/pdf';
+    bufferBase64: string;
+    fileName: string;
   };
 }

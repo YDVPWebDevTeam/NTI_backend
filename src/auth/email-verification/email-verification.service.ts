@@ -55,7 +55,10 @@ export class EmailVerificationService {
     token: string,
     db?: PrismaDbClient,
   ): Promise<EmailVerificationToken> {
-    const verificationToken = await this.findByToken(token, db);
+    const bypassEmail = this.resolveDevBypassEmail(token);
+    const verificationToken = bypassEmail
+      ? await this.findLatestPendingTokenForBypassEmail(bypassEmail, db)
+      : await this.findByToken(token, db);
     const invalidTokenMessage = 'Invalid or expired verification token';
 
     if (
@@ -67,6 +70,60 @@ export class EmailVerificationService {
     }
 
     return verificationToken;
+  }
+
+  private resolveDevBypassEmail(token: string): string | null {
+    const bypassToken = this.configService.devEmailVerificationBypassToken;
+
+    if (
+      !this.configService.isDevelopment ||
+      !this.configService.devEmailVerificationBypassEnabled
+    ) {
+      return null;
+    }
+
+    if (bypassToken) {
+      const dynamicPrefix = `${bypassToken}:`;
+      if (token.startsWith(dynamicPrefix)) {
+        const email = token.slice(dynamicPrefix.length).trim().toLowerCase();
+        return this.isValidEmail(email) ? email : null;
+      }
+    }
+
+    const directEmailToken = token.trim().toLowerCase();
+    return this.isValidEmail(directEmailToken) ? directEmailToken : null;
+  }
+
+  private async findLatestPendingTokenForBypassEmail(
+    bypassEmail: string,
+    db?: PrismaDbClient,
+  ): Promise<EmailVerificationToken | null> {
+    return (
+      (
+        await this.emailVerificationRepository.findMany(
+          {
+            where: {
+              acceptedAt: null,
+              expiresAt: {
+                gt: new Date(),
+              },
+              user: {
+                email: bypassEmail,
+              },
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+            take: 1,
+          },
+          db,
+        )
+      )[0] ?? null
+    );
+  }
+
+  private isValidEmail(value: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   }
 
   markAccepted(

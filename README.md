@@ -300,37 +300,3 @@ Required minimum for worker:
 1. API and worker must point to the same Redis.
 2. API and worker must point to the same Postgres database.
 3. Deploy API and worker.
-
-### 5. Smoke test after deploy
-
-1. Call an endpoint that triggers PDF generation.
-2. In API logs, confirm job enqueue/wait behavior.
-3. In worker logs, confirm:
-   - `Processing PDF job ...`
-   - `Completed PDF job ...`
-4. If API times out waiting for a PDF, worker is not running or is connected to different Redis.
-
-### 6. Common Render mistakes
-
-- Deploying only API + Redis, but no worker service
-- Worker using different Redis host/port than API
-- Missing required env vars on worker (schema validation fails at boot)
-- Running migrations from worker too (unnecessary/risky)
-
-### 7. Demo endpoint for worker verification
-
-A JWT-protected demo route is available to verify API -> Redis -> worker -> PDF end-to-end:
-
-- `GET /api/v1/demo/pdf`
-- optional query: `title`
-
-Example:
-
-```bash
-curl -L --request GET \
-  --url 'https://YOUR_RENDER_API_DOMAIN/api/v1/demo/pdf?title=Render%20Worker%20Check' \
-  --header 'Authorization: Bearer YOUR_ACCESS_TOKEN' \
-  --output demo.pdf
-```
-
-If successful, `demo.pdf` is downloaded and worker logs show PDF job processing/completion.

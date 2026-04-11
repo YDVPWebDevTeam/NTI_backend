@@ -244,3 +244,93 @@ test/                end-to-end tests
 - `src/app.module.ts` shows what the app depends on and in what order modules are wired
 - when adding or changing a public endpoint, update the matching API docs decorators and tests together
 - when changing auth or file flows, check the relevant queue, storage, and token repositories as well as the service layer
+
+## Production Deployment (Render)
+
+If you use BullMQ for email/PDF jobs, deploy **three runtime services** on Render:
+
+- one **Web Service** for the API
+- one **Background Worker** for queue processing
+- one **Redis** instance
+
+No worker URL is required. The API and worker communicate through Redis queues.
+
+### 1. Create/keep Redis
+
+1. In Render, create a Redis instance (or keep your existing one).
+2. Note Redis host and port from Render.
+
+### 2. Configure the API Web Service
+
+1. Open your current API service.
+2. Make sure it builds from repo root with `Dockerfile`.
+3. Keep API start as production app (`node dist/src/main`, already in Dockerfile `CMD`).
+4. Set environment variables.
+
+Required minimum for API:
+
+- `DATABASE_URL`
+- `REDIS_HOST`
+- `REDIS_PORT`
+- all other required variables from `src/infrastructure/config/env.schema.ts` (`SMTP_*`, `R2_*`, `JWT_*`, `FRONTEND_URL`, etc.)
+
+Notes:
+
+- API container runs Prisma migrations on startup via Dockerfile command.
+- Keep migrations in API only; do not run them in worker.
+
+### 3. Create a Worker Background Service
+
+1. In Render, click **New +** -> **Background Worker**.
+2. Select the same repository and branch as the API.
+3. Set Dockerfile path to `Dockerfile.worker`.
+4. Worker command is already in Dockerfile: `node dist/src/worker`.
+5. Add environment variables.
+
+Required minimum for worker:
+
+- `DATABASE_URL`
+- `REDIS_HOST`
+- `REDIS_PORT`
+- `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium`
+- same required app config values used by loaded modules (`SMTP_*`, `R2_*`, `JWT_*`, etc.)
+
+### 4. Verify both services use the same infrastructure
+
+1. API and worker must point to the same Redis.
+2. API and worker must point to the same Postgres database.
+3. Deploy API and worker.
+
+### 5. Smoke test after deploy
+
+1. Call an endpoint that triggers PDF generation.
+2. In API logs, confirm job enqueue/wait behavior.
+3. In worker logs, confirm:
+   - `Processing PDF job ...`
+   - `Completed PDF job ...`
+4. If API times out waiting for a PDF, worker is not running or is connected to different Redis.
+
+### 6. Common Render mistakes
+
+- Deploying only API + Redis, but no worker service
+- Worker using different Redis host/port than API
+- Missing required env vars on worker (schema validation fails at boot)
+- Running migrations from worker too (unnecessary/risky)
+
+### 7. Demo endpoint for worker verification
+
+A JWT-protected demo route is available to verify API -> Redis -> worker -> PDF end-to-end:
+
+- `GET /api/v1/demo/pdf`
+- optional query: `title`
+
+Example:
+
+```bash
+curl -L --request GET \
+  --url 'https://YOUR_RENDER_API_DOMAIN/api/v1/demo/pdf?title=Render%20Worker%20Check' \
+  --header 'Authorization: Bearer YOUR_ACCESS_TOKEN' \
+  --output demo.pdf
+```
+
+If successful, `demo.pdf` is downloaded and worker logs show PDF job processing/completion.

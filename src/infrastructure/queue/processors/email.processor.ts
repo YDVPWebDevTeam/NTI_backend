@@ -2,7 +2,8 @@ import { Logger } from '@nestjs/common';
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { QUEUE_NAMES } from '../queue.constants';
-import { EMAIL_JOBS, EmailJobData, EmailJobName } from '../queue.types';
+import { EMAIL_JOBS } from '../queue.types';
+import type { EmailJobData, EmailJobName } from '../queue.types';
 import { MailerService } from '../../mailer/mailer.service';
 
 type EmailJobHandlers = {
@@ -33,6 +34,13 @@ export class EmailProcessor extends WorkerHost {
     },
     [EMAIL_JOBS.TEAM_CONFIRMATION]: this.handleTeamInviteEmail,
     [EMAIL_JOBS.TEAM_INVITATION]: this.handleTeamInviteEmail,
+    [EMAIL_JOBS.SYSTEM_INVITE_SENT]: async (data) => {
+      await this.mailerService.sendSystemInvite(
+        data.email,
+        data.token,
+        data.roleToAssign,
+      );
+    },
     [EMAIL_JOBS.PASSWORD_RESET]: async (data) => {
       await this.mailerService.sendPasswordResetEmail(data.email, data.token);
     },

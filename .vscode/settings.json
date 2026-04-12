@@ -5,6 +5,7 @@
         "git status": true,
         "git diff": true,
         "git rev-parse --abbrev-ref HEAD": true,
-        "npm test": true
+        "npm test": true,
+        "git fetch": true,
     }
 }

@@ -28,6 +28,17 @@ enum UserStatus {
   SUSPENDED
 }
 
+enum UploadStatus {
+  PENDING
+  UPLOADED
+  FAILED
+}
+
+enum FileVisibility {
+  PRIVATE
+  PUBLIC
+}
+
 model User {
   id                 String  @id @default(uuid())
   name               String
@@ -50,10 +61,13 @@ model User {
 
   teams TeamMember[]
 
-  leadOfTeams Team[] @relation("TeamLead")
+  leadOfTeams       Team[]             @relation("TeamLead")
+  systemInvitesSent SystemInvitation[] @relation("SystemInvitationInvitedBy")
 
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  uploads UploadedFile[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -61,6 +75,36 @@ model User {
   @@index([organizationId])
   @@index([role, status])
   @@index([status, createdAt])
+}
+
+model UploadedFile {
+  id String @id @default(uuid())
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  key          String @unique
+  originalName String
+  mimeType     String
+  size         Int
+
+  purpose    String?
+  entityType String?
+  entityId   String?
+  visibility FileVisibility @default(PRIVATE)
+
+  status UploadStatus @default(PENDING)
+
+  uploadUrlExpiresAt DateTime
+  uploadedAt         DateTime?
+  failedAt           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, status])
+  @@index([status, uploadUrlExpiresAt])
+  @@index([entityType, entityId])
 }
 
 model TeamMember {
@@ -95,6 +139,13 @@ model Team {
 }
 
 enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+enum SystemInvitationStatus {
   PENDING
   ACCEPTED
   EXPIRED
@@ -207,4 +258,25 @@ model OrgInvitation {
   @@index([organizationId, status, expiresAt])
   @@index([email, status, expiresAt])
   @@index([expiresAt])
+}
+
+model SystemInvitation {
+  id    String @id @default(uuid())
+  email String
+  token String @unique
+
+  roleToAssign UserRole
+  status       SystemInvitationStatus @default(PENDING)
+
+  invitedById String
+  invitedBy   User   @relation("SystemInvitationInvitedBy", fields: [invitedById], references: [id])
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+
+  @@index([status, expiresAt, email])
+  @@index([email, roleToAssign, status, expiresAt])
 }

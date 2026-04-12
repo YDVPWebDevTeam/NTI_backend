@@ -25,6 +25,10 @@ jest.mock('./reset-token/reset-token.service', () => ({
   ResetTokenService: class ResetTokenService {},
 }));
 
+jest.mock('../invites/invites.service', () => ({
+  InvitesService: class InvitesService {},
+}));
+
 jest.mock('../infrastructure/queue', () => ({
   EMAIL_JOBS: {
     PASSWORD_RESET: 'password-reset',
@@ -41,6 +45,7 @@ import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { UserService } from '../user/user.service';
+import { InvitesService } from '../invites/invites.service';
 import { EmailVerificationService } from './email-verification/email-verification.service';
 import { AuthService, FORCE_PASSWORD_CHANGE_PURPOSE } from './auth.service';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
@@ -72,6 +77,11 @@ describe('AuthService', () => {
     createForUser: jest.Mock;
     findByToken: jest.Mock;
     markUsed: jest.Mock;
+  };
+  let invites: {
+    validateTokenOrThrow: jest.Mock;
+    createTeamMember: jest.Mock;
+    markAccepted: jest.Mock;
   };
   let queueService: {
     addEmail: jest.Mock;
@@ -139,6 +149,11 @@ describe('AuthService', () => {
       findByToken: jest.fn(),
       markUsed: jest.fn(),
     };
+    invites = {
+      validateTokenOrThrow: jest.fn(),
+      createTeamMember: jest.fn(),
+      markAccepted: jest.fn(),
+    };
     queueService = {
       addEmail: jest.fn().mockResolvedValue(undefined),
     };
@@ -172,6 +187,7 @@ describe('AuthService', () => {
       emailVerification as unknown as EmailVerificationService,
       resetTokens as unknown as ResetTokenService,
       queueService as unknown as QueueService,
+      invites as unknown as InvitesService,
     );
   });
 
@@ -231,6 +247,81 @@ describe('AuthService', () => {
         password: 'strongpass123',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('registers a confirmed user via invite and accepts the invitation', async () => {
+    invites.validateTokenOrThrow.mockResolvedValue({
+      id: 'invite-1',
+      email: 'student@example.com',
+      teamId: 'team-1',
+    });
+    users.findByEmail.mockResolvedValue(null);
+    users.create.mockResolvedValue({
+      ...user,
+      isEmailConfirmed: true,
+    });
+
+    const result = await service.registerViaInvite({
+      name: 'Student',
+      token: 'invite-token',
+      password: 'strongpass123',
+    });
+
+    expect(users.transaction).toHaveBeenCalled();
+    expect(invites.validateTokenOrThrow).toHaveBeenCalledWith(
+      'invite-token',
+      transactionClient,
+    );
+    expect(users.findByEmail).toHaveBeenCalledWith(
+      'student@example.com',
+      transactionClient,
+    );
+    expect(users.create).toHaveBeenCalledWith(
+      {
+        email: 'student@example.com',
+        name: 'Student',
+        passwordHash: 'password-hash',
+        isEmailConfirmed: true,
+      },
+      transactionClient,
+    );
+    expect(invites.createTeamMember).toHaveBeenCalledWith(
+      'user-1',
+      'team-1',
+      transactionClient,
+    );
+    expect(invites.markAccepted).toHaveBeenCalledWith(
+      'invite-1',
+      transactionClient,
+    );
+    expect(queueService.addEmail).not.toHaveBeenCalledWith(
+      EMAIL_JOBS.USER_CONFIRMATION,
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      message: 'Registration via invite completed successfully.',
+    });
+  });
+
+  it('throws on invite registration when user already exists', async () => {
+    invites.validateTokenOrThrow.mockResolvedValue({
+      id: 'invite-1',
+      email: 'student@example.com',
+      teamId: 'team-1',
+    });
+    users.findByEmail.mockResolvedValue(user);
+
+    await expect(
+      service.registerViaInvite({
+        name: 'Student',
+        token: 'invite-token',
+        password: 'strongpass123',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(users.create).not.toHaveBeenCalled();
+    expect(invites.createTeamMember).not.toHaveBeenCalled();
+    expect(invites.markAccepted).not.toHaveBeenCalled();
   });
 
   it('logs in a confirmed user and returns tokens', async () => {

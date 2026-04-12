@@ -33,6 +33,10 @@ export type PrismaDelegate<
     where: TWhereUniqueInput;
     data: TUpdateInput;
   }): Promise<TModel>;
+  updateMany(args: {
+    where?: TWhereInput;
+    data: TUpdateInput;
+  }): Promise<Prisma.BatchPayload>;
   delete(args: { where: TWhereUniqueInput }): Promise<TModel>;
   count(args?: { where?: TWhereInput }): Promise<number>;
   upsert(
@@ -91,6 +95,14 @@ export abstract class BaseRepository<
     db?: PrismaDbClient,
   ): Promise<TModel> {
     return this.getDelegate(db).update({ where, data });
+  }
+
+  updateMany(
+    where: TWhereInput | undefined,
+    data: TUpdateInput,
+    db?: PrismaDbClient,
+  ): Promise<Prisma.BatchPayload> {
+    return this.getDelegate(db).updateMany({ where, data });
   }
 
   delete(where: TWhereUniqueInput, db?: PrismaDbClient): Promise<TModel> {

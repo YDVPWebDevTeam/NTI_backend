@@ -63,6 +63,43 @@ export class EmailProcessor extends WorkerHost {
         ),
       );
     },
+    [EMAIL_JOBS.ORG_APPROVED]: async (data) => {
+      this.logger.log(`Organization approved: ${data.organizationId}`);
+
+      if (!data.ownerEmails || data.ownerEmails.length === 0) {
+        this.logger.warn('No company owners found for ORG_APPROVED email');
+        return;
+      }
+
+      await Promise.allSettled(
+        data.ownerEmails.map((ownerEmail) =>
+          this.mailerService.sendOrgApprovedEmail(
+            ownerEmail,
+            data.organizationId,
+            data.organizationName,
+          ),
+        ),
+      );
+    },
+    [EMAIL_JOBS.ORG_REJECTED]: async (data) => {
+      this.logger.log(`Organization rejected: ${data.organizationId}`);
+
+      if (!data.ownerEmails || data.ownerEmails.length === 0) {
+        this.logger.warn('No company owners found for ORG_REJECTED email');
+        return;
+      }
+
+      await Promise.allSettled(
+        data.ownerEmails.map((ownerEmail) =>
+          this.mailerService.sendOrgRejectedEmail(
+            ownerEmail,
+            data.organizationId,
+            data.organizationName,
+            data.rejectionReason,
+          ),
+        ),
+      );
+    },
   };
 
   async process(job: Job<EmailJobData[EmailJobName]>): Promise<void> {

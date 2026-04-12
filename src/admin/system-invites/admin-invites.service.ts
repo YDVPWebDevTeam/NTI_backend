@@ -3,13 +3,16 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import type { SystemInvitation } from '../../generated/prisma/client';
-import { SystemInvitationStatus, UserRole } from '../../generated/prisma/enums';
-import { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import { ConfigService } from '../infrastructure/config';
-import { HashingService } from '../infrastructure/hashing';
-import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
-import { UserService } from '../user/user.service';
+import type { SystemInvitation } from '../../../generated/prisma/client';
+import {
+  SystemInvitationStatus,
+  UserRole,
+} from '../../../generated/prisma/enums';
+import { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import { ConfigService } from '../../infrastructure/config';
+import { HashingService } from '../../infrastructure/hashing';
+import { EMAIL_JOBS, QueueService } from '../../infrastructure/queue';
+import { UserService } from '../../user/user.service';
 import {
   CreateSystemInviteDto,
   SYSTEM_INVITABLE_ROLES,

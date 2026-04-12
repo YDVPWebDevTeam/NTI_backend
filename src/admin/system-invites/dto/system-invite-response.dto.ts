@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   SystemInvitationStatus,
   UserRole,
-} from '../../../generated/prisma/enums';
+} from '../../../../generated/prisma/enums';
 
 export class SystemInviteResponseDto {
   @ApiProperty({

@@ -117,4 +117,42 @@ export class MailerService {
 
     await this.sendEmail(email, 'Organization pending review', html);
   }
+
+  async sendOrgApprovedEmail(
+    email: string,
+    organizationId: string,
+    organizationName: string,
+  ): Promise<void> {
+    const link = `${this.configService.frontUrl}/organization/${organizationId}`;
+
+    const html = `
+      <h1>Organization approved</h1>
+
+      <p>Your organization <b>${organizationName}</b> has been approved.</p>
+
+      <a href="${link}">Open organization</a>
+  `;
+
+    await this.sendEmail(email, 'Organization approved', html);
+  }
+
+  async sendOrgRejectedEmail(
+    email: string,
+    organizationId: string,
+    organizationName: string,
+    rejectionReason: string,
+  ): Promise<void> {
+    const link = `${this.configService.frontUrl}/organization/${organizationId}`;
+
+    const html = `
+      <h1>Organization rejected</h1>
+
+      <p>Your organization <b>${organizationName}</b> was rejected.</p>
+      <p><b>Reason:</b> ${rejectionReason}</p>
+
+      <a href="${link}">Open organization</a>
+  `;
+
+    await this.sendEmail(email, 'Organization rejected', html);
+  }
 }

@@ -6,8 +6,8 @@ import {
   SystemInvitationStatus,
   UserRole,
   UserStatus,
-} from '../../generated/prisma/enums';
-import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+} from '../../../generated/prisma/enums';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { AdminInvitesController } from './admin-invites.controller';
 import { AdminInvitesService } from './admin-invites.service';
 import { SYSTEM_INVITABLE_ROLES } from './dto/create-system-invite.dto';

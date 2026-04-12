@@ -3,10 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { UserRole } from '../../generated/prisma/enums';
-import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import { RefreshTokenService } from '../auth/refresh-token/refresh-token.service';
-import { UserService } from '../user/user.service';
+import { UserRole } from '../../../generated/prisma/enums';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import { RefreshTokenService } from '../../auth/refresh-token/refresh-token.service';
+import { UserService } from '../../user/user.service';
 import {
   MANAGEABLE_USER_STATUSES,
   type ManageableUserStatus,

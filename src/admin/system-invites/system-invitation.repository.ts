@@ -1,8 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma, SystemInvitation } from '../../generated/prisma/client';
-import { SystemInvitationStatus, UserRole } from '../../generated/prisma/enums';
-import { BaseRepository, PrismaDbClient } from '../infrastructure/database';
-import { PrismaService } from '../infrastructure/database/prisma.service';
+import type {
+  Prisma,
+  SystemInvitation,
+} from '../../../generated/prisma/client';
+import {
+  SystemInvitationStatus,
+  UserRole,
+} from '../../../generated/prisma/enums';
+import { BaseRepository, PrismaDbClient } from '../../infrastructure/database';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 @Injectable()
 export class SystemInvitationRepository extends BaseRepository<

@@ -8,6 +8,8 @@ export const EMAIL_JOBS = {
   TEAM_CONFIRMATION: 'team-confirmation',
   SYSTEM_INVITE_SENT: 'system-invite-sent',
   ORG_PENDING_REVIEW: 'org-pending-review',
+  ORG_APPROVED: 'org-approved',
+  ORG_REJECTED: 'org-rejected',
   TEAM_INVITATION: 'team-invitation',
 } as const;
 
@@ -34,6 +36,17 @@ export interface EmailJobData {
   [EMAIL_JOBS.ORG_PENDING_REVIEW]: {
     organizationId: string;
     adminEmails: string[];
+  };
+  [EMAIL_JOBS.ORG_APPROVED]: {
+    organizationId: string;
+    organizationName: string;
+    ownerEmails: string[];
+  };
+  [EMAIL_JOBS.ORG_REJECTED]: {
+    organizationId: string;
+    organizationName: string;
+    ownerEmails: string[];
+    rejectionReason: string;
   };
 }
 

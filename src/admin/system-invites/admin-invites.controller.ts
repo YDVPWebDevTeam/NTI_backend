@@ -1,11 +1,11 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { UserRole } from '../../generated/prisma/enums';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { GetUserContext } from '../auth/decorators/get-user-context.decorator';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import { UserRole } from '../../../generated/prisma/enums';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { GetUserContext } from '../../auth/decorators/get-user-context.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { CreateSystemInviteApi } from './api-docs/admin-invites-api-docs.decorators';
 import { AdminInvitesService } from './admin-invites.service';
 import { CreateSystemInviteDto } from './dto/create-system-invite.dto';

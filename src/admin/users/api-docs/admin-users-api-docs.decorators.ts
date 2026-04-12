@@ -5,8 +5,8 @@ import {
   ApiNotFoundResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { AuthenticatedUserDto } from '../../auth/dto/authenticated-user.dto';
-import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
+import { AuthenticatedUserDto } from '../../../auth/dto/authenticated-user.dto';
+import { createApiDecorator } from '../../../infrastructure/api-docs/api-docs-factory';
 import { UpdateUserStatusDto } from '../dto/update-user-status.dto';
 
 export const UpdateUserStatusApi = () =>

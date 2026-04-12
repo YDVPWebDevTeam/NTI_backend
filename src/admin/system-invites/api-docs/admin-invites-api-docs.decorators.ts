@@ -5,7 +5,7 @@ import {
   ApiForbiddenResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
+import { createApiDecorator } from '../../../infrastructure/api-docs/api-docs-factory';
 import { CreateSystemInviteDto } from '../dto/create-system-invite.dto';
 import { SystemInviteResponseDto } from '../dto/system-invite-response.dto';
 

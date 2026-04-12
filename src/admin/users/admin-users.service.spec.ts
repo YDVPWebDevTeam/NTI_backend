@@ -1,20 +1,20 @@
-jest.mock('../../generated/prisma/client', () => ({}), { virtual: true });
+jest.mock('../../../generated/prisma/client', () => ({}), { virtual: true });
 jest.mock('@prisma/client', () => ({}), { virtual: true });
 
-jest.mock('../user/user.service', () => ({
+jest.mock('../../user/user.service', () => ({
   UserService: class UserService {},
 }));
 
-jest.mock('../auth/refresh-token/refresh-token.service', () => ({
+jest.mock('../../auth/refresh-token/refresh-token.service', () => ({
   RefreshTokenService: class RefreshTokenService {},
 }));
 
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { UserRole, UserStatus } from '../../generated/prisma/enums';
-import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import type { PrismaDbClient } from '../infrastructure/database';
-import { RefreshTokenService } from '../auth/refresh-token/refresh-token.service';
-import { UserService } from '../user/user.service';
+import { UserRole, UserStatus } from '../../../generated/prisma/enums';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import type { PrismaDbClient } from '../../infrastructure/database';
+import { RefreshTokenService } from '../../auth/refresh-token/refresh-token.service';
+import { UserService } from '../../user/user.service';
 import { AdminUsersService } from './admin-users.service';
 import { MANAGEABLE_USER_STATUSES } from './dto/update-user-status.dto';
 

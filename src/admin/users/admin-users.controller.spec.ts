@@ -2,8 +2,8 @@ jest.mock('./admin-users.service', () => ({
   AdminUsersService: class AdminUsersService {},
 }));
 
-import { UserRole, UserStatus } from '../../generated/prisma/enums';
-import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import { UserRole, UserStatus } from '../../../generated/prisma/enums';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { AdminUsersController } from './admin-users.controller';
 import { AdminUsersService } from './admin-users.service';
 import { MANAGEABLE_USER_STATUSES } from './dto/update-user-status.dto';

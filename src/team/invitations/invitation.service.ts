@@ -9,6 +9,7 @@ import { Prisma } from '../../../generated/prisma/client';
 import type { Invitation, TeamMember } from '../../../generated/prisma/client';
 import { InvitationStatus } from '../../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import { normalizeInviteEmail } from '../../common/validation/invite-email.validation';
 import { ConfigService } from '../../infrastructure/config';
 import type { PrismaDbClient } from '../../infrastructure/database';
 import { HashingService } from '../../infrastructure/hashing';
@@ -16,7 +17,6 @@ import { TeamRepository } from '../team.repository';
 import { InvitationRepository } from './invitation.repository';
 
 const INVITATION_TOKEN_MAX_RETRIES = 5;
-const normalizeInviteEmail = (email: string) => email.trim().toLowerCase();
 
 @Injectable()
 export class InvitationService {

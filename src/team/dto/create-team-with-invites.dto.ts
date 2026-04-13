@@ -8,10 +8,13 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
+import {
+  normalizeInviteEmail,
+  NormalizeInviteEmails,
+} from '../../common/validation/invite-email.validation';
 
 const MIN_TEAM_INVITES_PER_REQUEST = 2;
 const MAX_TEAM_INVITES_PER_REQUEST = 100;
-const normalizeInviteEmail = (email: string) => email.trim().toLowerCase();
 
 export class CreateTeamWithInvitesDto {
   @ApiProperty({
@@ -30,6 +33,7 @@ export class CreateTeamWithInvitesDto {
     type: [String],
   })
   @IsArray()
+  @NormalizeInviteEmails()
   @ArrayMinSize(MIN_TEAM_INVITES_PER_REQUEST)
   @ArrayMaxSize(MAX_TEAM_INVITES_PER_REQUEST)
   @ArrayUnique(normalizeInviteEmail)

@@ -4,6 +4,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   MinLength,
@@ -74,7 +75,6 @@ export class RequestUploadDto {
     example: 'd8d89d76-1a4c-4cc8-b804-e7fcf58567af',
   })
   @IsOptional()
-  @IsString()
-  @MaxLength(128)
+  @IsUUID()
   entityId?: string;
 }

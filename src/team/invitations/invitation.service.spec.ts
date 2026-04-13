@@ -31,7 +31,8 @@ describe('InvitationService', () => {
   let service: InvitationService;
   let invitationRepository: {
     transaction: jest.Mock;
-    create: jest.Mock;
+    createMany: jest.Mock;
+    findByTokens: jest.Mock;
     findActiveInvitationEmails: jest.Mock;
     findExistingMemberEmails: jest.Mock;
     findById: jest.Mock;
@@ -49,19 +50,30 @@ describe('InvitationService', () => {
   let hashingService: {
     generateHexToken: jest.Mock;
   };
+  let tokenCounter: number;
 
   beforeEach(() => {
     transactionClient = {} as PrismaDbClient;
+    tokenCounter = 0;
 
     invitationRepository = {
       transaction: jest.fn(<T>(fn: (db: PrismaDbClient) => T | Promise<T>) =>
         fn(transactionClient),
       ),
-      create: jest.fn().mockResolvedValue({
-        id: 'invite-1',
-        email: 'a@example.com',
-        token: 'token-1',
-      }),
+      createMany: jest.fn().mockResolvedValue({ count: 2 }),
+      findByTokens: jest.fn((tokens: string[]) =>
+        Promise.resolve(
+          tokens.map((token, index) => ({
+            id: `invite-${index + 1}`,
+            email: index === 0 ? 'a@example.com' : 'b@example.com',
+            token,
+            teamId: 'team-1',
+            status: 'PENDING',
+            revokedAt: null,
+            expiresAt: new Date(Date.now() + 60_000),
+          })),
+        ),
+      ),
       findActiveInvitationEmails: jest.fn().mockResolvedValue([]),
       findExistingMemberEmails: jest.fn().mockResolvedValue([]),
       findById: jest.fn().mockResolvedValue({
@@ -112,7 +124,10 @@ describe('InvitationService', () => {
     };
 
     hashingService = {
-      generateHexToken: jest.fn().mockReturnValue('token-1'),
+      generateHexToken: jest.fn(() => {
+        tokenCounter += 1;
+        return `token-${tokenCounter}`;
+      }),
     };
 
     service = new InvitationService(
@@ -133,8 +148,38 @@ describe('InvitationService', () => {
       'b@example.com',
     ]);
 
-    expect(invitationRepository.create).toHaveBeenCalledTimes(2);
+    expect(invitationRepository.createMany).toHaveBeenCalledTimes(1);
     expect(result).toHaveLength(2);
+  });
+
+  it('retries invitation batch creation when token unique collision happens', async () => {
+    invitationRepository.createMany
+      .mockRejectedValueOnce({
+        code: 'P2002',
+        meta: { target: 'token' },
+      })
+      .mockResolvedValueOnce({ count: 2 });
+
+    const result = await service.createInvites('team-1', [
+      'a@example.com',
+      'b@example.com',
+    ]);
+
+    expect(invitationRepository.createMany).toHaveBeenCalledTimes(2);
+    expect(result).toHaveLength(2);
+  });
+
+  it('throws after max retries when token unique collision keeps happening', async () => {
+    invitationRepository.createMany.mockRejectedValue({
+      code: 'P2002',
+      meta: { target: 'token' },
+    });
+
+    await expect(
+      service.createInvites('team-1', ['a@example.com', 'b@example.com']),
+    ).rejects.toMatchObject({ code: 'P2002' });
+
+    expect(invitationRepository.createMany).toHaveBeenCalledTimes(5);
   });
 
   it('revokes an active invitation for a team', async () => {

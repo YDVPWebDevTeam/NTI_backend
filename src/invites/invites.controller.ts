@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ValidateInviteApi } from './api-docs';
 import { ValidateInviteDto } from './dto/validate-invite.dto';
@@ -12,6 +12,7 @@ export class InvitesController {
 
   @ValidateInviteApi()
   @Post('validate')
+  @HttpCode(HttpStatus.OK)
   validateToken(
     @Body() dto: ValidateInviteDto,
   ): Promise<InviteValidationResponseDto> {

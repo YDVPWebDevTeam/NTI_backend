@@ -1,4 +1,5 @@
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
   ApiConflictResponse,
   ApiForbiddenResponse,
@@ -55,6 +56,9 @@ export const GetTeamApi = () =>
       ApiParam({ name: 'id', description: 'Team identifier.' }),
     ],
     errors: [
+      ApiBadRequestResponse({
+        description: 'Team identifier must be a valid UUID.',
+      }),
       ApiNotFoundResponse({
         description: 'Team not found.',
       }),
@@ -77,6 +81,9 @@ export const UpdateTeamApi = () =>
       ApiParam({ name: 'id', description: 'Team identifier.' }),
     ],
     errors: [
+      ApiBadRequestResponse({
+        description: 'Team identifier must be a valid UUID.',
+      }),
       ApiUnauthorizedResponse({
         description: 'Bearer token is missing or invalid.',
       }),
@@ -107,6 +114,9 @@ export const DeleteTeamApi = () =>
       ApiParam({ name: 'id', description: 'Team identifier.' }),
     ],
     errors: [
+      ApiBadRequestResponse({
+        description: 'Team identifier must be a valid UUID.',
+      }),
       ApiUnauthorizedResponse({
         description: 'Bearer token is missing or invalid.',
       }),
@@ -135,6 +145,9 @@ export const CreateTeamInvitesApi = () =>
       ApiParam({ name: 'teamId', description: 'Team identifier.' }),
     ],
     errors: [
+      ApiBadRequestResponse({
+        description: 'Invitation identifier must be a valid UUID.',
+      }),
       ApiUnauthorizedResponse({
         description: 'Bearer token is missing or invalid.',
       }),

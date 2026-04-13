@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Delete,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -41,6 +43,7 @@ export class InvitationController {
 
   @CreateTeamInvitesApi()
   @Post('teams/:teamId/invitations')
+  @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, TeamLeadGuard)
   async createInvites(
     @Body() dto: CreateTeamInvitesDto,
@@ -71,6 +74,7 @@ export class InvitationController {
 
   @AcceptInvitationApi()
   @Post('invitations/accept')
+  @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   async accept(
     @Body() dto: AcceptInvitationDto,

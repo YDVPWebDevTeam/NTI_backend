@@ -1,12 +1,11 @@
 import {
   ConflictException,
   ForbiddenException,
-  GoneException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '../../../generated/prisma/client';
 import type { Invitation, TeamMember } from '../../../generated/prisma/client';
+import { Prisma } from '../../../generated/prisma/client';
 import { InvitationStatus } from '../../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { normalizeInviteEmail } from '../../common/validation/invite-email.validation';
@@ -101,11 +100,27 @@ export class InvitationService {
       throw new NotFoundException('Invitation not found');
     }
 
-    if (invitation.status !== InvitationStatus.PENDING) {
+    const now = new Date();
+    const result = await this.invitationRepository.revokePendingById(
+      invitation.id,
+      now,
+      db,
+    );
+
+    if (result.count === 0) {
       throw new ConflictException('Invitation is not active');
     }
 
-    return this.invitationRepository.revokeById(invitation.id, new Date(), db);
+    const revokedInvitation = await this.invitationRepository.findById(
+      invitation.id,
+      db,
+    );
+
+    if (!revokedInvitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    return revokedInvitation;
   }
 
   async accept(
@@ -114,6 +129,7 @@ export class InvitationService {
   ): Promise<TeamMember> {
     return this.invitationRepository.transaction(async (db) => {
       const invitation = await this.invitationRepository.findByToken(token, db);
+      const normalizedUserEmail = normalizeInviteEmail(user.email);
 
       if (!invitation) {
         throw new NotFoundException('Invitation not found');
@@ -123,15 +139,7 @@ export class InvitationService {
         throw new ConflictException('Invitation already accepted');
       }
 
-      if (
-        invitation.status === InvitationStatus.REVOKED ||
-        invitation.revokedAt !== null ||
-        invitation.expiresAt <= new Date()
-      ) {
-        throw new GoneException('Invitation expired or revoked');
-      }
-
-      if (invitation.email !== user.email) {
+      if (invitation.email !== normalizedUserEmail) {
         throw new ForbiddenException(
           'Invitation token does not belong to the authenticated user',
         );
@@ -147,6 +155,15 @@ export class InvitationService {
         throw new ConflictException('Team is locked');
       }
 
+      const now = new Date();
+      if (
+        invitation.status === InvitationStatus.REVOKED ||
+        invitation.revokedAt !== null ||
+        invitation.expiresAt <= now
+      ) {
+        throw new ConflictException('Invitation expired or revoked');
+      }
+
       const existingMember = await this.teamRepository.findMember(
         invitation.teamId,
         user.id,
@@ -155,6 +172,30 @@ export class InvitationService {
 
       if (existingMember) {
         throw new ConflictException('User is already a team member');
+      }
+
+      const accepted = await this.invitationRepository.markAcceptedIfPending(
+        invitation.id,
+        normalizedUserEmail,
+        now,
+        db,
+      );
+
+      if (accepted.count === 0) {
+        const latestInvitation = await this.invitationRepository.findById(
+          invitation.id,
+          db,
+        );
+
+        if (!latestInvitation) {
+          throw new NotFoundException('Invitation not found');
+        }
+
+        if (latestInvitation.status === InvitationStatus.ACCEPTED) {
+          throw new ConflictException('Invitation already accepted');
+        }
+
+        throw new ConflictException('Invitation expired or revoked');
       }
 
       let membership: TeamMember;
@@ -172,8 +213,6 @@ export class InvitationService {
 
         throw error;
       }
-
-      await this.invitationRepository.markAccepted(invitation.id, db);
 
       return membership;
     });

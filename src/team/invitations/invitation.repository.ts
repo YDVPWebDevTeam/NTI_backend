@@ -53,27 +53,10 @@ export class InvitationRepository extends BaseRepository<
     return this.findUnique({ token }, db);
   }
 
-  findActiveByEmailAndTeam(
-    email: string,
-    teamId: string,
-    now = new Date(),
-    db?: PrismaDbClient,
-  ): Promise<Invitation | null> {
-    return (db ?? this.prisma.client).invitation.findFirst({
-      where: {
-        email,
-        teamId,
-        status: InvitationStatus.PENDING,
-        revokedAt: null,
-        expiresAt: { gt: now },
-      },
-    });
-  }
-
   findActiveInvitationEmails(
     teamId: string,
     emails: string[],
-    now = new Date(),
+    at: Date,
     db?: PrismaDbClient,
   ): Promise<Array<{ email: string }>> {
     return (db ?? this.prisma.client).invitation.findMany({
@@ -82,7 +65,7 @@ export class InvitationRepository extends BaseRepository<
         email: { in: emails },
         status: InvitationStatus.PENDING,
         revokedAt: null,
-        expiresAt: { gt: now },
+        expiresAt: { gt: at },
       },
       select: { email: true },
     });
@@ -110,23 +93,39 @@ export class InvitationRepository extends BaseRepository<
     });
   }
 
-  revokeById(
+  revokePendingById(
     id: string,
-    revokedAt = new Date(),
+    at: Date,
     db?: PrismaDbClient,
-  ): Promise<Invitation> {
-    return (db ?? this.prisma.client).invitation.update({
-      where: { id },
+  ): Promise<Prisma.BatchPayload> {
+    return (db ?? this.prisma.client).invitation.updateMany({
+      where: {
+        id,
+        status: InvitationStatus.PENDING,
+        revokedAt: null,
+        expiresAt: { gt: at },
+      },
       data: {
         status: InvitationStatus.REVOKED,
-        revokedAt,
+        revokedAt: at,
       },
     });
   }
 
-  markAccepted(id: string, db?: PrismaDbClient): Promise<Invitation> {
-    return (db ?? this.prisma.client).invitation.update({
-      where: { id },
+  markAcceptedIfPending(
+    id: string,
+    email: string,
+    at: Date,
+    db?: PrismaDbClient,
+  ): Promise<Prisma.BatchPayload> {
+    return (db ?? this.prisma.client).invitation.updateMany({
+      where: {
+        id,
+        email,
+        status: InvitationStatus.PENDING,
+        revokedAt: null,
+        expiresAt: { gt: at },
+      },
       data: {
         status: InvitationStatus.ACCEPTED,
       },
@@ -135,7 +134,7 @@ export class InvitationRepository extends BaseRepository<
 
   revokeInvitations(
     invitationIds: string[],
-    revokedAt = new Date(),
+    revokedAt: Date,
     db?: PrismaDbClient,
   ): Promise<Prisma.BatchPayload> {
     return (db ?? this.prisma.client).invitation.updateMany({

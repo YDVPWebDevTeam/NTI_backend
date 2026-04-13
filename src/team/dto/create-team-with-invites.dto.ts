@@ -2,16 +2,10 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
   ArrayMinSize,
-  ArrayUnique,
-  IsArray,
-  IsEmail,
   IsString,
   MinLength,
 } from 'class-validator';
-import {
-  normalizeInviteEmail,
-  NormalizeInviteEmails,
-} from '../../common/validation/invite-email.validation';
+import { EmailValidation } from '../../common/validation/email.validation';
 
 const MIN_TEAM_INVITES_PER_REQUEST = 2;
 const MAX_TEAM_INVITES_PER_REQUEST = 100;
@@ -32,11 +26,8 @@ export class CreateTeamWithInvitesDto {
     maxItems: MAX_TEAM_INVITES_PER_REQUEST,
     type: [String],
   })
-  @IsArray()
-  @NormalizeInviteEmails()
   @ArrayMinSize(MIN_TEAM_INVITES_PER_REQUEST)
   @ArrayMaxSize(MAX_TEAM_INVITES_PER_REQUEST)
-  @ArrayUnique(normalizeInviteEmail)
-  @IsEmail({}, { each: true })
+  @EmailValidation({ array: true, unique: true })
   emails!: string[];
 }

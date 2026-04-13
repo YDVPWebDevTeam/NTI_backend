@@ -24,6 +24,16 @@ export class QueueService {
     return this.emailQueue.add(jobName, data, opts);
   }
 
+  async removeEmailJob(jobId: string): Promise<void> {
+    const job = await this.emailQueue.getJob(jobId);
+
+    if (!job) {
+      return;
+    }
+
+    await job.remove();
+  }
+
   addPdf<K extends PdfJobName>(
     jobName: K,
     data: PdfJobData[K],

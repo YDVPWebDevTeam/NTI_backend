@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import type { Team } from '../../generated/prisma/client';
@@ -20,6 +21,8 @@ import {
 
 @Injectable()
 export class TeamService {
+  private readonly logger = new Logger(TeamService.name);
+
   constructor(
     private readonly teamRepository: TeamRepository,
     private readonly invitationService: InvitationService,
@@ -55,7 +58,14 @@ export class TeamService {
         minimumCreatedCount: 2,
       });
     } catch (error) {
-      await this.teamRepository.remove({ id: team.id });
+      try {
+        await this.teamRepository.remove({ id: team.id });
+      } catch (cleanupError) {
+        this.logger.error(
+          `Failed to rollback team ${team.id} after invite creation failure`,
+          cleanupError instanceof Error ? cleanupError.stack : undefined,
+        );
+      }
       throw error;
     }
 
@@ -128,17 +138,28 @@ export class TeamService {
       );
     }
 
+    const queuedJobIds: string[] = [];
+
     try {
-      await Promise.all(
-        invitations.map((invitation) =>
-          this.queueService.addEmail(EMAIL_JOBS.TEAM_INVITATION, {
+      for (const invitation of invitations) {
+        const jobId = `team-invitation:${invitation.id}`;
+
+        await this.queueService.addEmail(
+          EMAIL_JOBS.TEAM_INVITATION,
+          {
             email: invitation.email,
             teamName: team.name,
             token: invitation.token,
-          }),
-        ),
-      );
+          },
+          { jobId },
+        );
+
+        queuedJobIds.push(jobId);
+      }
     } catch {
+      await Promise.allSettled(
+        queuedJobIds.map((jobId) => this.queueService.removeEmailJob(jobId)),
+      );
       await this.invitationService.revokeInvitations(
         invitations.map(({ id }) => id),
       );

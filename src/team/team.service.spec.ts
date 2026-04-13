@@ -48,6 +48,7 @@ describe('TeamService', () => {
   };
   let queueService: {
     addEmail: jest.Mock;
+    removeEmailJob: jest.Mock;
   };
   let transactionClient: PrismaDbClient;
 
@@ -108,6 +109,7 @@ describe('TeamService', () => {
 
     queueService = {
       addEmail: jest.fn().mockResolvedValue(undefined),
+      removeEmailJob: jest.fn().mockResolvedValue(undefined),
     };
 
     service = new TeamService(
@@ -152,6 +154,7 @@ describe('TeamService', () => {
         teamName: 'Alpha Team',
         token: 'token-1',
       },
+      { jobId: 'team-invitation:invite-1' },
     );
     expect(result).toMatchObject({
       id: 'team-1',
@@ -182,6 +185,7 @@ describe('TeamService', () => {
         teamName: 'Alpha Team',
         token: 'token-1',
       },
+      { jobId: 'team-invitation:invite-1' },
     );
     expect(result).toEqual({
       createdCount: 2,
@@ -239,5 +243,31 @@ describe('TeamService', () => {
 
     expect(teamRepository.findPublicById).toHaveBeenCalledWith('team-1');
     expect(result.id).toBe('team-1');
+  });
+
+  it('removes already queued jobs and revokes invitations when enqueue fails', async () => {
+    queueService.addEmail
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('queue unavailable'));
+
+    await expect(
+      service.createInvites(
+        {
+          id: 'team-1',
+          name: 'Alpha Team',
+          lockedAt: null,
+        } as TeamRecord,
+        ['a@example.com', 'b@example.com'],
+      ),
+    ).rejects.toThrow('Failed to enqueue invitation emails');
+
+    expect(queueService.removeEmailJob).toHaveBeenCalledTimes(1);
+    expect(queueService.removeEmailJob).toHaveBeenCalledWith(
+      'team-invitation:invite-1',
+    );
+    expect(invitationService.revokeInvitations).toHaveBeenCalledWith([
+      'invite-1',
+      'invite-2',
+    ]);
   });
 });

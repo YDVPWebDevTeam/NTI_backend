@@ -44,20 +44,23 @@ export const CreateTeamApi = () =>
 
 export const GetTeamApi = () =>
   createApiDecorator({
-    summary: 'Get public team info',
-    description:
-      'Returns base team information that is safe to expose publicly.',
+    summary: 'Get team info',
+    description: 'Returns base team information for authenticated users.',
     successResponse: {
       status: 200,
       type: TeamPublicDto,
       description: 'Public team data.',
     },
     extraDecorators: [
+      ApiBearerAuth('access-token'),
       ApiParam({ name: 'id', description: 'Team identifier.' }),
     ],
     errors: [
       ApiBadRequestResponse({
         description: 'Team identifier must be a valid UUID.',
+      }),
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
       }),
       ApiNotFoundResponse({
         description: 'Team not found.',
@@ -146,7 +149,7 @@ export const CreateTeamInvitesApi = () =>
     ],
     errors: [
       ApiBadRequestResponse({
-        description: 'Invitation identifier must be a valid UUID.',
+        description: 'Team identifier must be a valid UUID.',
       }),
       ApiUnauthorizedResponse({
         description: 'Bearer token is missing or invalid.',

@@ -37,8 +37,8 @@ describe('InvitationService', () => {
     findExistingMemberEmails: jest.Mock;
     findById: jest.Mock;
     findByToken: jest.Mock;
-    revokeById: jest.Mock;
-    markAccepted: jest.Mock;
+    revokePendingById: jest.Mock;
+    markAcceptedIfPending: jest.Mock;
     revokeInvitations: jest.Mock;
   };
   let teamRepository: {
@@ -92,22 +92,8 @@ describe('InvitationService', () => {
         revokedAt: null,
         expiresAt: new Date(Date.now() + 60_000),
       }),
-      revokeById: jest.fn().mockResolvedValue({
-        id: 'invite-1',
-        email: 'a@example.com',
-        teamId: 'team-1',
-        status: 'REVOKED',
-        revokedAt: new Date(),
-        expiresAt: new Date(Date.now() + 60_000),
-      }),
-      markAccepted: jest.fn().mockResolvedValue({
-        id: 'invite-1',
-        email: 'a@example.com',
-        teamId: 'team-1',
-        status: 'ACCEPTED',
-        revokedAt: null,
-        expiresAt: new Date(Date.now() + 60_000),
-      }),
+      revokePendingById: jest.fn().mockResolvedValue({ count: 1 }),
+      markAcceptedIfPending: jest.fn().mockResolvedValue({ count: 1 }),
       revokeInvitations: jest.fn().mockResolvedValue({ count: 1 }),
     };
 
@@ -183,13 +169,31 @@ describe('InvitationService', () => {
   });
 
   it('revokes an active invitation for a team', async () => {
+    invitationRepository.findById
+      .mockResolvedValueOnce({
+        id: 'invite-1',
+        email: 'a@example.com',
+        teamId: 'team-1',
+        status: 'PENDING',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      })
+      .mockResolvedValueOnce({
+        id: 'invite-1',
+        email: 'a@example.com',
+        teamId: 'team-1',
+        status: 'REVOKED',
+        revokedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+
     const result = await service.revoke('team-1', 'invite-1');
 
     expect(invitationRepository.findById).toHaveBeenCalledWith(
       'invite-1',
       undefined,
     );
-    expect(invitationRepository.revokeById).toHaveBeenCalledWith(
+    expect(invitationRepository.revokePendingById).toHaveBeenCalledWith(
       'invite-1',
       expect.any(Date),
       undefined,
@@ -219,8 +223,10 @@ describe('InvitationService', () => {
       'user-1',
       transactionClient,
     );
-    expect(invitationRepository.markAccepted).toHaveBeenCalledWith(
+    expect(invitationRepository.markAcceptedIfPending).toHaveBeenCalledWith(
       'invite-1',
+      'a@example.com',
+      expect.any(Date),
       transactionClient,
     );
     expect(result).toEqual({ userId: 'user-1', teamId: 'team-1' });
@@ -241,6 +247,25 @@ describe('InvitationService', () => {
     expect(teamRepository.addMember).not.toHaveBeenCalled();
   });
 
+  it('accepts invitation when authenticated email differs only by case', async () => {
+    const authUser = {
+      id: 'user-1',
+      email: 'A@Example.com',
+      role: 'STUDENT',
+      status: 'ACTIVE',
+    } as AuthenticatedUserContext;
+
+    const result = await service.accept('token-1', authUser);
+
+    expect(invitationRepository.markAcceptedIfPending).toHaveBeenCalledWith(
+      'invite-1',
+      'a@example.com',
+      expect.any(Date),
+      transactionClient,
+    );
+    expect(result).toEqual({ userId: 'user-1', teamId: 'team-1' });
+  });
+
   it('rejects accepting an invitation for a locked team', async () => {
     teamRepository.findById.mockResolvedValueOnce({
       id: 'team-1',
@@ -258,7 +283,7 @@ describe('InvitationService', () => {
     );
 
     expect(teamRepository.addMember).not.toHaveBeenCalled();
-    expect(invitationRepository.markAccepted).not.toHaveBeenCalled();
+    expect(invitationRepository.markAcceptedIfPending).not.toHaveBeenCalled();
   });
 
   it('maps team member unique violations to conflict on accept', async () => {
@@ -278,6 +303,6 @@ describe('InvitationService', () => {
       'User is already a team member',
     );
 
-    expect(invitationRepository.markAccepted).not.toHaveBeenCalled();
+    expect(invitationRepository.markAcceptedIfPending).toHaveBeenCalledTimes(1);
   });
 });

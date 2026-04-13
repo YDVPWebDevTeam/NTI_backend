@@ -15,12 +15,9 @@ export const superadminSeed: SeedTask = {
 
     const tempPassword = process.env.SUPERADMIN_TEMP_PASSWORD;
 
-    const hasLetter = /[A-Za-z]/.test(tempPassword ?? '');
-    const hasNumber = /\d/.test(tempPassword ?? '');
-
-    if (!tempPassword || tempPassword.length < 8 || !hasLetter || !hasNumber) {
+    if (!tempPassword || tempPassword.length < 8) {
       throw new Error(
-        'SUPERADMIN_TEMP_PASSWORD must be set, be at least 8 characters long, and contain both letters and numbers',
+        'SUPERADMIN_TEMP_PASSWORD must be set and at least 8 characters long',
       );
     }
 

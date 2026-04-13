@@ -3,12 +3,13 @@ import {
   Controller,
   Delete,
   Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { Team } from '../../../generated/prisma/client';
+import { InvitationStatus, type Team } from '../../../generated/prisma/client';
 import { GetUserContext } from '../../auth/decorators/get-user-context.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { TeamLeadGuard } from '../../auth/guards/team-lead.guard';
@@ -52,7 +53,7 @@ export class InvitationController {
   @Delete('teams/:teamId/invitations/:invitationId')
   @UseGuards(JwtAuthGuard, TeamLeadGuard)
   async revokeInvitation(
-    @Param('invitationId') invitationId: string,
+    @Param('invitationId', ParseUUIDPipe) invitationId: string,
     @Req() request: TeamRequest,
   ): Promise<RevokedInvitationDto> {
     const invitation = await this.invitationService.revoke(
@@ -63,7 +64,7 @@ export class InvitationController {
     return {
       id: invitation.id,
       email: invitation.email,
-      status: 'REVOKED',
+      status: InvitationStatus.REVOKED,
       revokedAt: invitation.revokedAt!,
     };
   }

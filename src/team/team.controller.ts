@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   UseGuards,
@@ -44,7 +45,8 @@ export class TeamController {
 
   @GetTeamApi()
   @Get(':id')
-  findById(@Param('id') id: string): Promise<TeamPublicDto> {
+  @UseGuards(JwtAuthGuard)
+  findById(@Param('id', ParseUUIDPipe) id: string): Promise<TeamPublicDto> {
     return this.teamService.findPublicById(id);
   }
 
@@ -52,7 +54,7 @@ export class TeamController {
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
   update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateTeamDto,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<TeamDetailDto> {
@@ -63,7 +65,7 @@ export class TeamController {
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  remove(@Param('id') id: string): Promise<TeamPublicDto> {
+  remove(@Param('id', ParseUUIDPipe) id: string): Promise<TeamPublicDto> {
     return this.teamService.remove(id);
   }
 }

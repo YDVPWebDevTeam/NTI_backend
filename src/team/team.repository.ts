@@ -27,22 +27,25 @@ export class TeamRepository extends BaseRepository<
   Prisma.TeamWhereUniqueInput,
   Prisma.TeamOrderByWithRelationInput
 > {
+  private readonly safeUserSelect = {
+    id: true,
+    name: true,
+    email: true,
+    role: true,
+    status: true,
+    isEmailConfirmed: true,
+    isAdminConfirmed: true,
+    organizationId: true,
+    createdAt: true,
+    updatedAt: true,
+  } as const;
+
   constructor(prisma: PrismaService) {
     super(prisma);
   }
 
   protected getDelegate(db?: PrismaDbClient) {
     return (db ?? this.prisma.client).team;
-  }
-
-  create(
-    data: Prisma.TeamUncheckedCreateInput,
-    db?: PrismaDbClient,
-  ): Promise<TeamWithRelations> {
-    return (db ?? this.prisma.client).team.create({
-      data,
-      select: this.teamRelationsSelect(),
-    });
   }
 
   findById(id: string, db?: PrismaDbClient): Promise<TeamWithRelations | null> {
@@ -129,36 +132,14 @@ export class TeamRepository extends BaseRepository<
       lockedAt: true,
       archivedAt: true,
       leader: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          status: true,
-          isEmailConfirmed: true,
-          isAdminConfirmed: true,
-          organizationId: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        select: this.safeUserSelect,
       },
       members: {
         select: {
           userId: true,
           teamId: true,
           user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              role: true,
-              status: true,
-              isEmailConfirmed: true,
-              isAdminConfirmed: true,
-              organizationId: true,
-              createdAt: true,
-              updatedAt: true,
-            },
+            select: this.safeUserSelect,
           },
         },
       },

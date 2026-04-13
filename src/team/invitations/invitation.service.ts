@@ -42,15 +42,37 @@ export class InvitationService {
             normalizedEmails,
             db,
           );
-          const createdInvitations: Invitation[] = [];
 
-          for (const email of availableEmails) {
-            createdInvitations.push(
-              await this.createInvitation(teamId, email, db),
-            );
+          if (availableEmails.length === 0) {
+            return [];
           }
 
-          return createdInvitations;
+          const invitationsToCreate = this.buildInvitationsToCreate(
+            teamId,
+            availableEmails,
+          );
+
+          await this.invitationRepository.createMany(invitationsToCreate, db);
+
+          const createdInvitations =
+            await this.invitationRepository.findByTokens(
+              invitationsToCreate.map(({ token }) => token),
+              db,
+            );
+
+          const invitationByToken = new Map(
+            createdInvitations.map((invitation) => [
+              invitation.token,
+              invitation,
+            ]),
+          );
+
+          return invitationsToCreate
+            .map(({ token }) => invitationByToken.get(token))
+            .filter(
+              (invitation): invitation is Invitation =>
+                invitation !== undefined,
+            );
         });
       } catch (error: unknown) {
         if (
@@ -197,23 +219,34 @@ export class InvitationService {
     return emails.filter((email) => !blockedEmails.has(email));
   }
 
-  private async createInvitation(
+  private buildInvitationsToCreate(
     teamId: string,
-    email: string,
-    db: PrismaDbClient,
-  ): Promise<Invitation> {
-    return this.invitationRepository.create(
-      {
-        email,
-        token: this.hashingService.generateHexToken(
+    emails: string[],
+  ): Prisma.InvitationUncheckedCreateInput[] {
+    const expiresAt = this.resolveExpirationDate();
+    const generatedTokens = new Set<string>();
+
+    return emails.map((email) => {
+      let token = this.hashingService.generateHexToken(
+        this.configService.tokenByteLength,
+      );
+
+      while (generatedTokens.has(token)) {
+        token = this.hashingService.generateHexToken(
           this.configService.tokenByteLength,
-        ),
+        );
+      }
+
+      generatedTokens.add(token);
+
+      return {
+        email,
+        token,
         status: InvitationStatus.PENDING,
         teamId,
-        expiresAt: this.resolveExpirationDate(),
-      },
-      db,
-    );
+        expiresAt,
+      };
+    });
   }
 
   private resolveExpirationDate(): Date {

@@ -28,6 +28,23 @@ export class InvitationRepository extends BaseRepository<
     return (db ?? this.prisma.client).invitation.create({ data });
   }
 
+  createMany(
+    data: Prisma.InvitationUncheckedCreateInput[],
+    db?: PrismaDbClient,
+  ): Promise<Prisma.BatchPayload> {
+    return (db ?? this.prisma.client).invitation.createMany({ data });
+  }
+
+  findByTokens(tokens: string[], db?: PrismaDbClient): Promise<Invitation[]> {
+    return (db ?? this.prisma.client).invitation.findMany({
+      where: {
+        token: {
+          in: tokens,
+        },
+      },
+    });
+  }
+
   findById(id: string, db?: PrismaDbClient): Promise<Invitation | null> {
     return this.findUnique({ id }, db);
   }

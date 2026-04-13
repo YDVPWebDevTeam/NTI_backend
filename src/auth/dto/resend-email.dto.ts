@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail } from 'class-validator';
+import { EmailValidation } from '../../common/validation/email.validation';
 
 export class ResendEmailDto {
   @ApiProperty({
@@ -7,6 +7,6 @@ export class ResendEmailDto {
       'The email address of the user to resend the verification email to',
     example: 'user@example.com',
   })
-  @IsEmail()
+  @EmailValidation()
   email: string;
 }

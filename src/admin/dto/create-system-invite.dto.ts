@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsEnum } from 'class-validator';
+import { IsEnum } from 'class-validator';
 import { UserRole } from '../../../generated/prisma/enums';
+import { EmailValidation } from '../../common/validation/email.validation';
 
 export const SYSTEM_INVITABLE_ROLES = {
   ADMIN: UserRole.ADMIN,
@@ -16,7 +17,7 @@ export class CreateSystemInviteDto {
     description: 'Email of the person that should receive the invite.',
     example: 'mentor@example.com',
   })
-  @IsEmail()
+  @EmailValidation()
   email!: string;
 
   @ApiProperty({

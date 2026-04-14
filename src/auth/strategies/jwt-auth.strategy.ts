@@ -7,6 +7,7 @@ import { ExtractJwt } from 'passport-jwt';
 import { ConfigService } from '../../infrastructure/config/config.service';
 import { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { UserStatus } from '../../../generated/prisma/enums';
+import { toAuthenticatedUserContext } from '../../user/user.mapper';
 
 @Injectable()
 export class JwtAuthStrategy extends PassportStrategy(Strategy) {
@@ -39,6 +40,6 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy) {
       );
     }
 
-    return this.userService.bareSafeUser(user);
+    return toAuthenticatedUserContext(user);
   }
 }

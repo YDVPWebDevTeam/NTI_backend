@@ -99,13 +99,15 @@ describe('AuthController', () => {
     });
 
     const result = await controller.registerViaInvite({
-      name: 'Jan Novak',
+      firstName: 'Jan',
+      lastName: 'Novak',
       token: 'invite-token',
       password: 'StrongPass123!',
     });
 
     expect(authService.registerViaInvite).toHaveBeenCalledWith({
-      name: 'Jan Novak',
+      firstName: 'Jan',
+      lastName: 'Novak',
       token: 'invite-token',
       password: 'StrongPass123!',
     });

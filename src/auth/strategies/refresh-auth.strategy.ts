@@ -9,6 +9,7 @@ import { RefreshJwtPayload } from '../types/refresh-jwt-payload.type';
 import { HashingService } from '../../infrastructure/hashing';
 import { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { UserStatus } from '../../../generated/prisma/enums';
+import { toAuthenticatedUserContext } from '../../user/user.mapper';
 
 const extractRefreshTokenFromCookie = (req: FastifyRequest): string | null => {
   if (!req || !req.cookies) return null;
@@ -84,7 +85,7 @@ export class RefreshJwtStrategy extends PassportStrategy(
     }
 
     return {
-      ...this.userService.bareSafeUser(user),
+      ...toAuthenticatedUserContext(user),
       refreshTokenId: payload.refreshTokenId,
     };
   }

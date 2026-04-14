@@ -7,6 +7,7 @@ import { UserRole } from '../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { RefreshTokenService } from '../auth/refresh-token/refresh-token.service';
 import { UserService } from '../user/user.service';
+import { toAuthenticatedUserContext } from '../user/user.mapper';
 import {
   MANAGEABLE_USER_STATUSES,
   type ManageableUserStatus,
@@ -63,6 +64,6 @@ export class AdminUsersService {
       return user;
     });
 
-    return this.userService.bareSafeUser(updatedUser);
+    return toAuthenticatedUserContext(updatedUser);
   }
 }

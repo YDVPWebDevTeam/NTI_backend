@@ -24,6 +24,7 @@ import { ResetTokenService } from './reset-token/reset-token.service';
 import { RegisterCompanyOwnerDto } from './dto/register-company-owner.dto';
 import { RegisterViaInviteDto } from './dto/register-via-invite.dto';
 import { InvitesService } from '../invites/invites.service';
+import { toAuthenticatedUserContext } from '../user/user.mapper';
 
 export type AuthTokensResponse = {
   accessToken: string;
@@ -114,14 +115,13 @@ export class AuthService {
       token: verificationToken.token,
     });
 
-    return this.usersService.bareSafeUser(user);
+    return toAuthenticatedUserContext(user);
   }
 
   async registerCompanyOwner(
     dto: RegisterCompanyOwnerDto,
   ): Promise<AuthenticatedUserContext> {
-    const email = dto.email.toLowerCase().trim();
-    const existingUser = await this.usersService.findByEmail(email);
+    const existingUser = await this.usersService.findByEmail(dto.email);
 
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
@@ -133,7 +133,7 @@ export class AuthService {
       async (transaction) => {
         const user = await this.usersService.create(
           {
-            email: email,
+            email: dto.email,
             firstName: dto.firstName,
             lastName: dto.lastName,
             passwordHash,
@@ -158,7 +158,7 @@ export class AuthService {
       token: verificationToken.token,
     });
 
-    return this.usersService.bareSafeUser(user);
+    return toAuthenticatedUserContext(user);
   }
 
   async registerViaInvite(dto: RegisterViaInviteDto): Promise<MessageResponse> {
@@ -400,7 +400,7 @@ export class AuthService {
   }
 
   private async issueAuthTokens(user: User): Promise<AuthTokensResponse> {
-    const safeUser = this.usersService.bareSafeUser(user);
+    const safeUser = toAuthenticatedUserContext(user);
 
     const accessPayload: JwtPayload = {
       sub: user.id,

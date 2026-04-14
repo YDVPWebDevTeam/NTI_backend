@@ -59,7 +59,6 @@ describe('AuthService', () => {
     findById: jest.Mock;
     update: jest.Mock;
     markEmailConfirmed: jest.Mock;
-    bareSafeUser: jest.Mock;
     transaction: jest.Mock;
   };
   let refreshTokens: {
@@ -127,7 +126,6 @@ describe('AuthService', () => {
       findById: jest.fn(),
       update: jest.fn(),
       markEmailConfirmed: jest.fn(),
-      bareSafeUser: jest.fn().mockReturnValue(safeUser),
       transaction: jest
         .fn()
         .mockImplementation((fn: (db: PrismaDbClient) => Promise<unknown>) =>
@@ -451,7 +449,12 @@ describe('AuthService', () => {
     expect(result).toEqual({
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
-      user: safeUser,
+      user: {
+        id: 'user-1',
+        email: 'admin@nti.sk',
+        role: UserRole.SUPER_ADMIN,
+        status: UserStatus.PENDING,
+      },
     });
   });
 

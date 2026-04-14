@@ -16,15 +16,26 @@ export class RegisterDto {
   email!: string;
 
   @ApiProperty({
-    description: 'Display name of the new user.',
-    example: 'Jan Novak',
+    description: 'First name of the new user.',
+    example: 'Jan',
     minLength: 2,
     maxLength: 50,
   })
   @IsString()
   @MinLength(2)
   @MaxLength(50)
-  name!: string;
+  firstName!: string;
+
+  @ApiProperty({
+    description: 'Last name of the new user.',
+    example: 'Novak',
+    minLength: 2,
+    maxLength: 50,
+  })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(50)
+  lastName!: string;
 
   @ApiProperty({
     description: 'Password for the new account.',

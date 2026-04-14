@@ -98,7 +98,8 @@ describe('AuthService', () => {
   const user = {
     id: 'user-1',
     email: 'student@example.com',
-    name: 'Student',
+    firstName: 'Student',
+    lastName: 'User',
     passwordHash: 'stored-hash',
     role: UserRole.STUDENT,
     status: UserStatus.PENDING,
@@ -208,7 +209,8 @@ describe('AuthService', () => {
 
     const result = await service.register({
       email: user.email,
-      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
       password: 'strongpass123',
     });
 
@@ -218,7 +220,8 @@ describe('AuthService', () => {
     expect(users.create).toHaveBeenCalledWith(
       {
         email: user.email,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         passwordHash: 'password-hash',
       },
       transactionClient,
@@ -243,7 +246,8 @@ describe('AuthService', () => {
     await expect(
       service.register({
         email: user.email,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         password: 'strongpass123',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -262,7 +266,8 @@ describe('AuthService', () => {
     });
 
     const result = await service.registerViaInvite({
-      name: 'Student',
+      firstName: 'Student',
+      lastName: 'User',
       token: 'invite-token',
       password: 'strongpass123',
     });
@@ -279,7 +284,8 @@ describe('AuthService', () => {
     expect(users.create).toHaveBeenCalledWith(
       {
         email: 'student@example.com',
-        name: 'Student',
+        firstName: 'Student',
+        lastName: 'User',
         passwordHash: 'password-hash',
         isEmailConfirmed: true,
       },
@@ -313,7 +319,8 @@ describe('AuthService', () => {
 
     await expect(
       service.registerViaInvite({
-        name: 'Student',
+        firstName: 'Student',
+        lastName: 'User',
         token: 'invite-token',
         password: 'strongpass123',
       }),

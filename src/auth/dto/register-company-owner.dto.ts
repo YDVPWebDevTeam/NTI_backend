@@ -16,15 +16,26 @@ export class RegisterCompanyOwnerDto {
   email!: string;
 
   @ApiProperty({
-    example: 'John Doe',
-    description: 'Full name of the company owner',
+    example: 'John',
+    description: 'First name of the company owner',
     minLength: 2,
-    maxLength: 100,
+    maxLength: 50,
   })
   @IsString()
   @MinLength(2)
-  @MaxLength(100)
-  name!: string;
+  @MaxLength(50)
+  firstName!: string;
+
+  @ApiProperty({
+    example: 'Doe',
+    description: 'Last name of the company owner',
+    minLength: 2,
+    maxLength: 50,
+  })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(50)
+  lastName!: string;
 
   @ApiProperty({
     example: 'strongpass123',

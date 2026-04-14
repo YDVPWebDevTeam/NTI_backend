@@ -46,7 +46,8 @@ describe('AdminUsersService', () => {
   const targetUser = {
     id: 'user-1',
     email: 'user@example.com',
-    name: 'User',
+    firstName: 'User',
+    lastName: 'Test',
     passwordHash: 'hash',
     role: UserRole.STUDENT,
     status: UserStatus.ACTIVE,

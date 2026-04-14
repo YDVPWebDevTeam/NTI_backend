@@ -92,7 +92,8 @@ export class AuthService {
         const user = await this.usersService.create(
           {
             email: dto.email,
-            name: dto.name,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
             passwordHash,
           },
           transaction,
@@ -133,7 +134,8 @@ export class AuthService {
         const user = await this.usersService.create(
           {
             email: email,
-            name: dto.name,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
             passwordHash,
             role: UserRole.COMPANY_OWNER,
             isEmailConfirmed: false,
@@ -178,7 +180,8 @@ export class AuthService {
       const user = await this.usersService.create(
         {
           email: invitation.email,
-          name: dto.name,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
           passwordHash,
           isEmailConfirmed: true,
         },

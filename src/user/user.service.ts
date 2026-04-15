@@ -2,7 +2,7 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma, type User } from '../../generated/prisma/client';
 import { UserRepository } from './user.repository';
 import { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import { PrismaDbClient } from '../infrastructure/database/base.repository';
+import { PrismaDbClient } from '../infrastructure/database';
 
 @Injectable()
 export class UserService {
@@ -14,6 +14,10 @@ export class UserService {
 
   findByEmail(email: string, db?: PrismaDbClient): Promise<User | null> {
     return this.users.findByEmail(email, db);
+  }
+
+  findMany(db?: PrismaDbClient): Promise<User[]> {
+    return this.users.findMany(undefined, db);
   }
 
   async create(
@@ -40,10 +44,6 @@ export class UserService {
 
   markEmailConfirmed(userId: string, db?: PrismaDbClient): Promise<User> {
     return this.users.markEmailConfirmed(userId, db);
-  }
-
-  markAdminConfirmed(userId: string, db?: PrismaDbClient): Promise<User> {
-    return this.users.markAdminConfirmed(userId, db);
   }
 
   transaction<T>(fn: (db: PrismaDbClient) => Promise<T>): Promise<T> {

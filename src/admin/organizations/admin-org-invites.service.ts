@@ -1,9 +1,5 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { UserRole } from '../../../generated/prisma/enums';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { ensureAdminRole } from '../../auth/admin-role.helper';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { OrganizationRepository } from '../../organization/organization.repository';
 import { OrgInvitationRepository } from './org-invitation.repository';
@@ -19,7 +15,10 @@ export class AdminOrgInvitesService {
   async listAll(
     actor: AuthenticatedUserContext,
   ): Promise<OrgInviteResponseDto[]> {
-    this.ensureAdminRole(actor.role);
+    ensureAdminRole(
+      actor.role,
+      'Only administrators can access organization invitations',
+    );
 
     return this.orgInvitationRepository.findMany({
       orderBy: [{ createdAt: 'desc' }],
@@ -30,7 +29,10 @@ export class AdminOrgInvitesService {
     actor: AuthenticatedUserContext,
     organizationId: string,
   ): Promise<OrgInviteResponseDto[]> {
-    this.ensureAdminRole(actor.role);
+    ensureAdminRole(
+      actor.role,
+      'Only administrators can access organization invitations',
+    );
 
     const organization = await this.organizationRepository.findUnique({
       id: organizationId,
@@ -44,13 +46,5 @@ export class AdminOrgInvitesService {
       where: { organizationId },
       orderBy: [{ createdAt: 'desc' }],
     });
-  }
-
-  private ensureAdminRole(role: UserRole): void {
-    if (role !== UserRole.SUPER_ADMIN && role !== UserRole.ADMIN) {
-      throw new ForbiddenException(
-        'Only administrators can access organization invitations',
-      );
-    }
   }
 }

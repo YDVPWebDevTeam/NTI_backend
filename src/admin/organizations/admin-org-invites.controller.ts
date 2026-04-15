@@ -19,7 +19,7 @@ import {
 import { AdminOrgInvitesService } from './admin-org-invites.service';
 import { OrgInviteResponseDto } from './dto/org-invite-response.dto';
 
-@ApiTags('Admin Organizations')
+@ApiTags('Admin')
 @Controller('admin/organizations')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)

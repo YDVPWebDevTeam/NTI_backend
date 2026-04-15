@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UserRole } from '../../../generated/prisma/enums';
+import { ensureAdminRole } from '../../auth/admin-role.helper';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { RefreshTokenService } from '../../auth/refresh-token/refresh-token.service';
 import { UserService } from '../../user/user.service';
@@ -19,16 +20,37 @@ export class AdminUsersService {
     private readonly refreshTokenService: RefreshTokenService,
   ) {}
 
+  async getUsers(
+    actor: AuthenticatedUserContext,
+  ): Promise<AuthenticatedUserContext[]> {
+    ensureAdminRole(actor.role, 'Only administrators can access users');
+
+    const users = await this.userService.findMany();
+
+    return users.map((user) => this.userService.bareSafeUser(user));
+  }
+
+  async getUserById(
+    actor: AuthenticatedUserContext,
+    targetUserId: string,
+  ): Promise<AuthenticatedUserContext> {
+    ensureAdminRole(actor.role, 'Only administrators can access users');
+
+    const targetUser = await this.userService.findById(targetUserId);
+
+    if (!targetUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    return this.userService.bareSafeUser(targetUser);
+  }
+
   async updateStatus(
     actor: AuthenticatedUserContext,
     targetUserId: string,
     status: ManageableUserStatus,
   ): Promise<AuthenticatedUserContext> {
-    if (actor.role !== UserRole.SUPER_ADMIN && actor.role !== UserRole.ADMIN) {
-      throw new ForbiddenException(
-        'Only administrators can manage user statuses',
-      );
-    }
+    ensureAdminRole(actor.role, 'Only administrators can manage user statuses');
 
     const targetUser = await this.userService.findById(targetUserId);
 

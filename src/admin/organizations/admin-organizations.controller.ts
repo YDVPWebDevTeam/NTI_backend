@@ -18,7 +18,7 @@ import { AdminOrganizationsService } from './admin-organizations.service';
 import { OrganizationStatusResponseDto } from './dto/organization-status-response.dto';
 import { UpdateOrgStatusDto } from './dto/update-org-status.dto';
 
-@ApiTags('Admin Organizations')
+@ApiTags('Admin')
 @Controller('admin/organizations')
 export class AdminOrganizationsController {
   constructor(

@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { MessageResponse } from './auth.service';
 import {
   AuthService,
   AuthTokensResponse,
@@ -40,14 +41,13 @@ import {
   MeApi,
   RefreshApi,
   RegisterApi,
-  RegisterViaInviteApi,
-  ResetPasswordApi,
   RegisterCompanyOwnerApi,
+  RegisterViaInviteApi,
   ResendConfirmationEmailApi,
+  ResetPasswordApi,
 } from './api-docs';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import type { MessageResponse } from './auth.service';
 
 type AuthHttpResponse = Omit<AuthTokensResponse, 'refreshToken'>;
 type PasswordChangeRequiredHttpResponse = { requiresPasswordChange: true };
@@ -64,9 +64,7 @@ export class AuthController {
   @RegisterApi()
   @Post('register')
   async register(@Body() dto: RegisterDto): Promise<AuthenticatedUserContext> {
-    const authResult = await this.authService.register(dto);
-
-    return authResult;
+    return await this.authService.register(dto);
   }
 
   @RegisterCompanyOwnerApi()
@@ -101,6 +99,7 @@ export class AuthController {
     return this.toHttpAuthResponse(authResult);
   }
 
+  @ApiTags('Admin')
   @AdminLoginApi()
   @HttpCode(HttpStatus.OK)
   @Post('admin/login')
@@ -114,9 +113,10 @@ export class AuthController {
     );
   }
 
+  @ApiTags('Admin')
   @ForceChangePasswordApi()
   @HttpCode(HttpStatus.OK)
-  @Post('force-change-password')
+  @Post('admin/force-change-password')
   async forceChangePassword(
     @Body() dto: ForceChangePasswordDto,
     @Req() request: FastifyRequest,

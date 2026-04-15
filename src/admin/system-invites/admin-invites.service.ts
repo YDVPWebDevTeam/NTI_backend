@@ -8,6 +8,7 @@ import {
   SystemInvitationStatus,
   UserRole,
 } from '../../../generated/prisma/enums';
+import { isAdminRole } from '../../auth/admin-role.helper';
 import { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { ConfigService } from '../../infrastructure/config';
 import { HashingService } from '../../infrastructure/hashing';
@@ -80,7 +81,7 @@ export class AdminInvitesService {
     actorRole: UserRole,
     roleToAssign: SystemInvitableRole,
   ): void {
-    if (actorRole !== UserRole.SUPER_ADMIN && actorRole !== UserRole.ADMIN) {
+    if (!isAdminRole(actorRole)) {
       throw new ForbiddenException(
         'Only administrators can create system invitations',
       );

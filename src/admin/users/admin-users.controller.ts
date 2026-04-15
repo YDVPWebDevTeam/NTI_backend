@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -13,14 +14,39 @@ import { GetUserContext } from '../../auth/decorators/get-user-context.decorator
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
-import { UpdateUserStatusApi } from './api-docs/admin-users-api-docs.decorators';
+import {
+  GetUserByIdAdminApi,
+  GetUsersAdminApi,
+  UpdateUserStatusApi,
+} from './api-docs/admin-users-api-docs.decorators';
 import { AdminUsersService } from './admin-users.service';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 
-@ApiTags('Admin Users')
+@ApiTags('Admin')
 @Controller('admin/users')
 export class AdminUsersController {
   constructor(private readonly adminUsersService: AdminUsersService) {}
+
+  @GetUsersAdminApi()
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  getUsers(
+    @GetUserContext() actor: AuthenticatedUserContext,
+  ): Promise<AuthenticatedUserContext[]> {
+    return this.adminUsersService.getUsers(actor);
+  }
+
+  @GetUserByIdAdminApi()
+  @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  getUserById(
+    @GetUserContext() actor: AuthenticatedUserContext,
+    @Param('id', ParseUUIDPipe) targetUserId: string,
+  ): Promise<AuthenticatedUserContext> {
+    return this.adminUsersService.getUserById(actor, targetUserId);
+  }
 
   @UpdateUserStatusApi()
   @Patch(':id/status')

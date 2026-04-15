@@ -1,14 +1,13 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { OrganizationStatus, UserRole } from '../../../generated/prisma/enums';
+import { ensureAdminRole } from '../../auth/admin-role.helper';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
-import { QueueService } from '../../infrastructure/queue/queue.service';
-import { EMAIL_JOBS } from '../../infrastructure/queue/queue.types';
+import { EMAIL_JOBS, QueueService } from '../../infrastructure/queue';
 import { OrganizationRepository } from '../../organization/organization.repository';
 import { UserRepository } from '../../user/user.repository';
 import { OrganizationStatusResponseDto } from './dto/organization-status-response.dto';
@@ -32,11 +31,10 @@ export class AdminOrganizationsService {
     organizationId: string,
     dto: UpdateOrgStatusDto,
   ): Promise<OrganizationStatusResponseDto> {
-    if (actor.role !== UserRole.SUPER_ADMIN && actor.role !== UserRole.ADMIN) {
-      throw new ForbiddenException(
-        'Only administrators can process organization statuses',
-      );
-    }
+    ensureAdminRole(
+      actor.role,
+      'Only administrators can process organization statuses',
+    );
 
     const organization = await this.organizationRepository.findUnique({
       id: organizationId,

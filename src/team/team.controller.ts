@@ -1,70 +1,71 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import {
-  ApiBearerAuth,
-  ApiBody,
-  ApiForbiddenResponse,
-  ApiNotFoundResponse,
-  ApiOperation,
-  ApiParam,
-  ApiResponse,
-  ApiTags,
-  ApiUnauthorizedResponse,
-} from '@nestjs/swagger';
-import type { Team } from '../../generated/prisma/client';
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { UserRole } from '../../generated/prisma/enums';
+import { GetUserContext } from '../auth/decorators/get-user-context.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { TeamLeadGuard } from '../auth/guards/team-lead.guard';
-import { CreateTeamInvitesDto } from './dto/create-team-invites.dto';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import {
+  CreateTeamApi,
+  DeleteTeamApi,
+  GetTeamApi,
+  UpdateTeamApi,
+} from './api-docs';
+import { CreateTeamWithInvitesDto } from './dto/create-team-with-invites.dto';
+import { TeamDetailDto } from './dto/team-detail.dto';
+import { TeamPublicDto } from './dto/team-public.dto';
+import { UpdateTeamDto } from './dto/update-team.dto';
 import { TeamService } from './team.service';
 
-type TeamRequest = {
-  team: Team;
-};
-
 @ApiTags('Teams')
-@ApiBearerAuth('access-token')
 @Controller('teams')
 export class TeamController {
   constructor(private readonly teamService: TeamService) {}
 
-  @ApiOperation({
-    summary: 'Create team invites',
-    description:
-      'Creates invitation records for the specified team and enqueues invitation emails for the provided addresses.',
-  })
-  @ApiParam({
-    name: 'teamId',
-    description: 'Identifier of the team that will receive the invitations.',
-    example: 'team-1',
-  })
-  @ApiBody({ type: CreateTeamInvitesDto })
-  @ApiResponse({
-    status: 201,
-    description: 'Invitations were created successfully.',
-    schema: {
-      type: 'object',
-      properties: {
-        createdCount: {
-          type: 'number',
-          example: 2,
-        },
-      },
-    },
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Bearer token is missing or invalid.',
-  })
-  @ApiForbiddenResponse({
-    description: 'Current user is not the leader of the requested team.',
-  })
-  @ApiNotFoundResponse({
-    description: 'Team was not found.',
-  })
-  @Post(':teamId/invites')
-  @UseGuards(JwtAuthGuard, TeamLeadGuard)
-  async createInvites(
-    @Body() dto: CreateTeamInvitesDto,
-    @Req() request: TeamRequest,
-  ): Promise<{ createdCount: number }> {
-    return this.teamService.createInvites(request.team, dto.emails);
+  @CreateTeamApi()
+  @Post()
+  @UseGuards(JwtAuthGuard)
+  create(
+    @Body() dto: CreateTeamWithInvitesDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<TeamDetailDto> {
+    return this.teamService.create(user, dto);
+  }
+
+  @GetTeamApi()
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  findById(@Param('id', ParseUUIDPipe) id: string): Promise<TeamPublicDto> {
+    return this.teamService.findPublicById(id);
+  }
+
+  @UpdateTeamApi()
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateTeamDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<TeamDetailDto> {
+    return this.teamService.update(id, user.id, dto);
+  }
+
+  @DeleteTeamApi()
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  remove(@Param('id', ParseUUIDPipe) id: string): Promise<TeamPublicDto> {
+    return this.teamService.remove(id);
   }
 }

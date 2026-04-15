@@ -1,9 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '../config';
-import { QueueService } from './queue.service.js';
-import { QUEUE_NAMES } from './queue.constants.js';
-import { createQueueConnection } from './queue.connection.js';
+import { QueueService } from './queue.service';
+import { QUEUE_NAMES } from './queue.constants';
+import { createQueueConnection } from './queue.connection';
 
 const DEFAULT_JOB_OPTIONS = {
   attempts: 3,

@@ -25,7 +25,6 @@ describe('AdminUsersService', () => {
     findMany: jest.Mock;
     update: jest.Mock;
     transaction: jest.Mock;
-    bareSafeUser: jest.Mock;
   };
   let refreshTokenService: {
     revokeAllActiveByUserId: jest.Mock;
@@ -53,7 +52,8 @@ describe('AdminUsersService', () => {
   const targetUser = {
     id: 'user-1',
     email: 'user@example.com',
-    name: 'User',
+    firstName: 'User',
+    lastName: 'Test',
     passwordHash: 'hash',
     role: UserRole.STUDENT,
     status: UserStatus.ACTIVE,
@@ -64,11 +64,6 @@ describe('AdminUsersService', () => {
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
-  type BareSafeUserInput = Pick<
-    typeof targetUser,
-    'id' | 'email' | 'role' | 'status'
-  >;
-
   beforeEach(() => {
     userService = {
       findById: jest.fn(),
@@ -79,12 +74,6 @@ describe('AdminUsersService', () => {
         .mockImplementation((fn: (db: PrismaDbClient) => Promise<unknown>) =>
           fn(transactionClient),
         ),
-      bareSafeUser: jest.fn((user: BareSafeUserInput) => ({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        status: user.status,
-      })),
     };
     refreshTokenService = {
       revokeAllActiveByUserId: jest.fn(),

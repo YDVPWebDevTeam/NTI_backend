@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { envSchema, type Env } from './env.schema.js';
+import { envSchema, type Env } from './env.schema';
 import type { StringValue } from 'ms';
 
 @Injectable()

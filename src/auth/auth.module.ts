@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from 'src/infrastructure/config';
 import { HashingModule } from '../infrastructure/hashing';
 import { AuthController } from './auth.controller';
+import { AuthCookieService } from './auth-cookie.service';
 import { AuthService } from './auth.service';
 import { UserModule } from '../user/user.module';
 import { RefreshTokenRepository } from './refresh-token/refresh-token.repository';
@@ -36,6 +37,7 @@ import { RolesGuard } from './guards/roles.guard';
   ],
   controllers: [AuthController],
   providers: [
+    AuthCookieService,
     AuthService,
     EmailVerificationRepository,
     EmailVerificationService,

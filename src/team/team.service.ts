@@ -1,142 +1,186 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { Prisma } from '../../generated/prisma/client';
-import type { Invitation, Team } from '../../generated/prisma/client';
-import { InvitationStatus } from '../../generated/prisma/enums';
-import { ConfigService } from '../infrastructure/config';
-import type { PrismaDbClient } from '../infrastructure/database';
-import { HashingService } from '../infrastructure/hashing';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import type { Team } from '../../generated/prisma/client';
+import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
-import { TeamRepository } from './team.repository';
-
-const INVITATION_TOKEN_MAX_RETRIES = 5;
-const normalizeInviteEmail = (email: string) => email.trim().toLowerCase();
+import { CreateTeamWithInvitesDto } from './dto/create-team-with-invites.dto';
+import { CreatedInvitationDto } from './invitations/dto/created-invitation.dto';
+import { UpdateTeamDto } from './dto/update-team.dto';
+import { InvitationService } from './invitations/invitation.service';
+import {
+  TeamPublicView,
+  TeamRepository,
+  TeamWithRelations,
+} from './team.repository';
 
 @Injectable()
 export class TeamService {
+  private readonly logger = new Logger(TeamService.name);
+
   constructor(
     private readonly teamRepository: TeamRepository,
-    private readonly hashingService: HashingService,
-    private readonly configService: ConfigService,
+    private readonly invitationService: InvitationService,
     private readonly queueService: QueueService,
   ) {}
 
-  async createInvites(
-    team: Team,
-    emails: string[],
-  ): Promise<{ createdCount: number }> {
-    const normalizedEmails = [...new Set(emails.map(normalizeInviteEmail))];
-
-    const invitations = await this.teamRepository.transaction(async (db) => {
-      const availableEmails = await this.filterInvitableEmails(
-        team.id,
-        normalizedEmails,
+  async create(
+    user: AuthenticatedUserContext,
+    dto: CreateTeamWithInvitesDto,
+  ): Promise<TeamWithRelations> {
+    const team = await this.teamRepository.transaction(async (db) => {
+      const createdTeam = await this.teamRepository.create(
+        {
+          name: dto.name,
+          leaderId: user.id,
+        },
         db,
       );
-      const createdInvitations: Invitation[] = [];
 
-      for (const email of availableEmails) {
-        createdInvitations.push(
-          await this.createInvitation(team.id, email, db),
-        );
+      await this.teamRepository.addMember(createdTeam.id, user.id, db);
+
+      const loadedTeam = await this.teamRepository.findById(createdTeam.id, db);
+
+      if (!loadedTeam) {
+        throw new InternalServerErrorException('Failed to load created team');
       }
 
-      return createdInvitations;
+      return loadedTeam;
     });
 
     try {
-      await Promise.all(
-        invitations.map((invitation) =>
-          this.queueService.addEmail(EMAIL_JOBS.TEAM_INVITATION, {
+      await this.createInvites(team, dto.emails, {
+        minimumCreatedCount: 2,
+      });
+    } catch (error) {
+      try {
+        await this.teamRepository.remove({ id: team.id });
+      } catch (cleanupError) {
+        this.logger.error(
+          `Failed to rollback team ${team.id} after invite creation failure`,
+          cleanupError instanceof Error ? cleanupError.stack : undefined,
+        );
+      }
+      throw error;
+    }
+
+    return team;
+  }
+
+  async findPublicById(id: string): Promise<TeamPublicView> {
+    const team = await this.teamRepository.findPublicById(id);
+
+    if (!team) {
+      throw new NotFoundException('Team not found');
+    }
+
+    return team;
+  }
+
+  async update(
+    teamId: string,
+    requesterId: string,
+    dto: UpdateTeamDto,
+  ): Promise<TeamWithRelations> {
+    const team = await this.findByIdOrThrow(teamId);
+
+    if (team.leaderId !== requesterId) {
+      throw new ForbiddenException();
+    }
+
+    if (team.lockedAt) {
+      throw new ConflictException('Team is locked');
+    }
+
+    if (Object.keys(dto).length === 0) {
+      return team;
+    }
+
+    return this.teamRepository.update({ id: teamId }, dto);
+  }
+
+  async remove(teamId: string): Promise<Team> {
+    await this.findByIdOrThrow(teamId);
+    return this.teamRepository.remove({ id: teamId });
+  }
+
+  async createInvites(
+    team: Pick<Team, 'id' | 'name' | 'lockedAt'>,
+    emails: string[],
+    options?: {
+      minimumCreatedCount?: number;
+    },
+  ): Promise<{ createdCount: number; invitations: CreatedInvitationDto[] }> {
+    if (team.lockedAt) {
+      throw new ConflictException('Team is locked');
+    }
+
+    const invitations = await this.invitationService.createInvites(
+      team.id,
+      emails,
+    );
+    const minimumCreatedCount = options?.minimumCreatedCount ?? 0;
+
+    if (invitations.length < minimumCreatedCount) {
+      if (invitations.length > 0) {
+        await this.invitationService.revokeInvitations(
+          invitations.map(({ id }) => id),
+        );
+      }
+
+      throw new ConflictException(
+        `At least ${minimumCreatedCount} invitations must be created`,
+      );
+    }
+
+    const queuedJobIds: string[] = [];
+
+    try {
+      for (const invitation of invitations) {
+        const jobId = `team-invitation:${invitation.id}`;
+
+        await this.queueService.addEmail(
+          EMAIL_JOBS.TEAM_INVITATION,
+          {
             email: invitation.email,
             teamName: team.name,
             token: invitation.token,
-          }),
-        ),
-      );
+          },
+          { jobId },
+        );
+
+        queuedJobIds.push(jobId);
+      }
     } catch {
-      await this.teamRepository.revokeInvitations(
-        invitations.map((invitation) => invitation.id),
+      await Promise.allSettled(
+        queuedJobIds.map((jobId) => this.queueService.removeEmailJob(jobId)),
+      );
+      await this.invitationService.revokeInvitations(
+        invitations.map(({ id }) => id),
       );
       throw new InternalServerErrorException(
         'Failed to enqueue invitation emails',
       );
     }
 
-    return { createdCount: invitations.length };
+    return {
+      createdCount: invitations.length,
+      invitations: invitations.map(({ id, email }) => ({ id, email })),
+    };
   }
 
-  private async filterInvitableEmails(
-    teamId: string,
-    emails: string[],
-    db: PrismaDbClient,
-  ): Promise<string[]> {
-    if (emails.length === 0) {
-      return [];
+  private async findByIdOrThrow(id: string): Promise<TeamWithRelations> {
+    const team = await this.teamRepository.findById(id);
+
+    if (!team) {
+      throw new NotFoundException('Team not found');
     }
 
-    const now = new Date();
-    const [activeInvitations, existingMembers] = await Promise.all([
-      this.teamRepository.findActiveInvitationEmails(teamId, emails, now, db),
-      this.teamRepository.findExistingMemberEmails(teamId, emails, db),
-    ]);
-
-    const blockedEmails = new Set<string>([
-      ...activeInvitations.map(({ email }) => email),
-      ...existingMembers.map(({ user }) => user.email),
-    ]);
-
-    return emails.filter((email) => !blockedEmails.has(email));
-  }
-
-  private async createInvitation(
-    teamId: string,
-    email: string,
-    db: PrismaDbClient,
-  ): Promise<Invitation> {
-    for (
-      let attempt = 0;
-      attempt < INVITATION_TOKEN_MAX_RETRIES;
-      attempt += 1
-    ) {
-      try {
-        return await this.teamRepository.createInvitation(
-          {
-            email,
-            token: this.hashingService.generateHexToken(
-              this.configService.tokenByteLength,
-            ),
-            status: InvitationStatus.PENDING,
-            teamId,
-            expiresAt: this.resolveExpirationDate(),
-          },
-          db,
-        );
-      } catch (error: unknown) {
-        if (
-          !this.isTokenUniqueConstraintError(error) ||
-          attempt === INVITATION_TOKEN_MAX_RETRIES - 1
-        ) {
-          throw error;
-        }
-      }
-    }
-
-    throw new Error('Failed to create invitation');
-  }
-
-  private resolveExpirationDate(): Date {
-    return new Date(
-      Date.now() +
-        this.configService.emailVerificationExpirationHours * 60 * 60 * 1000,
-    );
-  }
-
-  private isTokenUniqueConstraintError(
-    error: unknown,
-  ): error is Prisma.PrismaClientKnownRequestError {
-    return (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002'
-    );
+    return team;
   }
 }

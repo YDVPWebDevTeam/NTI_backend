@@ -12,6 +12,7 @@ import {
   MANAGEABLE_USER_STATUSES,
   type ManageableUserStatus,
 } from './dto/update-user-status.dto';
+import { toAuthenticatedUserContext } from '../../user/user.mapper';
 
 @Injectable()
 export class AdminUsersService {
@@ -27,7 +28,7 @@ export class AdminUsersService {
 
     const users = await this.userService.findMany();
 
-    return users.map((user) => this.userService.bareSafeUser(user));
+    return users.map((user) => toAuthenticatedUserContext(user));
   }
 
   async getUserById(
@@ -42,7 +43,7 @@ export class AdminUsersService {
       throw new NotFoundException('User not found');
     }
 
-    return this.userService.bareSafeUser(targetUser);
+    return toAuthenticatedUserContext(targetUser);
   }
 
   async updateStatus(
@@ -85,6 +86,6 @@ export class AdminUsersService {
       return user;
     });
 
-    return this.userService.bareSafeUser(updatedUser);
+    return toAuthenticatedUserContext(updatedUser);
   }
 }

@@ -47,7 +47,7 @@ describe('AuthController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('sets refresh token cookie and omits it from login response body', async () => {
+  it('sets access and refresh token cookies and omits tokens from login response body', async () => {
     authService.login.mockResolvedValue({
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
@@ -74,6 +74,15 @@ describe('AuthController', () => {
     );
 
     expect(replyMock.setCookie).toHaveBeenCalledWith(
+      'accessToken',
+      'access-token',
+      expect.objectContaining({
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: false,
+      }),
+    );
+    expect(replyMock.setCookie).toHaveBeenCalledWith(
       'refreshToken',
       'refresh-token',
       expect.objectContaining({
@@ -83,7 +92,6 @@ describe('AuthController', () => {
       }),
     );
     expect(result).toEqual({
-      accessToken: 'access-token',
       user: {
         id: 'user-1',
         email: 'student@example.com',
@@ -135,6 +143,9 @@ describe('AuthController', () => {
     expect(replyMock.clearCookie).toHaveBeenCalledWith('refreshToken', {
       path: '/',
     });
+    expect(replyMock.clearCookie).toHaveBeenCalledWith('accessToken', {
+      path: '/',
+    });
     expect(result).toEqual({ success: true });
   });
 
@@ -165,6 +176,9 @@ describe('AuthController', () => {
       }),
     );
     expect(replyMock.clearCookie).toHaveBeenCalledWith('refreshToken', {
+      path: '/',
+    });
+    expect(replyMock.clearCookie).toHaveBeenCalledWith('accessToken', {
       path: '/',
     });
     expect(result).toEqual({
@@ -209,6 +223,13 @@ describe('AuthController', () => {
       'NewStrongPass123!',
     );
     expect(replyMock.setCookie).toHaveBeenCalledWith(
+      'accessToken',
+      'access-token',
+      expect.objectContaining({
+        httpOnly: true,
+      }),
+    );
+    expect(replyMock.setCookie).toHaveBeenCalledWith(
       'refreshToken',
       'refresh-token',
       expect.objectContaining({
@@ -220,7 +241,6 @@ describe('AuthController', () => {
       { path: '/' },
     );
     expect(result).toEqual({
-      accessToken: 'access-token',
       user: {
         id: 'user-1',
         email: 'admin@nti.sk',

@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import ms from 'ms';
 import {
   AuthService,
   AuthTokensResponse,
@@ -49,9 +50,11 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import type { MessageResponse } from './auth.service';
 
-type AuthHttpResponse = Omit<AuthTokensResponse, 'refreshToken'>;
+type AuthHttpResponse = Pick<AuthTokensResponse, 'user'>;
 type PasswordChangeRequiredHttpResponse = { requiresPasswordChange: true };
 const PASSWORD_CHANGE_COOKIE = 'requiresPasswordChangeToken';
+const ACCESS_TOKEN_COOKIE = 'accessToken';
+const REFRESH_TOKEN_COOKIE = 'refreshToken';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -96,6 +99,7 @@ export class AuthController {
   ): Promise<AuthHttpResponse> {
     const authResult = await this.authService.login(dto);
     this.clearPasswordChangeTokenCookie(reply);
+    this.setAccessTokenCookie(reply, authResult.accessToken);
     this.setRefreshTokenCookie(reply, authResult.refreshToken);
 
     return this.toHttpAuthResponse(authResult);
@@ -137,6 +141,7 @@ export class AuthController {
     );
 
     this.clearPasswordChangeTokenCookie(reply);
+    this.setAccessTokenCookie(reply, authResult.accessToken);
     this.setRefreshTokenCookie(reply, authResult.refreshToken);
 
     return this.toHttpAuthResponse(authResult);
@@ -160,6 +165,7 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AuthHttpResponse> {
     const authResult = await this.authService.refresh(authUser);
+    this.setAccessTokenCookie(reply, authResult.accessToken);
     this.setRefreshTokenCookie(reply, authResult.refreshToken);
 
     return this.toHttpAuthResponse(authResult);
@@ -178,6 +184,7 @@ export class AuthController {
     }
 
     this.clearRefreshTokenCookie(reply);
+    this.clearAccessTokenCookie(reply);
     this.clearPasswordChangeTokenCookie(reply);
 
     return { success: true };
@@ -191,6 +198,7 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AuthHttpResponse> {
     const authResult = await this.authService.confirmEmail(dto.token);
+    this.setAccessTokenCookie(reply, authResult.accessToken);
     this.setRefreshTokenCookie(reply, authResult.refreshToken);
     return this.toHttpAuthResponse(authResult);
   }
@@ -220,16 +228,34 @@ export class AuthController {
 
   private toHttpAuthResponse(authResult: AuthTokensResponse): AuthHttpResponse {
     return {
-      accessToken: authResult.accessToken,
       user: authResult.user,
     };
+  }
+
+  private setAccessTokenCookie(reply: FastifyReply, accessToken: string): void {
+    const accessTokenExpiration = this.configService.jwtAccessExpiration;
+    const parsedAccessTokenDuration = accessTokenExpiration
+      ? ms(accessTokenExpiration)
+      : undefined;
+    const maxAgeSeconds =
+      typeof parsedAccessTokenDuration === 'number'
+        ? Math.floor(parsedAccessTokenDuration / 1000)
+        : undefined;
+
+    reply.setCookie(ACCESS_TOKEN_COOKIE, accessToken, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: this.configService.isProduction,
+      path: '/',
+      ...(maxAgeSeconds ? { maxAge: maxAgeSeconds } : {}),
+    });
   }
 
   private setRefreshTokenCookie(
     reply: FastifyReply,
     refreshToken: string,
   ): void {
-    reply.setCookie('refreshToken', refreshToken, {
+    reply.setCookie(REFRESH_TOKEN_COOKIE, refreshToken, {
       httpOnly: true,
       sameSite: 'lax',
       secure: this.configService.isProduction,
@@ -239,7 +265,13 @@ export class AuthController {
   }
 
   private clearRefreshTokenCookie(reply: FastifyReply): void {
-    reply.clearCookie('refreshToken', {
+    reply.clearCookie(REFRESH_TOKEN_COOKIE, {
+      path: '/',
+    });
+  }
+
+  private clearAccessTokenCookie(reply: FastifyReply): void {
+    reply.clearCookie(ACCESS_TOKEN_COOKIE, {
       path: '/',
     });
   }
@@ -275,6 +307,7 @@ export class AuthController {
   ): AuthHttpResponse | PasswordChangeRequiredHttpResponse {
     if (this.isPasswordChangeRequiredResponse(authResult)) {
       this.clearRefreshTokenCookie(reply);
+      this.clearAccessTokenCookie(reply);
       this.setPasswordChangeTokenCookie(
         reply,
         authResult.requiresPasswordChangeToken,
@@ -283,6 +316,7 @@ export class AuthController {
     }
 
     this.clearPasswordChangeTokenCookie(reply);
+    this.setAccessTokenCookie(reply, authResult.accessToken);
     this.setRefreshTokenCookie(reply, authResult.refreshToken);
 
     return this.toHttpAuthResponse(authResult);

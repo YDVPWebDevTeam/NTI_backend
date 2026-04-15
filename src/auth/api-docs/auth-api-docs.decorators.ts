@@ -90,13 +90,13 @@ export const LoginApi = () =>
   createApiDecorator({
     summary: 'Log in',
     description:
-      'Authenticates non-admin users, returns an access token, and writes the refresh token into an HttpOnly cookie. Admin accounts must use `/auth/admin/login`.',
+      'Authenticates non-admin users and writes both access and refresh tokens into HttpOnly cookies. Admin accounts must use `/auth/admin/login`.',
     body: LoginDto,
     successResponse: {
       status: 200,
       type: AuthResponseDto,
       description:
-        'Authentication succeeded. The refresh token is returned via the `refreshToken` cookie only when full auth is granted.',
+        'Authentication succeeded. Access and refresh tokens are returned via `accessToken` and `refreshToken` cookies.',
     },
     errors: [
       ApiUnauthorizedResponse({
@@ -136,7 +136,7 @@ export const ForceChangePasswordApi = () =>
       status: 200,
       type: AuthResponseDto,
       description:
-        'Password was changed successfully. The refresh token is returned via the `refreshToken` cookie.',
+        'Password was changed successfully. Access and refresh tokens are returned via `accessToken` and `refreshToken` cookies.',
     },
     errors: [
       ApiBadRequestResponse({
@@ -154,16 +154,20 @@ export const MeApi = () =>
   createApiDecorator({
     summary: 'Get current user',
     description:
-      'Returns the current authenticated user using the Bearer access token.',
+      'Returns the current authenticated user using the `accessToken` cookie (or Bearer token for backward compatibility).',
     successResponse: {
       status: 200,
       type: AuthenticatedUserDto,
       description: 'Current authenticated user.',
     },
-    extraDecorators: [ApiBearerAuth('access-token')],
+    extraDecorators: [
+      ApiCookieAuth('access-token-cookie'),
+      ApiBearerAuth('access-token'),
+    ],
     errors: [
       ApiUnauthorizedResponse({
-        description: 'Bearer token is missing or invalid.',
+        description:
+          'Access token is missing, expired, or invalid in cookie/Bearer auth.',
       }),
     ],
   });
@@ -172,12 +176,12 @@ export const RefreshApi = () =>
   createApiDecorator({
     summary: 'Refresh access token',
     description:
-      'Uses the HttpOnly `refreshToken` cookie to rotate the refresh token and issue a new access token.',
+      'Uses the HttpOnly `refreshToken` cookie to rotate the refresh token and issue a new `accessToken` cookie.',
     successResponse: {
       status: 200,
       type: AuthResponseDto,
       description:
-        'Tokens were refreshed successfully. A new refresh token is returned via the `refreshToken` cookie.',
+        'Tokens were refreshed successfully. New `accessToken` and `refreshToken` cookies were set.',
     },
     extraDecorators: [ApiCookieAuth('refresh-token')],
     errors: [
@@ -191,7 +195,7 @@ export const LogoutApi = () =>
   createApiDecorator({
     summary: 'Log out',
     description:
-      'Revokes the current refresh token and clears the `refreshToken` cookie.',
+      'Revokes the current refresh token and clears `accessToken` and `refreshToken` cookies.',
     successResponse: {
       status: 200,
       type: LogoutResponseDto,

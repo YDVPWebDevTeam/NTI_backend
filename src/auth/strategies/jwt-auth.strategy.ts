@@ -8,6 +8,13 @@ import { ConfigService } from '../../infrastructure/config/config.service';
 import { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { UserStatus } from '../../../generated/prisma/enums';
 import { toAuthenticatedUserContext } from '../../user/user.mapper';
+import type { FastifyRequest } from 'fastify';
+
+const extractAccessTokenFromCookie = (req: FastifyRequest): string | null => {
+  if (!req || !req.cookies) return null;
+  const accessToken = req.cookies.accessToken;
+  return accessToken || null;
+};
 
 @Injectable()
 export class JwtAuthStrategy extends PassportStrategy(Strategy) {
@@ -22,7 +29,10 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy) {
     }
 
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        extractAccessTokenFromCookie,
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ]),
       ignoreExpiration: false,
       secretOrKey: jwtAccessSecret,
     });

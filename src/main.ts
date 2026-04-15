@@ -59,9 +59,19 @@ async function bootstrap() {
         scheme: 'bearer',
         bearerFormat: 'JWT',
         description:
-          'Use the access token returned by the authentication endpoints.',
+          'Optional fallback: use the access token as Bearer token. Primary transport is HttpOnly cookie.',
       },
       'access-token',
+    )
+    .addCookieAuth(
+      'accessToken',
+      {
+        type: 'apiKey',
+        in: 'cookie',
+        description:
+          'HttpOnly access token cookie used for authenticated endpoints.',
+      },
+      'access-token-cookie',
     )
     .addCookieAuth(
       'refreshToken',

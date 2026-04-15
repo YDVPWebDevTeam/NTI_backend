@@ -106,7 +106,7 @@ The auth module supports:
 
 Behavior that is worth knowing:
 
-- access tokens are returned in the JSON response
+- access tokens are stored in an HttpOnly `accessToken` cookie
 - refresh tokens are stored in an HttpOnly `refreshToken` cookie
 - forced password changes use a short-lived `requiresPasswordChangeToken` cookie
 - admin login can require an immediate password change before the session is usable
@@ -190,7 +190,7 @@ The REST API is prefixed with:
 /api/v1
 ```
 
-Swagger includes bearer auth for access tokens and cookie auth for refresh and forced password change flows.
+Swagger includes cookie auth for access/refresh/forced-password-change flows and optional bearer auth fallback for access tokens.
 
 ## Available Scripts
 

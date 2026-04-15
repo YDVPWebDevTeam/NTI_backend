@@ -64,6 +64,10 @@ describe('AdminOrgInvitesService', () => {
   });
 
   it('lists all organization invites ordered by createdAt desc', async () => {
+    const createdAt = new Date('2026-01-01T00:00:00.000Z');
+    const updatedAt = new Date('2026-01-01T00:00:00.000Z');
+    const expiresAt = new Date('2026-01-08T00:00:00.000Z');
+
     orgInvitationRepository.findMany.mockResolvedValue([
       {
         id: 'invite-1',
@@ -73,9 +77,9 @@ describe('AdminOrgInvitesService', () => {
         status: InvitationStatus.PENDING,
         organizationId: 'org-1',
         revokedById: null,
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-        expiresAt: new Date('2026-01-08T00:00:00.000Z'),
+        createdAt,
+        updatedAt,
+        expiresAt,
         acceptedAt: null,
         revokedAt: null,
       },
@@ -86,7 +90,22 @@ describe('AdminOrgInvitesService', () => {
     expect(orgInvitationRepository.findMany).toHaveBeenCalledWith({
       orderBy: [{ createdAt: 'desc' }],
     });
-    expect(result).toHaveLength(1);
+    expect(result).toEqual([
+      {
+        id: 'invite-1',
+        email: 'employee@example.com',
+        roleToAssign: UserRole.COMPANY_EMPLOYEE,
+        status: InvitationStatus.PENDING,
+        organizationId: 'org-1',
+        revokedById: null,
+        createdAt,
+        updatedAt,
+        expiresAt,
+        acceptedAt: null,
+        revokedAt: null,
+      },
+    ]);
+    expect(result[0]).not.toHaveProperty('token');
   });
 
   it('throws not found when organization does not exist', async () => {
@@ -99,13 +118,29 @@ describe('AdminOrgInvitesService', () => {
 
   it('lists invites filtered by organization id', async () => {
     organizationRepository.findUnique.mockResolvedValue({ id: 'org-1' });
-    orgInvitationRepository.findMany.mockResolvedValue([]);
+    orgInvitationRepository.findMany.mockResolvedValue([
+      {
+        id: 'invite-2',
+        email: 'employee2@example.com',
+        token: 'secret-token-2',
+        roleToAssign: UserRole.COMPANY_EMPLOYEE,
+        status: InvitationStatus.PENDING,
+        organizationId: 'org-1',
+        revokedById: null,
+        createdAt: new Date('2026-01-02T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+        expiresAt: new Date('2026-01-09T00:00:00.000Z'),
+        acceptedAt: null,
+        revokedAt: null,
+      },
+    ]);
 
-    await service.listByOrganization(actorAdmin, 'org-1');
+    const result = await service.listByOrganization(actorAdmin, 'org-1');
 
     expect(orgInvitationRepository.findMany).toHaveBeenCalledWith({
       where: { organizationId: 'org-1' },
       orderBy: [{ createdAt: 'desc' }],
     });
+    expect(result[0]).not.toHaveProperty('token');
   });
 });

@@ -5,7 +5,7 @@ import {
   ParseUUIDPipe,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { UserRole } from '../../../generated/prisma/enums';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { GetUserContext } from '../../auth/decorators/get-user-context.decorator';
@@ -29,7 +29,6 @@ export class AdminOrgInvitesController {
   ) {}
 
   @GetAllOrgInvitesApi()
-  @ApiOkResponse({ type: OrgInviteResponseDto, isArray: true })
   @Get('invites')
   listAll(
     @GetUserContext() actor: AuthenticatedUserContext,
@@ -38,7 +37,6 @@ export class AdminOrgInvitesController {
   }
 
   @GetOrganizationInvitesApi()
-  @ApiOkResponse({ type: OrgInviteResponseDto, isArray: true })
   @Get(':id/invites')
   listByOrganization(
     @GetUserContext() actor: AuthenticatedUserContext,

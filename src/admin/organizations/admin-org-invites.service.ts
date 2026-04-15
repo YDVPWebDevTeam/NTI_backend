@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { OrgInvitation } from '../../../generated/prisma/client';
 import { ensureAdminRole } from '../../auth/admin-role.helper';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { OrganizationRepository } from '../../organization/organization.repository';
@@ -20,9 +21,11 @@ export class AdminOrgInvitesService {
       'Only administrators can access organization invitations',
     );
 
-    return this.orgInvitationRepository.findMany({
+    const invitations = await this.orgInvitationRepository.findMany({
       orderBy: [{ createdAt: 'desc' }],
     });
+
+    return invitations.map((invitation) => this.toResponseDto(invitation));
   }
 
   async listByOrganization(
@@ -42,9 +45,27 @@ export class AdminOrgInvitesService {
       throw new NotFoundException('Organization not found');
     }
 
-    return this.orgInvitationRepository.findMany({
+    const invitations = await this.orgInvitationRepository.findMany({
       where: { organizationId },
       orderBy: [{ createdAt: 'desc' }],
     });
+
+    return invitations.map((invitation) => this.toResponseDto(invitation));
+  }
+
+  private toResponseDto(invitation: OrgInvitation): OrgInviteResponseDto {
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      roleToAssign: invitation.roleToAssign,
+      status: invitation.status,
+      organizationId: invitation.organizationId,
+      revokedById: invitation.revokedById,
+      createdAt: invitation.createdAt,
+      updatedAt: invitation.updatedAt,
+      expiresAt: invitation.expiresAt,
+      acceptedAt: invitation.acceptedAt,
+      revokedAt: invitation.revokedAt,
+    };
   }
 }

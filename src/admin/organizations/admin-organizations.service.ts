@@ -36,22 +36,35 @@ export class AdminOrganizationsService {
       'Only administrators can process organization statuses',
     );
 
-    const organization = await this.organizationRepository.findUnique({
-      id: organizationId,
-    });
+    const updateResult = await this.organizationRepository.updateMany(
+      {
+        id: organizationId,
+        status: OrganizationStatus.PENDING,
+      },
+      { status: dto.status },
+    );
 
-    if (!organization) {
-      throw new NotFoundException('Organization not found');
-    }
+    if (updateResult.count === 0) {
+      const existingOrganization = await this.organizationRepository.findUnique(
+        {
+          id: organizationId,
+        },
+      );
 
-    if (organization.status !== OrganizationStatus.PENDING) {
+      if (!existingOrganization) {
+        throw new NotFoundException('Organization not found');
+      }
+
       throw new BadRequestException('Organization has already been processed');
     }
 
-    const updatedOrganization = await this.organizationRepository.update(
-      { id: organizationId },
-      { status: dto.status },
-    );
+    const updatedOrganization = await this.organizationRepository.findUnique({
+      id: organizationId,
+    });
+
+    if (!updatedOrganization) {
+      throw new NotFoundException('Organization not found');
+    }
 
     const owners = await this.userRepository.findMany({
       where: {

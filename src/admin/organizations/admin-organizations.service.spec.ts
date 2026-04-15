@@ -33,7 +33,7 @@ describe('AdminOrganizationsService', () => {
   let service: AdminOrganizationsService;
   let organizationRepository: {
     findUnique: jest.Mock;
-    update: jest.Mock;
+    updateMany: jest.Mock;
   };
   let userRepository: {
     findMany: jest.Mock;
@@ -72,7 +72,7 @@ describe('AdminOrganizationsService', () => {
   beforeEach(() => {
     organizationRepository = {
       findUnique: jest.fn(),
-      update: jest.fn(),
+      updateMany: jest.fn(),
     };
 
     userRepository = {
@@ -99,6 +99,7 @@ describe('AdminOrganizationsService', () => {
   });
 
   it('throws when organization is not found', async () => {
+    organizationRepository.updateMany.mockResolvedValue({ count: 0 });
     organizationRepository.findUnique.mockResolvedValue(null);
 
     await expect(
@@ -109,6 +110,7 @@ describe('AdminOrganizationsService', () => {
   });
 
   it('throws when organization is already processed', async () => {
+    organizationRepository.updateMany.mockResolvedValue({ count: 0 });
     organizationRepository.findUnique.mockResolvedValue({
       ...pendingOrganization,
       status: OrganizationStatus.ACTIVE,
@@ -122,8 +124,8 @@ describe('AdminOrganizationsService', () => {
   });
 
   it('updates to ACTIVE and queues ORG_APPROVED', async () => {
-    organizationRepository.findUnique.mockResolvedValue(pendingOrganization);
-    organizationRepository.update.mockResolvedValue({
+    organizationRepository.updateMany.mockResolvedValue({ count: 1 });
+    organizationRepository.findUnique.mockResolvedValue({
       ...pendingOrganization,
       status: OrganizationStatus.ACTIVE,
     });
@@ -136,8 +138,8 @@ describe('AdminOrganizationsService', () => {
       status: MANAGEABLE_ORG_STATUSES.ACTIVE,
     });
 
-    expect(organizationRepository.update).toHaveBeenCalledWith(
-      { id: 'org-1' },
+    expect(organizationRepository.updateMany).toHaveBeenCalledWith(
+      { id: 'org-1', status: OrganizationStatus.PENDING },
       { status: OrganizationStatus.ACTIVE },
     );
     expect(queueService.addEmail).toHaveBeenCalledWith(
@@ -152,8 +154,8 @@ describe('AdminOrganizationsService', () => {
   });
 
   it('updates to REJECTED and queues ORG_REJECTED with reason', async () => {
-    organizationRepository.findUnique.mockResolvedValue(pendingOrganization);
-    organizationRepository.update.mockResolvedValue({
+    organizationRepository.updateMany.mockResolvedValue({ count: 1 });
+    organizationRepository.findUnique.mockResolvedValue({
       ...pendingOrganization,
       status: OrganizationStatus.REJECTED,
     });
@@ -179,8 +181,8 @@ describe('AdminOrganizationsService', () => {
   });
 
   it('does not queue owner notification when no owners are found', async () => {
-    organizationRepository.findUnique.mockResolvedValue(pendingOrganization);
-    organizationRepository.update.mockResolvedValue({
+    organizationRepository.updateMany.mockResolvedValue({ count: 1 });
+    organizationRepository.findUnique.mockResolvedValue({
       ...pendingOrganization,
       status: OrganizationStatus.ACTIVE,
     });

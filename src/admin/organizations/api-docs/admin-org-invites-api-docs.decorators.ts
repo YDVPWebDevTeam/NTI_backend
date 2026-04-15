@@ -15,6 +15,7 @@ export const GetAllOrgInvitesApi = () =>
     successResponse: {
       status: 200,
       type: OrgInviteResponseDto,
+      isArray: true,
       description: 'Organization invitations were retrieved successfully.',
     },
     extraDecorators: [ApiBearerAuth('access-token')],
@@ -36,6 +37,7 @@ export const GetOrganizationInvitesApi = () =>
     successResponse: {
       status: 200,
       type: OrgInviteResponseDto,
+      isArray: true,
       description: 'Organization invitations were retrieved successfully.',
     },
     extraDecorators: [ApiBearerAuth('access-token')],

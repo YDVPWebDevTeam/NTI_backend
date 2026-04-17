@@ -31,6 +31,7 @@ async function bootstrap() {
   app.enableCors({
     origin: configService.corsOrigins,
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   });
 
   // Global API prefix

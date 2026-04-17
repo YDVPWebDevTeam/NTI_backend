@@ -1,19 +1,19 @@
-jest.mock('../../generated/prisma/client', () => ({}), { virtual: true });
+jest.mock('../../../generated/prisma/client', () => ({}), { virtual: true });
 jest.mock('@prisma/client', () => ({}), { virtual: true });
 
-jest.mock('../user/user.service', () => ({
+jest.mock('../../user/user.service', () => ({
   UserService: class UserService {},
 }));
 jest.mock('./system-invitation.repository', () => ({
   SystemInvitationRepository: class SystemInvitationRepository {},
 }));
-jest.mock('../infrastructure/hashing', () => ({
+jest.mock('../../infrastructure/hashing', () => ({
   HashingService: class HashingService {},
 }));
-jest.mock('../infrastructure/config', () => ({
+jest.mock('../../infrastructure/config', () => ({
   ConfigService: class ConfigService {},
 }));
-jest.mock('../infrastructure/queue', () => ({
+jest.mock('../../infrastructure/queue', () => ({
   QueueService: class QueueService {},
   EMAIL_JOBS: {
     SYSTEM_INVITE_SENT: 'system-invite-sent',
@@ -25,12 +25,12 @@ import {
   SystemInvitationStatus,
   UserRole,
   UserStatus,
-} from '../../generated/prisma/enums';
-import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import { ConfigService } from '../infrastructure/config';
-import { HashingService } from '../infrastructure/hashing';
-import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
-import { UserService } from '../user/user.service';
+} from '../../../generated/prisma/enums';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import { ConfigService } from '../../infrastructure/config';
+import { HashingService } from '../../infrastructure/hashing';
+import { EMAIL_JOBS, QueueService } from '../../infrastructure/queue';
+import { UserService } from '../../user/user.service';
 import { AdminInvitesService } from './admin-invites.service';
 import {
   SYSTEM_INVITABLE_ROLES,

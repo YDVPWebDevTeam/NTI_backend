@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum } from 'class-validator';
-import { UserRole } from '../../../generated/prisma/enums';
-import { EmailValidation } from '../../common/validation/email.validation';
+import { UserRole } from '../../../../generated/prisma/enums';
+import { EmailValidation } from '../../../common/validation/email.validation';
 
 export const SYSTEM_INVITABLE_ROLES = {
   ADMIN: UserRole.ADMIN,

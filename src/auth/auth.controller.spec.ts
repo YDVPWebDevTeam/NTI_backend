@@ -8,15 +8,14 @@ jest.mock('./auth.service', () => ({
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '../infrastructure/config';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { AuthCookieService } from './auth-cookie.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let authService: {
-    refreshTokenValidityDays: number;
     registerViaInvite: jest.Mock;
     login: jest.Mock;
     adminLogin: jest.Mock;
@@ -26,7 +25,6 @@ describe('AuthController', () => {
 
   beforeEach(() => {
     authService = {
-      refreshTokenValidityDays: 7,
       registerViaInvite: jest.fn(),
       login: jest.fn(),
       adminLogin: jest.fn(),
@@ -34,12 +32,16 @@ describe('AuthController', () => {
       logout: jest.fn(),
     };
 
+    const authCookieService = new AuthCookieService({
+      isProduction: false,
+      jwtAccessExpiration: '15m',
+      jwtRefreshExpirationDays: '7',
+      forcePasswordChangeTokenExpirationMinutes: 15,
+    } as never);
+
     controller = new AuthController(
       authService as unknown as AuthService,
-      {
-        isProduction: false,
-        forcePasswordChangeTokenExpirationMinutes: 15,
-      } as unknown as ConfigService,
+      authCookieService,
     );
   });
 

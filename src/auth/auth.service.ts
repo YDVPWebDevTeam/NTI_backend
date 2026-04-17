@@ -24,6 +24,7 @@ import { ResetTokenService } from './reset-token/reset-token.service';
 import { RegisterCompanyOwnerDto } from './dto/register-company-owner.dto';
 import { RegisterViaInviteDto } from './dto/register-via-invite.dto';
 import { InvitesService } from '../invites/invites.service';
+import { isAdminRole } from './admin-role.helper';
 import { toAuthenticatedUserContext } from '../user/user.mapper';
 
 export type AuthTokensResponse = {
@@ -314,7 +315,7 @@ export class AuthService {
       );
     }
 
-    if (!this.isAdminRole(user.role) || !user.mustChangePassword) {
+    if (!isAdminRole(user.role) || !user.mustChangePassword) {
       throw new UnauthorizedException(
         'Invalid or expired password change token',
       );
@@ -475,18 +476,14 @@ export class AuthService {
   }
 
   private shouldRequirePasswordChange(user: User): boolean {
-    return this.isAdminRole(user.role) && user.mustChangePassword;
-  }
-
-  private isAdminRole(role: UserRole): boolean {
-    return role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
+    return isAdminRole(user.role) && user.mustChangePassword;
   }
 
   private ensureRoleMatchesLoginEndpoint(
     user: User,
     options: { requireAdmin: boolean },
   ): void {
-    const isAdmin = this.isAdminRole(user.role);
+    const isAdmin = isAdminRole(user.role);
     if (options.requireAdmin !== isAdmin) {
       throw new UnauthorizedException('Invalid email or password');
     }

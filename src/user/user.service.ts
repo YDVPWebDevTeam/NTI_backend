@@ -15,6 +15,10 @@ export class UserService {
     return this.users.findByEmail(email, db);
   }
 
+  findMany(db?: PrismaDbClient): Promise<User[]> {
+    return this.users.findMany(undefined, db);
+  }
+
   async create(
     data: Prisma.UserUncheckedCreateInput,
     db?: PrismaDbClient,
@@ -39,10 +43,6 @@ export class UserService {
 
   markEmailConfirmed(userId: string, db?: PrismaDbClient): Promise<User> {
     return this.users.markEmailConfirmed(userId, db);
-  }
-
-  markAdminConfirmed(userId: string, db?: PrismaDbClient): Promise<User> {
-    return this.users.markAdminConfirmed(userId, db);
   }
 
   transaction<T>(fn: (db: PrismaDbClient) => Promise<T>): Promise<T> {

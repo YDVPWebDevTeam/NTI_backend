@@ -23,6 +23,7 @@ type ApiDecoratorConfig = {
   successResponse?: {
     status: number;
     type?: Type<unknown>;
+    isArray?: boolean;
     description?: string;
     examples?: Record<
       string,
@@ -63,6 +64,7 @@ export function createApiDecorator(
           ApiResponse({
             status: config.successResponse.status,
             type: config.successResponse.type,
+            isArray: config.successResponse.isArray,
             description: config.successResponse.description,
             ...(config.successResponse.examples
               ? {

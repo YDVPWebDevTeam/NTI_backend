@@ -12,20 +12,13 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import ms from 'ms';
-import {
-  AuthService,
-  AuthTokensResponse,
-  LoginResponse,
-  PasswordChangeRequiredResponse,
-} from './auth.service';
+import { AuthService, LoginResponse, MessageResponse } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshJwtGuard } from './guards/refresh-auth.guard';
 import { GetUserContext } from './decorators/get-user-context.decorator';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import { ConfigService } from '../infrastructure/config';
 import { ResendEmailDto } from './dto/resend-email.dto';
 import { ConfirmEmailDto } from './dto/confirm-email.dto';
 import { RegisterCompanyOwnerDto } from './dto/register-company-owner.dto';
@@ -41,35 +34,32 @@ import {
   MeApi,
   RefreshApi,
   RegisterApi,
-  RegisterViaInviteApi,
-  ResetPasswordApi,
   RegisterCompanyOwnerApi,
+  RegisterViaInviteApi,
   ResendConfirmationEmailApi,
+  ResetPasswordApi,
 } from './api-docs';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import type { MessageResponse } from './auth.service';
-
-type AuthHttpResponse = Pick<AuthTokensResponse, 'user'>;
-type PasswordChangeRequiredHttpResponse = { requiresPasswordChange: true };
-const PASSWORD_CHANGE_COOKIE = 'requiresPasswordChangeToken';
-const ACCESS_TOKEN_COOKIE = 'accessToken';
-const REFRESH_TOKEN_COOKIE = 'refreshToken';
+import {
+  AuthCookieService,
+  AuthHttpResponse,
+  PASSWORD_CHANGE_COOKIE,
+  PasswordChangeRequiredHttpResponse,
+} from './auth-cookie.service';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly configService: ConfigService,
+    private readonly authCookieService: AuthCookieService,
   ) {}
 
   @RegisterApi()
   @Post('register')
   async register(@Body() dto: RegisterDto): Promise<AuthenticatedUserContext> {
-    const authResult = await this.authService.register(dto);
-
-    return authResult;
+    return await this.authService.register(dto);
   }
 
   @RegisterCompanyOwnerApi()
@@ -98,13 +88,11 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AuthHttpResponse> {
     const authResult = await this.authService.login(dto);
-    this.clearPasswordChangeTokenCookie(reply);
-    this.setAccessTokenCookie(reply, authResult.accessToken);
-    this.setRefreshTokenCookie(reply, authResult.refreshToken);
-
-    return this.toHttpAuthResponse(authResult);
+    this.authCookieService.applyAuthTokens(reply, authResult);
+    return this.authCookieService.toHttpAuthResponse(authResult);
   }
 
+  @ApiTags('Admin')
   @AdminLoginApi()
   @HttpCode(HttpStatus.OK)
   @Post('admin/login')
@@ -112,15 +100,14 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AuthHttpResponse | PasswordChangeRequiredHttpResponse> {
-    return this.handleLoginResponse(
-      await this.authService.adminLogin(dto),
-      reply,
-    );
+    const authResult: LoginResponse = await this.authService.adminLogin(dto);
+    return this.authCookieService.applyAdminLoginResponse(reply, authResult);
   }
 
+  @ApiTags('Admin')
   @ForceChangePasswordApi()
   @HttpCode(HttpStatus.OK)
-  @Post('force-change-password')
+  @Post('admin/force-change-password')
   async forceChangePassword(
     @Body() dto: ForceChangePasswordDto,
     @Req() request: FastifyRequest,
@@ -140,11 +127,8 @@ export class AuthController {
       dto.confirmNewPassword,
     );
 
-    this.clearPasswordChangeTokenCookie(reply);
-    this.setAccessTokenCookie(reply, authResult.accessToken);
-    this.setRefreshTokenCookie(reply, authResult.refreshToken);
-
-    return this.toHttpAuthResponse(authResult);
+    this.authCookieService.applyAuthTokens(reply, authResult);
+    return this.authCookieService.toHttpAuthResponse(authResult);
   }
 
   @MeApi()
@@ -165,10 +149,8 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AuthHttpResponse> {
     const authResult = await this.authService.refresh(authUser);
-    this.setAccessTokenCookie(reply, authResult.accessToken);
-    this.setRefreshTokenCookie(reply, authResult.refreshToken);
-
-    return this.toHttpAuthResponse(authResult);
+    this.authCookieService.applyAuthTokens(reply, authResult);
+    return this.authCookieService.toHttpAuthResponse(authResult);
   }
 
   @LogoutApi()
@@ -183,10 +165,7 @@ export class AuthController {
       await this.authService.logout(authUser.refreshTokenId);
     }
 
-    this.clearRefreshTokenCookie(reply);
-    this.clearAccessTokenCookie(reply);
-    this.clearPasswordChangeTokenCookie(reply);
-
+    this.authCookieService.clearAuthCookies(reply);
     return { success: true };
   }
 
@@ -198,9 +177,8 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AuthHttpResponse> {
     const authResult = await this.authService.confirmEmail(dto.token);
-    this.setAccessTokenCookie(reply, authResult.accessToken);
-    this.setRefreshTokenCookie(reply, authResult.refreshToken);
-    return this.toHttpAuthResponse(authResult);
+    this.authCookieService.applyAuthTokens(reply, authResult);
+    return this.authCookieService.toHttpAuthResponse(authResult);
   }
 
   @ResendConfirmationEmailApi()
@@ -224,101 +202,5 @@ export class AuthController {
   @Post('reset-password')
   async resetPassword(@Body() dto: ResetPasswordDto): Promise<MessageResponse> {
     return this.authService.resetPassword(dto.token, dto.password);
-  }
-
-  private toHttpAuthResponse(authResult: AuthTokensResponse): AuthHttpResponse {
-    return {
-      user: authResult.user,
-    };
-  }
-
-  private setAccessTokenCookie(reply: FastifyReply, accessToken: string): void {
-    const accessTokenExpiration = this.configService.jwtAccessExpiration;
-    const parsedAccessTokenDuration = accessTokenExpiration
-      ? ms(accessTokenExpiration)
-      : undefined;
-    const maxAgeSeconds =
-      typeof parsedAccessTokenDuration === 'number'
-        ? Math.floor(parsedAccessTokenDuration / 1000)
-        : undefined;
-
-    reply.setCookie(ACCESS_TOKEN_COOKIE, accessToken, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.configService.isProduction,
-      path: '/',
-      ...(maxAgeSeconds ? { maxAge: maxAgeSeconds } : {}),
-    });
-  }
-
-  private setRefreshTokenCookie(
-    reply: FastifyReply,
-    refreshToken: string,
-  ): void {
-    reply.setCookie(REFRESH_TOKEN_COOKIE, refreshToken, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.configService.isProduction,
-      path: '/',
-      maxAge: this.authService.refreshTokenValidityDays * 24 * 60 * 60, // Convert to seconds
-    });
-  }
-
-  private clearRefreshTokenCookie(reply: FastifyReply): void {
-    reply.clearCookie(REFRESH_TOKEN_COOKIE, {
-      path: '/',
-    });
-  }
-
-  private clearAccessTokenCookie(reply: FastifyReply): void {
-    reply.clearCookie(ACCESS_TOKEN_COOKIE, {
-      path: '/',
-    });
-  }
-
-  private setPasswordChangeTokenCookie(
-    reply: FastifyReply,
-    token: string,
-  ): void {
-    reply.setCookie(PASSWORD_CHANGE_COOKIE, token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.configService.isProduction,
-      path: '/',
-      maxAge: this.configService.forcePasswordChangeTokenExpirationMinutes * 60,
-    });
-  }
-
-  private clearPasswordChangeTokenCookie(reply: FastifyReply): void {
-    reply.clearCookie(PASSWORD_CHANGE_COOKIE, {
-      path: '/',
-    });
-  }
-
-  private isPasswordChangeRequiredResponse(
-    authResult: LoginResponse,
-  ): authResult is PasswordChangeRequiredResponse {
-    return 'requiresPasswordChange' in authResult;
-  }
-
-  private handleLoginResponse(
-    authResult: LoginResponse,
-    reply: FastifyReply,
-  ): AuthHttpResponse | PasswordChangeRequiredHttpResponse {
-    if (this.isPasswordChangeRequiredResponse(authResult)) {
-      this.clearRefreshTokenCookie(reply);
-      this.clearAccessTokenCookie(reply);
-      this.setPasswordChangeTokenCookie(
-        reply,
-        authResult.requiresPasswordChangeToken,
-      );
-      return { requiresPasswordChange: true };
-    }
-
-    this.clearPasswordChangeTokenCookie(reply);
-    this.setAccessTokenCookie(reply, authResult.accessToken);
-    this.setRefreshTokenCookie(reply, authResult.refreshToken);
-
-    return this.toHttpAuthResponse(authResult);
   }
 }

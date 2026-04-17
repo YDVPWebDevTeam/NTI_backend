@@ -1,20 +1,20 @@
-jest.mock('../../generated/prisma/client', () => ({}), { virtual: true });
+jest.mock('../../../generated/prisma/client', () => ({}), { virtual: true });
 jest.mock('@prisma/client', () => ({}), { virtual: true });
 
-jest.mock('../user/user.service', () => ({
+jest.mock('../../user/user.service', () => ({
   UserService: class UserService {},
 }));
 
-jest.mock('../auth/refresh-token/refresh-token.service', () => ({
+jest.mock('../../auth/refresh-token/refresh-token.service', () => ({
   RefreshTokenService: class RefreshTokenService {},
 }));
 
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { UserRole, UserStatus } from '../../generated/prisma/enums';
-import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import type { PrismaDbClient } from '../infrastructure/database';
-import { RefreshTokenService } from '../auth/refresh-token/refresh-token.service';
-import { UserService } from '../user/user.service';
+import { UserRole, UserStatus } from '../../../generated/prisma/enums';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import type { PrismaDbClient } from '../../infrastructure/database';
+import { RefreshTokenService } from '../../auth/refresh-token/refresh-token.service';
+import { UserService } from '../../user/user.service';
 import { AdminUsersService } from './admin-users.service';
 import { MANAGEABLE_USER_STATUSES } from './dto/update-user-status.dto';
 
@@ -22,6 +22,7 @@ describe('AdminUsersService', () => {
   let service: AdminUsersService;
   let userService: {
     findById: jest.Mock;
+    findMany: jest.Mock;
     update: jest.Mock;
     transaction: jest.Mock;
   };
@@ -42,6 +43,12 @@ describe('AdminUsersService', () => {
     role: UserRole.SUPER_ADMIN,
     status: UserStatus.ACTIVE,
   };
+  const actorStudent: AuthenticatedUserContext = {
+    id: 'student-1',
+    email: 'student@example.com',
+    role: UserRole.STUDENT,
+    status: UserStatus.ACTIVE,
+  };
   const targetUser = {
     id: 'user-1',
     email: 'user@example.com',
@@ -60,6 +67,7 @@ describe('AdminUsersService', () => {
   beforeEach(() => {
     userService = {
       findById: jest.fn(),
+      findMany: jest.fn(),
       update: jest.fn(),
       transaction: jest
         .fn()
@@ -86,6 +94,74 @@ describe('AdminUsersService', () => {
         'missing-user',
         MANAGEABLE_USER_STATUSES.ACTIVE,
       ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('returns safe users list for admins', async () => {
+    userService.findMany.mockResolvedValue([
+      targetUser,
+      {
+        ...targetUser,
+        id: 'user-2',
+        email: 'user-2@example.com',
+        role: UserRole.COMPANY_OWNER,
+      },
+    ]);
+
+    const result = await service.getUsers(actorAdmin);
+
+    expect(userService.findMany).toHaveBeenCalledWith();
+    expect(result).toEqual([
+      {
+        id: targetUser.id,
+        email: targetUser.email,
+        role: targetUser.role,
+        status: targetUser.status,
+      },
+      {
+        id: 'user-2',
+        email: 'user-2@example.com',
+        role: UserRole.COMPANY_OWNER,
+        status: targetUser.status,
+      },
+    ]);
+  });
+
+  it('throws forbidden when non-admin requests users list', async () => {
+    await expect(service.getUsers(actorStudent)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+
+    expect(userService.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns safe user by id for admins', async () => {
+    userService.findById.mockResolvedValue(targetUser);
+
+    const result = await service.getUserById(actorSuperAdmin, targetUser.id);
+
+    expect(userService.findById).toHaveBeenCalledWith(targetUser.id);
+    expect(result).toEqual({
+      id: targetUser.id,
+      email: targetUser.email,
+      role: targetUser.role,
+      status: targetUser.status,
+    });
+  });
+
+  it('throws forbidden when non-admin requests user by id', async () => {
+    await expect(
+      service.getUserById(actorStudent, targetUser.id),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(userService.findById).not.toHaveBeenCalled();
+  });
+
+  it('throws not found when requested user id does not exist', async () => {
+    userService.findById.mockResolvedValue(null);
+
+    await expect(
+      service.getUserById(actorAdmin, 'missing-user'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 

@@ -8,6 +8,15 @@ import nodemailer, { Transporter } from 'nodemailer';
 export class MailerService {
   private transporter: Transporter;
 
+  private escapeHtml(value: string): string {
+    return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
   constructor(private readonly configService: ConfigService) {
     this.transporter = nodemailer.createTransport({
       host: this.configService.smtpHost,
@@ -116,5 +125,46 @@ export class MailerService {
   `;
 
     await this.sendEmail(email, 'Organization pending review', html);
+  }
+
+  async sendOrgApprovedEmail(
+    email: string,
+    organizationId: string,
+    organizationName: string,
+  ): Promise<void> {
+    const link = `${this.configService.frontUrl}/organization/${organizationId}`;
+    const safeOrganizationName = this.escapeHtml(organizationName);
+
+    const html = `
+      <h1>Organization approved</h1>
+
+      <p>Your organization <b>${safeOrganizationName}</b> has been approved.</p>
+
+      <a href="${link}">Open organization</a>
+  `;
+
+    await this.sendEmail(email, 'Organization approved', html);
+  }
+
+  async sendOrgRejectedEmail(
+    email: string,
+    organizationId: string,
+    organizationName: string,
+    rejectionReason: string,
+  ): Promise<void> {
+    const link = `${this.configService.frontUrl}/organization/${organizationId}`;
+    const safeOrganizationName = this.escapeHtml(organizationName);
+    const safeRejectionReason = this.escapeHtml(rejectionReason);
+
+    const html = `
+      <h1>Organization rejected</h1>
+
+      <p>Your organization <b>${safeOrganizationName}</b> was rejected.</p>
+      <p><b>Reason:</b> ${safeRejectionReason}</p>
+
+      <a href="${link}">Open organization</a>
+  `;
+
+    await this.sendEmail(email, 'Organization rejected', html);
   }
 }

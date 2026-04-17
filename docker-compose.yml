@@ -30,7 +30,7 @@ services:
       context: .
       dockerfile: Dockerfile.worker
     working_dir: /app
-    command: sh -c "npx prisma generate && npm run start:worker:dev"
+    command: sh -c "npm install && npx prisma generate && npm run start:worker:dev"
     restart: unless-stopped
     env_file:
       - .env

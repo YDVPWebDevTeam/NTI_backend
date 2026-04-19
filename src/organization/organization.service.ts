@@ -137,11 +137,16 @@ export class OrganizationService {
       expiresAt,
     });
 
-    await this.queueService.addEmail(EMAIL_JOBS.ORG_INVITE, {
-      email: invitation.email,
-      token: invitation.token,
-      organizationName: organization.name,
-    });
+    try {
+      await this.queueService.addEmail(EMAIL_JOBS.ORG_INVITE, {
+        email: invitation.email,
+        token: invitation.token,
+        organizationName: organization.name,
+      });
+    } catch (error) {
+      await this.organizationInviteRepository.delete(invitation.id);
+      throw error;
+    }
 
     return invitation;
   }

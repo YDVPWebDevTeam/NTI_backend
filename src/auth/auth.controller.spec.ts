@@ -136,6 +136,7 @@ describe('AuthController', () => {
       email: 'student@example.com',
       role: 'STUDENT',
       status: 'PENDING',
+      organizationId: null,
       refreshTokenId: 'refresh-token-id',
     };
 

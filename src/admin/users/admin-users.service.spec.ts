@@ -36,12 +36,14 @@ describe('AdminUsersService', () => {
     email: 'admin@example.com',
     role: UserRole.ADMIN,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
   const actorSuperAdmin: AuthenticatedUserContext = {
     id: 'super-admin-1',
     email: 'super-admin@example.com',
     role: UserRole.SUPER_ADMIN,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
   const actorStudent: AuthenticatedUserContext = {
     id: 'student-1',

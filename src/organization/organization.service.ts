@@ -144,7 +144,7 @@ export class OrganizationService {
         organizationName: organization.name,
       });
     } catch (error) {
-      await this.organizationInviteRepository.delete(invitation.id);
+      await this.organizationInviteRepository.delete({ id: invitation.id });
       throw error;
     }
 

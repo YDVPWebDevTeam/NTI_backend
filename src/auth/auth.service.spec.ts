@@ -455,6 +455,7 @@ describe('AuthService', () => {
         email: 'admin@nti.sk',
         role: UserRole.SUPER_ADMIN,
         status: UserStatus.PENDING,
+        organizationId: null,
       },
     });
   });

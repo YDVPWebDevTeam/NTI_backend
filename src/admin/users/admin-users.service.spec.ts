@@ -120,12 +120,14 @@ describe('AdminUsersService', () => {
         email: targetUser.email,
         role: targetUser.role,
         status: targetUser.status,
+        organizationId: null,
       },
       {
         id: 'user-2',
         email: 'user-2@example.com',
         role: UserRole.COMPANY_OWNER,
         status: targetUser.status,
+        organizationId: null,
       },
     ]);
   });
@@ -149,6 +151,7 @@ describe('AdminUsersService', () => {
       email: targetUser.email,
       role: targetUser.role,
       status: targetUser.status,
+      organizationId: null,
     });
   });
 
@@ -196,6 +199,7 @@ describe('AdminUsersService', () => {
       email: targetUser.email,
       role: targetUser.role,
       status: UserStatus.SUSPENDED,
+      organizationId: null,
     });
   });
 
@@ -302,6 +306,7 @@ describe('AdminUsersService', () => {
       email: targetUser.email,
       role: UserRole.SUPER_ADMIN,
       status: UserStatus.ACTIVE,
+      organizationId: null,
     });
   });
 });

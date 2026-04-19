@@ -9,6 +9,6 @@ export function toAuthenticatedUserContext(
     email: user.email,
     status: user.status,
     role: user.role,
-    organizationId: user.organizationId,
+    organizationId: user.organizationId ?? null,
   };
 }

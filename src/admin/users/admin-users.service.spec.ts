@@ -50,6 +50,7 @@ describe('AdminUsersService', () => {
     email: 'student@example.com',
     role: UserRole.STUDENT,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
   const targetUser = {
     id: 'user-1',

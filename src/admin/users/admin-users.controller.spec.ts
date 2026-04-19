@@ -34,6 +34,7 @@ describe('AdminUsersController', () => {
       email: 'admin@example.com',
       role: UserRole.ADMIN,
       status: UserStatus.ACTIVE,
+      organizationId: null,
     };
 
     adminUsersService.updateStatus.mockResolvedValue({
@@ -66,6 +67,7 @@ describe('AdminUsersController', () => {
       email: 'admin@example.com',
       role: UserRole.ADMIN,
       status: UserStatus.ACTIVE,
+      organizationId: null,
     };
 
     const users = [
@@ -96,6 +98,7 @@ describe('AdminUsersController', () => {
       email: 'super-admin@example.com',
       role: UserRole.SUPER_ADMIN,
       status: UserStatus.ACTIVE,
+      organizationId: null,
     };
 
     const user = {

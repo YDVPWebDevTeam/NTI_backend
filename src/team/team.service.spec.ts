@@ -21,6 +21,11 @@ jest.mock('../infrastructure/queue', () => ({
 }));
 
 import type { PrismaDbClient } from '../infrastructure/database';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
@@ -33,12 +38,18 @@ type CreatedInvitation = {
   token: string;
 };
 
-type TransactionCallback = (db: PrismaDbClient) => Promise<CreatedInvitation[]>;
+type TeamRecord = {
+  id: string;
+  name?: string;
+  leaderId: string;
+  updatedAt?: Date;
+  lockedAt?: Date | null;
+};
 
 describe('TeamService', () => {
   let service: TeamService;
   let teamRepository: {
-    transaction: jest.Mock<Promise<CreatedInvitation[]>, [TransactionCallback]>;
+    transaction: jest.Mock;
     createInvitation: jest.Mock<
       Promise<CreatedInvitation>,
       [
@@ -61,6 +72,22 @@ describe('TeamService', () => {
       [string, string[], PrismaDbClient]
     >;
     revokeInvitations: jest.Mock<Promise<{ count: number }>, [string[]]>;
+    findUnique: jest.Mock<
+      Promise<TeamRecord | null>,
+      [{ id: string }, PrismaDbClient?]
+    >;
+    findMembership: jest.Mock<
+      Promise<{ teamId: string; userId: string } | null>,
+      [string, string, PrismaDbClient?]
+    >;
+    deleteMembership: jest.Mock<
+      Promise<{ teamId: string; userId: string }>,
+      [string, string, PrismaDbClient?]
+    >;
+    updateLeader: jest.Mock<
+      Promise<TeamRecord>,
+      [string, string, PrismaDbClient?]
+    >;
   };
   let transactionClient: PrismaDbClient;
   let hashingService: {
@@ -77,10 +104,9 @@ describe('TeamService', () => {
     transactionClient = {} as PrismaDbClient;
 
     teamRepository = {
-      transaction: jest.fn<
-        Promise<CreatedInvitation[]>,
-        [TransactionCallback]
-      >(),
+      transaction: jest
+        .fn<Promise<unknown>, [(db: PrismaDbClient) => Promise<unknown>]>()
+        .mockImplementation((fn) => fn(transactionClient)),
       createInvitation: jest
         .fn<
           Promise<CreatedInvitation>,
@@ -120,11 +146,42 @@ describe('TeamService', () => {
       revokeInvitations: jest
         .fn<Promise<{ count: number }>, [string[]]>()
         .mockResolvedValue({ count: 0 }),
+      findUnique: jest
+        .fn<Promise<TeamRecord | null>, [{ id: string }, PrismaDbClient?]>()
+        .mockResolvedValue({
+          id: 'team-1',
+          name: 'Alpha Team',
+          leaderId: 'leader-1',
+          updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+          lockedAt: null,
+        }),
+      findMembership: jest
+        .fn<
+          Promise<{ teamId: string; userId: string } | null>,
+          [string, string, PrismaDbClient?]
+        >()
+        .mockResolvedValue({
+          teamId: 'team-1',
+          userId: 'member-1',
+        }),
+      deleteMembership: jest
+        .fn<
+          Promise<{ teamId: string; userId: string }>,
+          [string, string, PrismaDbClient?]
+        >()
+        .mockResolvedValue({
+          teamId: 'team-1',
+          userId: 'member-1',
+        }),
+      updateLeader: jest
+        .fn<Promise<TeamRecord>, [string, string, PrismaDbClient?]>()
+        .mockResolvedValue({
+          id: 'team-1',
+          leaderId: 'member-2',
+          updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+          lockedAt: null,
+        }),
     };
-
-    teamRepository.transaction.mockImplementation((fn) =>
-      fn(transactionClient),
-    );
 
     hashingService = {
       generateHexToken: jest
@@ -272,5 +329,191 @@ describe('TeamService', () => {
       'invite-1',
       'invite-2',
     ]);
+  });
+
+  it('removes a non-leader member when requested by the team leader', async () => {
+    const result = await service.removeMember('team-1', 'leader-1', 'member-1');
+
+    expect(teamRepository.findUnique).toHaveBeenCalledWith(
+      { id: 'team-1' },
+      undefined,
+    );
+    expect(teamRepository.findMembership).toHaveBeenCalledWith(
+      'team-1',
+      'member-1',
+    );
+    expect(teamRepository.deleteMembership).toHaveBeenCalledWith(
+      'team-1',
+      'member-1',
+    );
+    expect(result).toEqual({
+      teamId: 'team-1',
+      memberId: 'member-1',
+      removed: true,
+    });
+  });
+
+  it('rejects member removal when the actor is not the team leader', async () => {
+    await expect(
+      service.removeMember('team-1', 'member-2', 'member-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(teamRepository.deleteMembership).not.toHaveBeenCalled();
+  });
+
+  it('rejects member removal for a locked team', async () => {
+    teamRepository.findUnique.mockResolvedValueOnce({
+      id: 'team-1',
+      leaderId: 'leader-1',
+      lockedAt: new Date('2026-04-20T10:00:00.000Z'),
+    });
+
+    await expect(
+      service.removeMember('team-1', 'leader-1', 'member-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(teamRepository.deleteMembership).not.toHaveBeenCalled();
+  });
+
+  it('rejects member removal when attempting to remove the current leader', async () => {
+    await expect(
+      service.removeMember('team-1', 'leader-1', 'leader-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(teamRepository.findMembership).not.toHaveBeenCalled();
+  });
+
+  it('rejects member removal when membership does not exist', async () => {
+    teamRepository.findMembership.mockResolvedValueOnce(null);
+
+    await expect(
+      service.removeMember('team-1', 'leader-1', 'missing-member'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('allows a non-leader member to leave a team', async () => {
+    teamRepository.findMembership.mockResolvedValueOnce({
+      teamId: 'team-1',
+      userId: 'member-1',
+    });
+
+    const result = await service.leaveTeam('team-1', 'member-1');
+
+    expect(teamRepository.deleteMembership).toHaveBeenCalledWith(
+      'team-1',
+      'member-1',
+    );
+    expect(result).toEqual({
+      teamId: 'team-1',
+      userId: 'member-1',
+      left: true,
+    });
+  });
+
+  it('rejects leave-team when membership does not exist', async () => {
+    teamRepository.findMembership.mockResolvedValueOnce(null);
+
+    await expect(
+      service.leaveTeam('team-1', 'member-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects leave-team for the current leader', async () => {
+    teamRepository.findMembership.mockResolvedValueOnce({
+      teamId: 'team-1',
+      userId: 'leader-1',
+    });
+
+    await expect(
+      service.leaveTeam('team-1', 'leader-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(teamRepository.deleteMembership).not.toHaveBeenCalled();
+  });
+
+  it('rejects leave-team for a locked team', async () => {
+    teamRepository.findUnique.mockResolvedValueOnce({
+      id: 'team-1',
+      leaderId: 'leader-1',
+      lockedAt: new Date('2026-04-20T10:00:00.000Z'),
+    });
+
+    await expect(
+      service.leaveTeam('team-1', 'member-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects leave-team when the team does not exist', async () => {
+    teamRepository.findUnique.mockResolvedValueOnce(null);
+
+    await expect(
+      service.leaveTeam('missing-team', 'member-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('transfers leadership to an existing member inside a transaction', async () => {
+    const result = await service.transferLeadership(
+      'team-1',
+      'leader-1',
+      'member-2',
+    );
+
+    expect(teamRepository.findUnique).toHaveBeenCalledWith(
+      { id: 'team-1' },
+      transactionClient,
+    );
+    expect(teamRepository.findMembership).toHaveBeenCalledWith(
+      'team-1',
+      'member-2',
+      transactionClient,
+    );
+    expect(teamRepository.updateLeader).toHaveBeenCalledWith(
+      'team-1',
+      'member-2',
+      transactionClient,
+    );
+    expect(result).toEqual({
+      id: 'team-1',
+      leaderId: 'member-2',
+      updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+    });
+  });
+
+  it('rejects leadership transfer when the actor is not the team leader', async () => {
+    await expect(
+      service.transferLeadership('team-1', 'member-1', 'member-2'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(teamRepository.updateLeader).not.toHaveBeenCalled();
+  });
+
+  it('rejects leadership transfer when the new leader is not a team member', async () => {
+    teamRepository.findMembership.mockResolvedValueOnce(null);
+
+    await expect(
+      service.transferLeadership('team-1', 'leader-1', 'missing-member'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(teamRepository.updateLeader).not.toHaveBeenCalled();
+  });
+
+  it('rejects leadership transfer for a locked team', async () => {
+    teamRepository.findUnique.mockResolvedValueOnce({
+      id: 'team-1',
+      leaderId: 'leader-1',
+      lockedAt: new Date('2026-04-20T10:00:00.000Z'),
+    });
+
+    await expect(
+      service.transferLeadership('team-1', 'leader-1', 'member-2'),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects lifecycle actions when the team does not exist', async () => {
+    teamRepository.findUnique.mockResolvedValueOnce(null);
+
+    await expect(
+      service.removeMember('missing-team', 'leader-1', 'member-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

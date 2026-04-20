@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { Invitation, Prisma, Team } from '../../generated/prisma/client';
+import type {
+  Invitation,
+  Prisma,
+  Team,
+  TeamMember,
+} from '../../generated/prisma/client';
 import { InvitationStatus } from '../../generated/prisma/enums';
 import { BaseRepository, PrismaDbClient } from '../infrastructure/database';
 import { PrismaService } from '../infrastructure/database/prisma.service';
@@ -82,5 +87,49 @@ export class TeamRepository extends BaseRepository<
         revokedAt,
       },
     });
+  }
+
+  findMembership(
+    teamId: string,
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<TeamMember | null> {
+    return (db ?? this.prisma.client).teamMember.findUnique({
+      where: {
+        userId_teamId: {
+          userId,
+          teamId,
+        },
+      },
+    });
+  }
+
+  deleteMembership(
+    teamId: string,
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<TeamMember> {
+    return (db ?? this.prisma.client).teamMember.delete({
+      where: {
+        userId_teamId: {
+          userId,
+          teamId,
+        },
+      },
+    });
+  }
+
+  updateLeader(
+    teamId: string,
+    leaderId: string,
+    db?: PrismaDbClient,
+  ): Promise<Team> {
+    return this.update(
+      { id: teamId },
+      {
+        leaderId,
+      },
+      db,
+    );
   }
 }

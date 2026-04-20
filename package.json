@@ -37,7 +37,7 @@
     "@aws-sdk/s3-request-presigner": "^3.926.0",
     "@fastify/cookie": "^11.0.2",
     "@fastify/helmet": "^13.0.2",
-    "@fastify/static": "^9.0.0",
+    "@fastify/static": "^9.1.2",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.1.18",

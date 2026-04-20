@@ -14,8 +14,7 @@ import {
 } from '@nestjs/swagger';
 import { AppService } from './app.service';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
-import { QueueService } from './infrastructure/queue/queue.service';
-import { PDF_JOBS, PDF_TEMPLATES } from './infrastructure/queue/queue.types';
+import { PDF_JOBS, PDF_TEMPLATES, QueueService } from './infrastructure/queue';
 
 @ApiTags('Demo')
 @Controller()

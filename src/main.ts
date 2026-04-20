@@ -27,7 +27,6 @@ async function bootstrap() {
   });
   await app.register((await import('@fastify/cookie')).default);
 
-  // CORS — origins from env (comma-separated)
   app.enableCors({
     origin: configService.corsOrigins,
     credentials: true,

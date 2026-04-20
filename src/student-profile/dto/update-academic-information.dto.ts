@@ -49,7 +49,7 @@ export class UpdateAcademicInformationDto {
   @Max(8)
   studyYear!: number;
 
-  @ApiPropertyOptional({ example: CURRENT_YEAR + 1 })
+  @ApiPropertyOptional({ example: 2027 })
   @IsOptional()
   @IsInt()
   @Min(CURRENT_YEAR)

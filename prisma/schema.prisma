@@ -161,7 +161,6 @@ model UploadedFile {
 
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
-  studentProfiles     StudentProfile[]
   academicEvidenceFor StudentProfile[] @relation("StudentAcademicEvidence")
   cvFor               StudentProfile[] @relation("StudentCvFile")
 
@@ -448,10 +447,8 @@ model StudentProfile {
   skills   StudentSkill[]
   projects StudentProject[]
 
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  uploadedFile   UploadedFile? @relation(fields: [uploadedFileId], references: [id])
-  uploadedFileId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([universityId])
   @@index([facultyId])

@@ -9,6 +9,7 @@ import type { AuthenticatedUserContext } from '../common/types/auth-user-context
 import { GetMyStudentProfileResponseDto } from './dto/student-profile.dto';
 import { UpdateAcademicInformationDto } from './dto/update-academic-information.dto';
 import { UpdateProfessionalSkillsDto } from './dto/update-professional-skills.dto';
+import { ProfileNotFoundError } from './student-profile.errors';
 import {
   StudentProfileRepository,
   StudentProfileWithRelations,
@@ -279,6 +280,6 @@ export class StudentProfileService {
   }
 
   private isProfileNotFoundError(error: unknown): boolean {
-    return error instanceof Error && error.message === 'PROFILE_NOT_FOUND';
+    return error instanceof ProfileNotFoundError;
   }
 }

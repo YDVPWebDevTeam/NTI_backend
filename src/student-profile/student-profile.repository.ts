@@ -11,6 +11,7 @@ import {
 } from '../infrastructure/database';
 import { UpdateAcademicInformationDto } from './dto/update-academic-information.dto';
 import { UpdateProfessionalSkillsDto } from './dto/update-professional-skills.dto';
+import { ProfileNotFoundError } from './student-profile.errors';
 
 const studentProfileInclude = {
   user: {
@@ -227,7 +228,7 @@ export class StudentProfileRepository extends BaseRepository<
     });
 
     if (!profile) {
-      throw new Error('PROFILE_NOT_FOUND');
+      throw new ProfileNotFoundError();
     }
 
     await client.studentProfile.update({
@@ -305,7 +306,7 @@ export class StudentProfileRepository extends BaseRepository<
     const profile = await this.findByUserIdWithRelations(userId, db);
 
     if (!profile) {
-      throw new Error('PROFILE_NOT_FOUND');
+      throw new ProfileNotFoundError();
     }
 
     return profile;

@@ -116,6 +116,7 @@ describe('AuthService', () => {
     email: 'student@example.com',
     role: UserRole.STUDENT,
     status: UserStatus.PENDING,
+    organizationId: null,
   };
   const transactionClient = {} as PrismaDbClient;
 
@@ -454,6 +455,7 @@ describe('AuthService', () => {
         email: 'admin@nti.sk',
         role: UserRole.SUPER_ADMIN,
         status: UserStatus.PENDING,
+        organizationId: null,
       },
     });
   });

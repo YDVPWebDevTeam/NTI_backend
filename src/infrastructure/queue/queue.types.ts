@@ -10,43 +10,56 @@ export const EMAIL_JOBS = {
   ORG_PENDING_REVIEW: 'org-pending-review',
   ORG_APPROVED: 'org-approved',
   ORG_REJECTED: 'org-rejected',
+  ORG_INVITE: 'org-invite',
   TEAM_INVITATION: 'team-invitation',
 } as const;
 
 export type EmailJobName = (typeof EMAIL_JOBS)[keyof typeof EMAIL_JOBS];
-
 export interface EmailJobData {
   [EMAIL_JOBS.PASSWORD_RESET]: { userId: string; email: string; token: string };
+
   [EMAIL_JOBS.USER_CONFIRMATION]: { email: string; token: string };
+
   [EMAIL_JOBS.TEAM_CONFIRMATION]: {
     email: string;
     teamName: string;
     token: string;
   };
+
   [EMAIL_JOBS.SYSTEM_INVITE_SENT]: {
     email: string;
     token: string;
     roleToAssign: UserRole;
   };
+
   [EMAIL_JOBS.TEAM_INVITATION]: {
     email: string;
     teamName: string;
     token: string;
   };
+
   [EMAIL_JOBS.ORG_PENDING_REVIEW]: {
     organizationId: string;
     adminEmails: string[];
   };
+
   [EMAIL_JOBS.ORG_APPROVED]: {
     organizationId: string;
     organizationName: string;
     ownerEmails: string[];
   };
+
   [EMAIL_JOBS.ORG_REJECTED]: {
     organizationId: string;
     organizationName: string;
     ownerEmails: string[];
     rejectionReason: string;
+  };
+
+  [EMAIL_JOBS.ORG_INVITE]: {
+    email: string;
+    token: string;
+    organizationName: string;
   };
 }
 

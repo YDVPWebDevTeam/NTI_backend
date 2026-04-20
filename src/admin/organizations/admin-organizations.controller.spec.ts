@@ -34,6 +34,7 @@ describe('AdminOrganizationsController', () => {
       email: 'admin@example.com',
       role: UserRole.ADMIN,
       status: UserStatus.ACTIVE,
+      organizationId: null,
     };
 
     adminOrganizationsService.updateStatus.mockResolvedValue({

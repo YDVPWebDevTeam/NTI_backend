@@ -33,6 +33,7 @@ describe('AdminOrgInvitesService', () => {
     email: 'admin@example.com',
     role: UserRole.ADMIN,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
 
   const actorStudent: AuthenticatedUserContext = {
@@ -40,6 +41,7 @@ describe('AdminOrgInvitesService', () => {
     email: 'student@example.com',
     role: UserRole.STUDENT,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
 
   beforeEach(() => {

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { DegreeLevel, StudentStudyMode } from '../../../generated/prisma/enums';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsEnum,
@@ -79,6 +80,8 @@ export class UpdateAcademicInformationDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
   @MaxLength(100, { each: true })
   relevantCourses?: string[];
 

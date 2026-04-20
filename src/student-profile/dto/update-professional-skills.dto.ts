@@ -70,6 +70,7 @@ export class ProfessionalProjectInputDto {
   @ApiPropertyOptional({ type: [String], example: ['React', 'TypeScript'] })
   @IsOptional()
   @IsArray()
+  @IsString({ each: true })
   @MaxLength(100, { each: true })
   technologies?: string[];
 

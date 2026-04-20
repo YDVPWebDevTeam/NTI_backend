@@ -1,30 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform, type TransformFnParams } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
-
-function toOptionalBoolean(value: unknown): unknown {
-  if (value === undefined || value === null || value === '') {
-    return undefined;
-  }
-
-  if (typeof value === 'boolean') {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-
-    if (normalized === 'true') {
-      return true;
-    }
-
-    if (normalized === 'false') {
-      return false;
-    }
-  }
-
-  return value;
-}
+import { toOptionalBoolean } from '../../../common/validation/to-optional-boolean.transformer';
 
 export class ListAcademicStructureQueryDto {
   @ApiPropertyOptional({ example: 'nitra' })
@@ -39,7 +16,7 @@ export class ListAcademicStructureQueryDto {
     description: 'When true, inactive records are also returned.',
   })
   @IsOptional()
-  @Transform(({ value }: TransformFnParams) => toOptionalBoolean(value))
+  @Transform(({ value }) => toOptionalBoolean(value))
   @IsBoolean()
   includeInactive?: boolean;
 }

@@ -2,12 +2,18 @@ import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue, JobsOptions } from 'bullmq';
 import { QUEUE_NAMES } from './queue.constants';
-import { EmailJobData, EmailJobName } from './queue.types';
+import type {
+  EmailJobData,
+  EmailJobName,
+  PdfJobData,
+  PdfJobName,
+} from './queue.types';
 
 @Injectable()
 export class QueueService {
   constructor(
     @InjectQueue(QUEUE_NAMES.EMAIL) private readonly emailQueue: Queue,
+    @InjectQueue(QUEUE_NAMES.PDF) private readonly pdfQueue: Queue,
   ) {}
 
   addEmail<K extends EmailJobName>(
@@ -16,5 +22,23 @@ export class QueueService {
     opts?: JobsOptions,
   ) {
     return this.emailQueue.add(jobName, data, opts);
+  }
+
+  async removeEmailJob(jobId: string): Promise<void> {
+    const job = await this.emailQueue.getJob(jobId);
+
+    if (!job) {
+      return;
+    }
+
+    await job.remove();
+  }
+
+  addPdf<K extends PdfJobName>(
+    jobName: K,
+    data: PdfJobData[K],
+    opts?: JobsOptions,
+  ) {
+    return this.pdfQueue.add(jobName, data, opts);
   }
 }

@@ -8,15 +8,26 @@ import {
 
 export class RegisterViaInviteDto {
   @ApiProperty({
-    description: 'Display name of the invited user.',
-    example: 'Jan Novak',
+    description: 'First name of the invited user.',
+    example: 'Jan',
     minLength: 2,
     maxLength: 50,
   })
   @IsString()
   @MinLength(2)
   @MaxLength(50)
-  name!: string;
+  firstName!: string;
+
+  @ApiProperty({
+    description: 'Last name of the invited user.',
+    example: 'Novak',
+    minLength: 2,
+    maxLength: 50,
+  })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(50)
+  lastName!: string;
 
   @ApiProperty({
     description: 'Invitation token from the team invite link.',

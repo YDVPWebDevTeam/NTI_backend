@@ -1,10 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '../config';
-import { QueueService } from './queue.service.js';
-import { QUEUE_NAMES } from './queue.constants.js';
-import { EmailProcessor } from './processors/email.processor.js';
-import { MailerModule } from '../mailer/mailer.module';
+import { QueueService } from './queue.service';
+import { QUEUE_NAMES } from './queue.constants';
+import { createQueueConnection } from './queue.connection';
 
 const DEFAULT_JOB_OPTIONS = {
   attempts: 3,
@@ -16,22 +15,20 @@ const DEFAULT_JOB_OPTIONS = {
 @Global()
 @Module({
   imports: [
-    MailerModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        connection: {
-          host: config.redisHost,
-          port: config.redisPort,
-          maxRetriesPerRequest: null,
-        },
+        connection: createQueueConnection(config),
         defaultJobOptions: DEFAULT_JOB_OPTIONS,
       }),
     }),
-    BullModule.registerQueue({ name: QUEUE_NAMES.EMAIL }),
+    BullModule.registerQueue(
+      { name: QUEUE_NAMES.EMAIL },
+      { name: QUEUE_NAMES.PDF },
+    ),
   ],
-  providers: [QueueService, EmailProcessor],
-  exports: [QueueService],
+  providers: [QueueService],
+  exports: [QueueService, BullModule],
 })
 export class QueueModule {}

@@ -28,9 +28,21 @@ enum UserStatus {
   SUSPENDED
 }
 
+enum UploadStatus {
+  PENDING
+  UPLOADED
+  FAILED
+}
+
+enum FileVisibility {
+  PRIVATE
+  PUBLIC
+}
+
 model User {
   id                 String  @id @default(uuid())
-  name               String
+  firstName          String
+  lastName           String
   email              String  @unique
   passwordHash       String
   mustChangePassword Boolean @default(false)
@@ -56,12 +68,44 @@ model User {
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
 
+  uploads UploadedFile[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
   @@index([role, status])
   @@index([status, createdAt])
+}
+
+model UploadedFile {
+  id String @id @default(uuid())
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  key          String @unique
+  originalName String
+  mimeType     String
+  size         Int
+
+  purpose    String?
+  entityType String?
+  entityId   String?
+  visibility FileVisibility @default(PRIVATE)
+
+  status UploadStatus @default(PENDING)
+
+  uploadUrlExpiresAt DateTime
+  uploadedAt         DateTime?
+  failedAt           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, status])
+  @@index([status, uploadUrlExpiresAt])
+  @@index([entityType, entityId])
 }
 
 model TeamMember {

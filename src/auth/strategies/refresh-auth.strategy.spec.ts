@@ -27,7 +27,6 @@ describe('RefreshJwtStrategy', () => {
   let strategy: RefreshJwtStrategy;
   let userService: {
     findById: jest.Mock;
-    bareSafeUser: jest.Mock;
   };
   let refreshTokenService: {
     findByTokenId: jest.Mock;
@@ -41,6 +40,7 @@ describe('RefreshJwtStrategy', () => {
     email: 'student@example.com',
     role: UserRole.STUDENT,
     status: UserStatus.PENDING,
+    organizationId: null,
   };
 
   const refreshTokenRecord = {
@@ -53,7 +53,6 @@ describe('RefreshJwtStrategy', () => {
   beforeEach(() => {
     userService = {
       findById: jest.fn().mockResolvedValue(user),
-      bareSafeUser: jest.fn().mockReturnValue(user),
     };
     refreshTokenService = {
       findByTokenId: jest.fn().mockResolvedValue(refreshTokenRecord),

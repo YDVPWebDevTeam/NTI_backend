@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, RequestMethod } from '@nestjs/common';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
 import { ConfigModule, ConfigService } from '../config';
 
@@ -29,6 +29,7 @@ import { ConfigModule, ConfigService } from '../config';
           }),
           redact: ['req.headers.authorization', 'req.headers.cookie'],
         },
+        forRoutes: [{ path: '/{*path}', method: RequestMethod.ALL }],
       }),
     }),
   ],

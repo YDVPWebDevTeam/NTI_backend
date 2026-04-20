@@ -2,7 +2,8 @@ import { Logger } from '@nestjs/common';
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { QUEUE_NAMES } from '../queue.constants';
-import { EMAIL_JOBS, EmailJobData, EmailJobName } from '../queue.types';
+import { EMAIL_JOBS } from '../queue.types';
+import type { EmailJobData, EmailJobName } from '../queue.types';
 import { MailerService } from '../../mailer/mailer.service';
 
 type EmailJobHandlers = {
@@ -60,6 +61,50 @@ export class EmailProcessor extends WorkerHost {
             data.organizationId,
           ),
         ),
+      );
+    },
+    [EMAIL_JOBS.ORG_APPROVED]: async (data) => {
+      this.logger.log(`Organization approved: ${data.organizationId}`);
+
+      if (!data.ownerEmails || data.ownerEmails.length === 0) {
+        this.logger.warn('No company owners found for ORG_APPROVED email');
+        return;
+      }
+
+      await Promise.allSettled(
+        data.ownerEmails.map((ownerEmail) =>
+          this.mailerService.sendOrgApprovedEmail(
+            ownerEmail,
+            data.organizationId,
+            data.organizationName,
+          ),
+        ),
+      );
+    },
+    [EMAIL_JOBS.ORG_REJECTED]: async (data) => {
+      this.logger.log(`Organization rejected: ${data.organizationId}`);
+
+      if (!data.ownerEmails || data.ownerEmails.length === 0) {
+        this.logger.warn('No company owners found for ORG_REJECTED email');
+        return;
+      }
+
+      await Promise.allSettled(
+        data.ownerEmails.map((ownerEmail) =>
+          this.mailerService.sendOrgRejectedEmail(
+            ownerEmail,
+            data.organizationId,
+            data.organizationName,
+            data.rejectionReason,
+          ),
+        ),
+      );
+    },
+    [EMAIL_JOBS.ORG_INVITE]: async (data) => {
+      await this.mailerService.sendOrgInviteEmail(
+        data.email,
+        data.token,
+        data.organizationName,
       );
     },
   };

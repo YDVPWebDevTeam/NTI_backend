@@ -16,6 +16,8 @@ describe('EmailProcessor', () => {
     sendTeamConfirm: jest.Mock;
     sendPasswordResetEmail: jest.Mock;
     sendOrgPendingReviewEmail: jest.Mock;
+    sendOrgApprovedEmail: jest.Mock;
+    sendOrgRejectedEmail: jest.Mock;
   };
 
   beforeEach(() => {
@@ -24,6 +26,8 @@ describe('EmailProcessor', () => {
       sendTeamConfirm: jest.fn().mockResolvedValue(undefined),
       sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
       sendOrgPendingReviewEmail: jest.fn().mockResolvedValue(undefined),
+      sendOrgApprovedEmail: jest.fn().mockResolvedValue(undefined),
+      sendOrgRejectedEmail: jest.fn().mockResolvedValue(undefined),
     };
 
     processor = new EmailProcessor(mailerService as unknown as MailerService);
@@ -113,6 +117,80 @@ describe('EmailProcessor', () => {
       2,
       'admin2@example.com',
       'org-1',
+    );
+  });
+
+  it('sends ORG_APPROVED to all provided owner emails', async () => {
+    const job: EmailProcessorJob = {
+      id: 'job-4',
+      name: EMAIL_JOBS.ORG_APPROVED,
+      data: {
+        organizationId: 'org-1',
+        organizationName: 'Acme Labs s.r.o.',
+        ownerEmails: ['owner1@example.com', 'owner2@example.com'],
+      },
+    } as Job<
+      {
+        organizationId: string;
+        organizationName: string;
+        ownerEmails: string[];
+      },
+      void,
+      typeof EMAIL_JOBS.ORG_APPROVED
+    >;
+
+    await processor.process(job);
+
+    expect(mailerService.sendOrgApprovedEmail).toHaveBeenNthCalledWith(
+      1,
+      'owner1@example.com',
+      'org-1',
+      'Acme Labs s.r.o.',
+    );
+    expect(mailerService.sendOrgApprovedEmail).toHaveBeenNthCalledWith(
+      2,
+      'owner2@example.com',
+      'org-1',
+      'Acme Labs s.r.o.',
+    );
+  });
+
+  it('sends ORG_REJECTED to all provided owner emails', async () => {
+    const job: EmailProcessorJob = {
+      id: 'job-5',
+      name: EMAIL_JOBS.ORG_REJECTED,
+      data: {
+        organizationId: 'org-1',
+        organizationName: 'Acme Labs s.r.o.',
+        ownerEmails: ['owner1@example.com', 'owner2@example.com'],
+        rejectionReason: 'Missing legal documents',
+      },
+    } as Job<
+      {
+        organizationId: string;
+        organizationName: string;
+        ownerEmails: string[];
+        rejectionReason: string;
+      },
+      void,
+      typeof EMAIL_JOBS.ORG_REJECTED
+    >;
+
+    await processor.process(job);
+
+    expect(mailerService.sendOrgRejectedEmail).toHaveBeenNthCalledWith(
+      1,
+      'owner1@example.com',
+      'org-1',
+      'Acme Labs s.r.o.',
+      'Missing legal documents',
+    );
+    expect(mailerService.sendOrgRejectedEmail).toHaveBeenNthCalledWith(
+      2,
+      'owner2@example.com',
+      'org-1',
+      'Acme Labs s.r.o.',
+      'Missing legal documents',
     );
   });
 });

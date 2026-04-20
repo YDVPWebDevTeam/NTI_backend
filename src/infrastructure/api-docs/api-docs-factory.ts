@@ -6,11 +6,33 @@ type Decorator = MethodDecorator & ClassDecorator & PropertyDecorator;
 type ApiDecoratorConfig = {
   summary: string;
   description?: string;
-  body?: Type<unknown>;
+  body?:
+    | Type<unknown>
+    | {
+        type: Type<unknown>;
+        description?: string;
+        examples?: Record<
+          string,
+          {
+            summary?: string;
+            description?: string;
+            value: unknown;
+          }
+        >;
+      };
   successResponse?: {
     status: number;
     type?: Type<unknown>;
+    isArray?: boolean;
     description?: string;
+    examples?: Record<
+      string,
+      {
+        summary?: string;
+        description?: string;
+        value: unknown;
+      }
+    >;
   };
   errors?: Decorator[];
   extraDecorators?: Decorator[];
@@ -24,13 +46,35 @@ export function createApiDecorator(
       summary: config.summary,
       description: config.description,
     }),
-    ...(config.body ? [ApiBody({ type: config.body })] : []),
+    ...(config.body
+      ? [
+          ApiBody(
+            'type' in config.body
+              ? {
+                  type: config.body.type,
+                  description: config.body.description,
+                  examples: config.body.examples,
+                }
+              : { type: config.body },
+          ),
+        ]
+      : []),
     ...(config.successResponse
       ? [
           ApiResponse({
             status: config.successResponse.status,
             type: config.successResponse.type,
+            isArray: config.successResponse.isArray,
             description: config.successResponse.description,
+            ...(config.successResponse.examples
+              ? {
+                  content: {
+                    'application/json': {
+                      examples: config.successResponse.examples,
+                    },
+                  },
+                }
+              : {}),
           }),
         ]
       : []),

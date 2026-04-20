@@ -1,15 +1,14 @@
 import 'dotenv/config';
 import argon2 from 'argon2';
 import { Client } from 'pg';
-import type { SeedContext, SeedTask } from './types';
+import type { SeedContext, SeedTask } from '../types.ts';
 
 async function loadSeeds(): Promise<SeedTask[]> {
-  const { superadminSeed } =
-    (await import('./seeds/001-superadmin.seed.ts')) as {
-      superadminSeed: SeedTask;
-    };
+  const { superadminSeed } = (await import('./001-superadmin.seed.ts')) as {
+    superadminSeed: SeedTask;
+  };
 
-  const { callsSeed } = (await import('./seeds/002-calls.seed.ts')) as {
+  const { callsSeed } = (await import('./002-calls.seed.ts')) as {
     callsSeed: SeedTask;
   };
 

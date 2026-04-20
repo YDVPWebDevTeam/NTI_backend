@@ -54,7 +54,7 @@ export interface EmailJobData {
     organizationName: string;
     ownerEmails: string[];
     rejectionReason: string;
-  }; // ← ВОТ ЭТОГО НЕ ХВАТАЛО
+  };
 
   [EMAIL_JOBS.ORG_INVITE]: {
     email: string;

@@ -16,12 +16,6 @@ export class OrganizationInviteResponseDto {
   email!: string;
 
   @ApiProperty({
-    description: 'Token used by the invited employee to accept the invitation.',
-    example: 'ebd65ee776169dee89e5025d5a31498e37b40d3bf36e74c7df1cf8f1b338b052',
-  })
-  token!: string;
-
-  @ApiProperty({
     description: 'Role assigned to the user after accepting the invitation.',
     enum: UserRole,
     example: UserRole.COMPANY_EMPLOYEE,

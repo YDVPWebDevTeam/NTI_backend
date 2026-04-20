@@ -102,6 +102,11 @@ export const envSchema = z.object({
     .int()
     .positive()
     .default(72),
+  ORGANIZATION_INVITATION_EXPIRATION_DAYS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(7),
   PASSWORD_RESET_EXPIRATION_MINUTES: z.coerce
     .number()
     .int()

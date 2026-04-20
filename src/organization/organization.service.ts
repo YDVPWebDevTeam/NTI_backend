@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { randomBytes } from 'node:crypto';
 import { OrganizationRepository } from './organization.repository';
 import { UserRepository } from 'src/user/user.repository';
 import { EMAIL_JOBS, QueueService } from 'src/infrastructure/queue';
@@ -14,9 +13,8 @@ import { Organization, Prisma } from 'generated/prisma/client';
 import { OrganizationInviteRepository } from './organization-invitation.repository';
 import { CreateOrganizationInviteDto } from './dto/create-organization-invite.dto';
 import { InvitationStatus, UserRole } from 'generated/prisma/enums';
-
-const ORG_INVITE_EXPIRATION_DAYS = 7;
-const ORG_INVITE_TOKEN_BYTES = 32;
+import { ConfigService } from 'src/infrastructure/config';
+import { HashingService } from 'src/infrastructure/hashing';
 
 @Injectable()
 export class OrganizationService {
@@ -25,6 +23,8 @@ export class OrganizationService {
     private readonly userRepo: UserRepository,
     private readonly queueService: QueueService,
     private readonly organizationInviteRepository: OrganizationInviteRepository,
+    private readonly hashingService: HashingService,
+    private readonly configService: ConfigService,
   ) {}
 
   private mapCreateDto(
@@ -123,24 +123,21 @@ export class OrganizationService {
       throw new ConflictException('Active organization invite already exists');
     }
 
-    const token = randomBytes(ORG_INVITE_TOKEN_BYTES).toString('hex');
-    const expiresAt = new Date(
-      now.getTime() + ORG_INVITE_EXPIRATION_DAYS * 24 * 60 * 60 * 1000,
-    );
-
     const invitation = await this.organizationInviteRepository.create({
       email: dto.email,
-      token,
+      token: this.generateToken(),
       status: InvitationStatus.PENDING,
       organizationId,
       roleToAssign: UserRole.COMPANY_EMPLOYEE,
-      expiresAt,
+      expiresAt: this.resolveExpirationDate(),
     });
+
+    const { token, ...response } = invitation;
 
     try {
       await this.queueService.addEmail(EMAIL_JOBS.ORG_INVITE, {
         email: invitation.email,
-        token: invitation.token,
+        token,
         organizationName: organization.name,
       });
     } catch (error) {
@@ -148,6 +145,23 @@ export class OrganizationService {
       throw error;
     }
 
-    return invitation;
+    return response;
+  }
+
+  private generateToken(): string {
+    return this.hashingService.generateHexToken(
+      this.configService.tokenByteLength,
+    );
+  }
+
+  private resolveExpirationDate(): Date {
+    return new Date(
+      Date.now() +
+        this.configService.organizationInvitationExpirationDays *
+          24 *
+          60 *
+          60 *
+          1000,
+    );
   }
 }

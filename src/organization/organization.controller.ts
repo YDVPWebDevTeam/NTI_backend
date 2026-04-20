@@ -1,4 +1,11 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { OrganizationService } from './organization.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -34,7 +41,7 @@ export class OrganizationController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.COMPANY_OWNER)
   async createInvite(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateOrganizationInviteDto,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<OrganizationInviteResponseDto> {

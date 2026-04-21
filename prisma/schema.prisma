@@ -66,6 +66,63 @@ enum ApplicationStatus {
   ARCHIVED
 }
 
+enum DegreeLevel {
+  BACHELOR
+  MASTER
+  PHD
+  OTHER
+}
+
+enum StudentStudyMode {
+  FULL_TIME
+  PART_TIME
+}
+
+enum StudentSkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum StudentFocusArea {
+  SOFTWARE_DEVELOPMENT
+  AI_AND_DATA
+  WEB_APPLICATIONS
+  GAME_DEVELOPMENT
+  IOT_AND_EMBEDDED
+  MOBILE_DEVELOPMENT
+  DESKTOP_DEVELOPMENT
+  QA_AND_TESTING
+  DEVOPS_AND_INFRASTRUCTURE
+  UI_UX_DESIGN
+  PRODUCT_PROJECT_MANAGEMENT
+}
+
+enum StudentPreferredRole {
+  FRONTEND
+  BACKEND
+  FULLSTACK
+  MOBILE
+  AI_DATA
+  QA
+  DEVOPS
+  EMBEDDED
+  GAME_DEV
+  UI_UX
+  PRODUCT_MANAGER
+  TEAM_LEAD
+}
+
+enum StudentSoftSkill {
+  TEAMWORK
+  COMMUNICATION
+  LEADERSHIP
+  PRESENTATION
+  PROBLEM_SOLVING
+  TIME_MANAGEMENT
+  PROJECT_COORDINATION
+}
+
 model User {
   id                 String  @id @default(uuid())
   firstName          String
@@ -94,6 +151,8 @@ model User {
 
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  studentProfile StudentProfile?
 
   uploads UploadedFile[]
 
@@ -129,8 +188,10 @@ model UploadedFile {
   uploadedAt         DateTime?
   failedAt           DateTime?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  academicEvidenceFor StudentProfile[] @relation("StudentAcademicEvidence")
+  cvFor               StudentProfile[] @relation("StudentCvFile")
 
   @@index([ownerId, status])
   @@index([status, uploadUrlExpiresAt])
@@ -352,4 +413,155 @@ model SystemInvitation {
 
   @@index([status, expiresAt, email])
   @@index([email, roleToAssign, status, expiresAt])
+}
+
+model University {
+  id        String  @id @default(uuid())
+  name      String  @unique
+  shortName String? @unique
+  website   String?
+  city      String?
+  country   String? @default("sk")
+  isActive  Boolean @default(true)
+
+  faculties Faculty[]
+  students  StudentProfile[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model Faculty {
+  id           String     @id @default(uuid())
+  universityId String
+  university   University @relation(fields: [universityId], references: [id], onDelete: Cascade)
+
+  name      String
+  shortName String?
+  isActive  Boolean @default(true)
+
+  specializations Specialization[]
+  students        StudentProfile[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([universityId, name])
+  @@index([universityId, isActive])
+}
+
+model Specialization {
+  id        String  @id @default(uuid())
+  facultyId String
+  faculty   Faculty @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+
+  name        String
+  code        String?
+  degreeLabel String?
+  isActive    Boolean @default(true)
+
+  students StudentProfile[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([facultyId, name])
+  @@index([facultyId, isActive])
+}
+
+model StudentProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  universityId String
+  university   University @relation(fields: [universityId], references: [id], onDelete: Restrict)
+
+  facultyId String
+  faculty   Faculty @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+
+  specializationId String
+  specialization   Specialization @relation(fields: [specializationId], references: [id], onDelete: Restrict)
+
+  degreeLevel DegreeLevel
+  studyMode   StudentStudyMode?
+  studyYear   Int
+
+  expectedGraduationYear Int?
+
+  hasTransferredSubjects   Boolean?
+  transferredSubjectsCount Int?
+  profileSubjectsAverage   Float?
+
+  relevantCourses      String[]
+  academicAchievements String?
+
+  academicEvidenceFileId String?
+  academicEvidenceFile   UploadedFile? @relation("StudentAcademicEvidence", fields: [academicEvidenceFileId], references: [id], onDelete: SetNull)
+
+  academicDeclarationAcceptedAt DateTime?
+  profileCompletedAt            DateTime?
+
+  focusAreas     StudentFocusArea[]
+  preferredRoles StudentPreferredRole[]
+  softSkills     StudentSoftSkill[]
+
+  githubUrl    String?
+  linkedinUrl  String?
+  portfolioUrl String?
+  bio          String?
+
+  cvFileId String?
+  cvFile   UploadedFile? @relation("StudentCvFile", fields: [cvFileId], references: [id], onDelete: SetNull)
+
+  skills   StudentSkill[]
+  projects StudentProject[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([universityId])
+  @@index([facultyId])
+  @@index([specializationId])
+  @@index([degreeLevel, studyYear])
+  @@index([profileCompletedAt])
+}
+
+model StudentSkill {
+  id String @id @default(uuid())
+
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  name             String
+  level            StudentSkillLevel
+  experienceMonths Int?
+  isPrimary        Boolean           @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentProfileId])
+  @@index([studentProfileId, level])
+  @@index([name])
+}
+
+model StudentProject {
+  id String @id @default(uuid())
+
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  title        String
+  description  String
+  role         String
+  technologies String[]
+  projectUrl   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentProfileId])
 }

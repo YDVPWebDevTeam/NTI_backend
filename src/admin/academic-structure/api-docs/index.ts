@@ -1,0 +1,12 @@
+export { CreateAdminFacultyApi } from './admin-academic-structure-api-docs.decorators';
+export { CreateAdminSpecializationApi } from './admin-academic-structure-api-docs.decorators';
+export { CreateAdminUniversityApi } from './admin-academic-structure-api-docs.decorators';
+export { DeleteAdminFacultyApi } from './admin-academic-structure-api-docs.decorators';
+export { DeleteAdminSpecializationApi } from './admin-academic-structure-api-docs.decorators';
+export { DeleteAdminUniversityApi } from './admin-academic-structure-api-docs.decorators';
+export { GetAdminFacultiesApi } from './admin-academic-structure-api-docs.decorators';
+export { GetAdminSpecializationsApi } from './admin-academic-structure-api-docs.decorators';
+export { GetAdminUniversitiesApi } from './admin-academic-structure-api-docs.decorators';
+export { UpdateAdminFacultyApi } from './admin-academic-structure-api-docs.decorators';
+export { UpdateAdminSpecializationApi } from './admin-academic-structure-api-docs.decorators';
+export { UpdateAdminUniversityApi } from './admin-academic-structure-api-docs.decorators';

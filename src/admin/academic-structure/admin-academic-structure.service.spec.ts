@@ -57,6 +57,7 @@ describe('AdminAcademicStructureService', () => {
     email: 'admin@example.com',
     role: UserRole.ADMIN,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
 
   const nonAdminActor: AuthenticatedUserContext = {
@@ -64,6 +65,7 @@ describe('AdminAcademicStructureService', () => {
     email: 'student@example.com',
     role: UserRole.STUDENT,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
 
   const prismaKnownError = (code: 'P2002' | 'P2003' | 'P2025') =>

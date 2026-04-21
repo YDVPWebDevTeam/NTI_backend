@@ -31,6 +31,7 @@ describe('AdminInvitesController', () => {
       email: 'admin@example.com',
       role: UserRole.ADMIN,
       status: UserStatus.ACTIVE,
+      organizationId: null,
     };
 
     adminInvitesService.createInvite.mockResolvedValue({

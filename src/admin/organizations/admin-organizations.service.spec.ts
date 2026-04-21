@@ -47,6 +47,7 @@ describe('AdminOrganizationsService', () => {
     email: 'admin@example.com',
     role: UserRole.ADMIN,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
 
   const actorStudent: AuthenticatedUserContext = {
@@ -54,6 +55,7 @@ describe('AdminOrganizationsService', () => {
     email: 'student@example.com',
     role: UserRole.STUDENT,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
 
   const pendingOrganization = {

@@ -2,6 +2,7 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma, type User } from '../../generated/prisma/client';
 import { UserRepository } from './user.repository';
 import { PrismaDbClient } from '../infrastructure/database';
+import { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
 
 @Injectable()
 export class UserService {
@@ -47,6 +48,16 @@ export class UserService {
 
   transaction<T>(fn: (db: PrismaDbClient) => Promise<T>): Promise<T> {
     return this.users.transaction(fn);
+  }
+
+  bareSafeUser(user: User): AuthenticatedUserContext {
+    return {
+      id: user.id,
+      email: user.email,
+      status: user.status,
+      role: user.role,
+      organizationId: user.organizationId,
+    };
   }
 
   private isUniqueConstraintError(error: unknown): error is { code: string } {

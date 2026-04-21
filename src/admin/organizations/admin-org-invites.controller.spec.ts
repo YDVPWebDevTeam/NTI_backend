@@ -23,6 +23,7 @@ describe('AdminOrgInvitesController', () => {
     email: 'admin@example.com',
     role: UserRole.ADMIN,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
 
   beforeEach(() => {

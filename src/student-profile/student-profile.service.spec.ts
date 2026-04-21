@@ -38,6 +38,7 @@ describe('StudentProfileService', () => {
     email: 'student@example.com',
     role: 'STUDENT',
     status: 'ACTIVE',
+    organizationId: null,
   };
 
   const baseProfile = () => ({

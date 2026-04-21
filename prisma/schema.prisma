@@ -39,6 +39,33 @@ enum FileVisibility {
   PUBLIC
 }
 
+enum ProgramType {
+  PROGRAM_A
+  PROGRAM_B
+}
+
+enum CallStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  FORMALLY_VERIFIED
+  EVALUATING
+  NEEDS_INFO
+  APPROVED
+  REJECTED
+  ONBOARDING
+  ACTIVE_PROJECT
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
 enum DegreeLevel {
   BACHELOR
   MASTER
@@ -129,6 +156,8 @@ model User {
 
   uploads UploadedFile[]
 
+  applicationsCreated Application[] @relation("ApplicationCreatedBy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -189,7 +218,8 @@ model Team {
 
   members TeamMember[]
 
-  invitations Invitation[]
+  invitations  Invitation[]
+  applications Application[]
 
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
@@ -198,6 +228,48 @@ model Team {
 
   @@index([leaderId])
   @@index([archivedAt])
+}
+
+model Call {
+  id String @id @default(uuid())
+
+  type     ProgramType
+  title    String
+  status   CallStatus  @default(DRAFT)
+  opensAt  DateTime?
+  closesAt DateTime?
+
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, status])
+  @@index([status, opensAt, closesAt])
+}
+
+model Application {
+  id String @id @default(uuid())
+
+  callId String
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  createdById String
+  createdBy   User   @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
+
+  status      ApplicationStatus @default(DRAFT)
+  submittedAt DateTime?
+  decidedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([callId, status])
+  @@index([teamId, status])
+  @@index([createdById, status])
 }
 
 enum InvitationStatus {

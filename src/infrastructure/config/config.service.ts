@@ -185,6 +185,10 @@ export class ConfigService {
     return this.env.SYSTEM_INVITATION_EXPIRATION_HOURS;
   }
 
+  get organizationInvitationExpirationDays(): number {
+    return this.env.ORGANIZATION_INVITATION_EXPIRATION_DAYS;
+  }
+
   get forcePasswordChangeTokenExpirationMinutes(): number {
     return this.env.FORCE_PASSWORD_CHANGE_TOKEN_EXPIRATION_MINUTES;
   }

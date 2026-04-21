@@ -36,18 +36,21 @@ describe('AdminUsersService', () => {
     email: 'admin@example.com',
     role: UserRole.ADMIN,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
   const actorSuperAdmin: AuthenticatedUserContext = {
     id: 'super-admin-1',
     email: 'super-admin@example.com',
     role: UserRole.SUPER_ADMIN,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
   const actorStudent: AuthenticatedUserContext = {
     id: 'student-1',
     email: 'student@example.com',
     role: UserRole.STUDENT,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
   const targetUser = {
     id: 'user-1',
@@ -117,12 +120,14 @@ describe('AdminUsersService', () => {
         email: targetUser.email,
         role: targetUser.role,
         status: targetUser.status,
+        organizationId: null,
       },
       {
         id: 'user-2',
         email: 'user-2@example.com',
         role: UserRole.COMPANY_OWNER,
         status: targetUser.status,
+        organizationId: null,
       },
     ]);
   });
@@ -146,6 +151,7 @@ describe('AdminUsersService', () => {
       email: targetUser.email,
       role: targetUser.role,
       status: targetUser.status,
+      organizationId: null,
     });
   });
 
@@ -193,6 +199,7 @@ describe('AdminUsersService', () => {
       email: targetUser.email,
       role: targetUser.role,
       status: UserStatus.SUSPENDED,
+      organizationId: null,
     });
   });
 
@@ -299,6 +306,7 @@ describe('AdminUsersService', () => {
       email: targetUser.email,
       role: UserRole.SUPER_ADMIN,
       status: UserStatus.ACTIVE,
+      organizationId: null,
     });
   });
 });

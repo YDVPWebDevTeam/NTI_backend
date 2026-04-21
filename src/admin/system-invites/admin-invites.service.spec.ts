@@ -64,12 +64,14 @@ describe('AdminInvitesService', () => {
     email: 'admin@example.com',
     role: UserRole.ADMIN,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
   const actorSuperAdmin: AuthenticatedUserContext = {
     id: 'super-admin-1',
     email: 'superadmin@example.com',
     role: UserRole.SUPER_ADMIN,
     status: UserStatus.ACTIVE,
+    organizationId: null,
   };
   type CreateSystemInvitationInput = {
     email: string;

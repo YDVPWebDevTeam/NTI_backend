@@ -40,6 +40,7 @@ describe('RefreshJwtStrategy', () => {
     email: 'student@example.com',
     role: UserRole.STUDENT,
     status: UserStatus.PENDING,
+    organizationId: null,
   };
 
   const refreshTokenRecord = {

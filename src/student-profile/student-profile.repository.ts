@@ -183,7 +183,7 @@ export class StudentProfileRepository extends BaseRepository<
       academicData.academicDeclarationAcceptedAt = new Date();
     }
 
-    const profile = await client.studentProfile.upsert({
+    return client.studentProfile.upsert({
       where: {
         userId,
       },
@@ -207,12 +207,13 @@ export class StudentProfileRepository extends BaseRepository<
         academicDeclarationAcceptedAt: dto.academicDeclarationAccepted
           ? new Date()
           : null,
+        focusAreas: [],
+        preferredRoles: [],
+        softSkills: [],
       },
       update: academicData,
       include: studentProfileInclude,
     });
-
-    return profile;
   }
 
   async replaceProfessionalSkills(
@@ -251,12 +252,6 @@ export class StudentProfileRepository extends BaseRepository<
       },
     });
 
-    await client.studentProject.deleteMany({
-      where: {
-        studentProfileId: profile.id,
-      },
-    });
-
     if (dto.skills.length > 0) {
       await client.studentSkill.createMany({
         data: dto.skills.map((skill) => ({
@@ -269,17 +264,27 @@ export class StudentProfileRepository extends BaseRepository<
       });
     }
 
-    if (dto.projects && dto.projects.length > 0) {
-      await client.studentProject.createMany({
-        data: dto.projects.map((project) => ({
+    if (dto.projects !== undefined) {
+      await client.studentProject.deleteMany({
+        where: {
           studentProfileId: profile.id,
-          title: project.title.trim(),
-          description: project.description.trim(),
-          role: project.role.trim(),
-          technologies: (project.technologies ?? []).map((item) => item.trim()),
-          projectUrl: project.projectUrl?.trim(),
-        })),
+        },
       });
+
+      if (dto.projects.length > 0) {
+        await client.studentProject.createMany({
+          data: dto.projects.map((project) => ({
+            studentProfileId: profile.id,
+            title: project.title.trim(),
+            description: project.description.trim(),
+            role: project.role.trim(),
+            technologies: (project.technologies ?? []).map((item) =>
+              item.trim(),
+            ),
+            projectUrl: project.projectUrl?.trim(),
+          })),
+        });
+      }
     }
 
     return this.findByUserIdWithRelationsOrThrow(userId, client);

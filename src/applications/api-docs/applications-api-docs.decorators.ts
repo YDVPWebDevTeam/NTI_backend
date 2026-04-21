@@ -1,4 +1,6 @@
 import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiConflictResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
@@ -19,12 +21,17 @@ export const CreateApplicationApi = () =>
       type: ApplicationDetailDto,
       description: 'Draft application was created.',
     },
+    extraDecorators: [ApiBearerAuth('access-token')],
     errors: [
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Request validation failed or the call is outside its application window.',
+      }),
       ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
       ApiConflictResponse({
         description:
-          'An active application for this team and call already exists.',
+          'An active application for this team and call already exists, or the call/team state does not allow creating a draft.',
       }),
       ApiNotFoundResponse({
         description: 'Related entities were not found.',
@@ -41,8 +48,12 @@ export const GetApplicationApi = () =>
       type: ApplicationDetailDto,
       description: 'Application details.',
     },
+    extraDecorators: [ApiBearerAuth('access-token')],
     errors: [
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description: 'Invalid application id format.',
+      }),
       ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],

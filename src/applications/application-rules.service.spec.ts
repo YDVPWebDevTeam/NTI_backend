@@ -39,7 +39,7 @@ describe('ApplicationRulesService', () => {
     );
   });
 
-  it('validates all rules and returns call and team on success', async () => {
+  it('validates all rules successfully when call and team are valid', async () => {
     const call = {
       id: 'call-1',
       type: 'PROGRAM_A',

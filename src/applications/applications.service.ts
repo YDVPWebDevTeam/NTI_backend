@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ApplicationStatus, UserRole } from '../../generated/prisma/enums';
+import { UserRole } from '../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { CreateApplicationDto } from './dto/create-application.dto';
@@ -13,19 +13,6 @@ import {
   ApplicationsRepository,
 } from './applications.repository';
 import { ApplicationRulesService } from './application-rules.service';
-
-const ACTIVE_APPLICATION_STATUSES: ApplicationStatus[] = [
-  ApplicationStatus.DRAFT,
-  ApplicationStatus.SUBMITTED,
-  ApplicationStatus.FORMALLY_VERIFIED,
-  ApplicationStatus.EVALUATING,
-  ApplicationStatus.NEEDS_INFO,
-  ApplicationStatus.APPROVED,
-  ApplicationStatus.ONBOARDING,
-  ApplicationStatus.ACTIVE_PROJECT,
-  ApplicationStatus.PAUSED,
-  ApplicationStatus.COMPLETED,
-];
 
 @Injectable()
 export class ApplicationsService {
@@ -38,24 +25,23 @@ export class ApplicationsService {
     user: AuthenticatedUserContext,
     dto: CreateApplicationDto,
   ): Promise<ApplicationDetailDto> {
-    // Validate all business rules (call status, team state, requester rights)
-    await this.applicationRulesService.validateApplicationCreationRules(
-      dto.callId,
-      dto.teamId,
-      user.id,
-    );
-
     let created: ApplicationWithRelations;
 
     try {
-      // Use transaction to prevent race conditions on duplicate check
+      // Use one transaction to prevent race conditions across validation, duplicate check, and create.
       created = await this.applicationsRepository.transaction(async (db) => {
+        await this.applicationRulesService.validateApplicationCreationRules(
+          dto.callId,
+          dto.teamId,
+          user.id,
+          db,
+        );
+
         // Double-check inside transaction for active duplicate
         const existing =
           await this.applicationsRepository.findActiveByTeamAndCall(
             dto.teamId,
             dto.callId,
-            ACTIVE_APPLICATION_STATUSES,
             db,
           );
 

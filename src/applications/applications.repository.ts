@@ -54,7 +54,6 @@ export class ApplicationsRepository extends BaseRepository<
   findActiveByTeamAndCall(
     teamId: string,
     callId: string,
-    activeStatuses: ApplicationStatus[],
     db?: PrismaDbClient,
   ): Promise<Pick<Application, 'id' | 'status'> | null> {
     return (db ?? this.prisma.client).application.findFirst({
@@ -62,7 +61,7 @@ export class ApplicationsRepository extends BaseRepository<
         teamId,
         callId,
         status: {
-          in: activeStatuses,
+          notIn: [ApplicationStatus.REJECTED, ApplicationStatus.ARCHIVED],
         },
       },
       select: {

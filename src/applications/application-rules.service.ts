@@ -5,17 +5,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Call, Team } from '../../generated/prisma/client';
+import type { Call } from '../../generated/prisma/client';
 import { CallStatus } from '../../generated/prisma/enums';
 import type { PrismaDbClient } from '../infrastructure/database';
-import { PrismaService } from '../infrastructure/database/prisma.service';
+import { TeamRepository } from '../team/team.repository';
 import { CallsRepository } from './calls.repository';
 
 @Injectable()
 export class ApplicationRulesService {
   constructor(
     private readonly callsRepository: CallsRepository,
-    private readonly prisma: PrismaService,
+    private readonly teamRepository: TeamRepository,
   ) {}
 
   /**
@@ -27,7 +27,7 @@ export class ApplicationRulesService {
     teamId: string,
     userId: string,
     db?: PrismaDbClient,
-  ): Promise<{ call: Call; team: Team }> {
+  ): Promise<void> {
     // 1. Verify call exists and is open with valid date window
     const call = await this.callsRepository.findById(callId, db);
     if (!call) {
@@ -37,9 +37,7 @@ export class ApplicationRulesService {
     this.validateCallOpenForApplications(call);
 
     // 2. Verify team exists and is not archived
-    const team = await (db ?? this.prisma.client).team.findUnique({
-      where: { id: teamId },
-    });
+    const team = await this.teamRepository.findPublicById(teamId, db);
 
     if (!team) {
       throw new NotFoundException('Team not found');
@@ -57,8 +55,6 @@ export class ApplicationRulesService {
         'Only team lead can submit applications on behalf of the team',
       );
     }
-
-    return { call, team };
   }
 
   private validateCallOpenForApplications(call: Call): void {

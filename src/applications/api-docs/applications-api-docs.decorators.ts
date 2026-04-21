@@ -12,7 +12,7 @@ export const CreateApplicationApi = () =>
   createApiDecorator({
     summary: 'Create draft application',
     description:
-      'Creates a draft application for a team in a target call. Additional eligibility and ownership checks will be expanded in subsequent implementation steps.',
+      'Creates a draft application for a team in a target call when the call is open and within its application window, the team is not archived, and the requester is the team lead.',
     body: CreateApplicationDto,
     successResponse: {
       status: 201,

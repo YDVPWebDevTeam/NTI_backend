@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { ApplicationStatus } from '../../../generated/prisma/enums';
+import { ApplicationStatus } from '../../../generated/prisma/enums';
 
 export class ApplicationDetailDto {
   @ApiProperty({ example: 'f6c90688-c973-40ca-8f3b-c55667cc6f77' })
@@ -14,7 +14,7 @@ export class ApplicationDetailDto {
   @ApiProperty({ example: 'b91e88db-5d96-443d-956b-ac4fdcbf95f7' })
   createdById!: string;
 
-  @ApiProperty({ enum: ['DRAFT', 'SUBMITTED', 'FORMALLY_VERIFIED'] })
+  @ApiProperty({ enum: ApplicationStatus })
   status!: ApplicationStatus;
 
   @ApiProperty({ required: false, nullable: true })

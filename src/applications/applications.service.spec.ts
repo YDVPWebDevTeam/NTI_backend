@@ -92,11 +92,10 @@ describe('ApplicationsService', () => {
 
     expect(
       applicationRulesService.validateApplicationCreationRules,
-    ).toHaveBeenCalledWith('call-1', 'team-1', 'user-1');
+    ).toHaveBeenCalledWith('call-1', 'team-1', 'user-1', transactionClient);
     expect(applicationsRepository.findActiveByTeamAndCall).toHaveBeenCalledWith(
       'team-1',
       'call-1',
-      expect.any(Array),
       transactionClient,
     );
     expect(applicationsRepository.createDraft).toHaveBeenCalledWith(
@@ -109,13 +108,15 @@ describe('ApplicationsService', () => {
   });
 
   it('throws conflict when active duplicate exists inside transaction', async () => {
+    const transactionClient = { tx: 'db-client' } as never;
+
     applicationsRepository.transaction.mockImplementation(
       (fn: (db: never) => Promise<unknown>) => {
         applicationsRepository.findActiveByTeamAndCall.mockResolvedValue({
           id: 'application-1',
           status: ApplicationStatus.DRAFT,
         });
-        return fn(null as never);
+        return fn(transactionClient);
       },
     );
 
@@ -125,6 +126,10 @@ describe('ApplicationsService', () => {
         { callId: 'call-1', teamId: 'team-1' },
       ),
     ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(
+      applicationRulesService.validateApplicationCreationRules,
+    ).toHaveBeenCalledWith('call-1', 'team-1', 'user-1', transactionClient);
   });
 
   it('maps prisma unique violation to conflict exception for concurrent creates', async () => {
@@ -294,6 +299,10 @@ describe('ApplicationsService', () => {
     const validationError = new ForbiddenException('Only team lead can submit');
     applicationRulesService.validateApplicationCreationRules.mockRejectedValue(
       validationError,
+    );
+
+    applicationsRepository.transaction.mockImplementation(
+      (fn: (db: never) => Promise<unknown>) => fn({ tx: 'db-client' } as never),
     );
 
     await expect(

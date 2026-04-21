@@ -23,5 +23,6 @@ import { TeamService } from './team.service';
     TeamLeadGuard,
     RolesGuard,
   ],
+  exports: [TeamRepository],
 })
 export class TeamModule {}

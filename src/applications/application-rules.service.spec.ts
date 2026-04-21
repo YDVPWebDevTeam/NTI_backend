@@ -2,8 +2,8 @@ jest.mock('./calls.repository', () => ({
   CallsRepository: class CallsRepository {},
 }));
 
-jest.mock('../infrastructure/database/prisma.service', () => ({
-  PrismaService: class PrismaService {},
+jest.mock('../team/team.repository', () => ({
+  TeamRepository: class TeamRepository {},
 }));
 
 import {
@@ -20,12 +20,8 @@ describe('ApplicationRulesService', () => {
   let callsRepository: {
     findById: jest.Mock;
   };
-  let prismaService: {
-    client: {
-      team: {
-        findUnique: jest.Mock;
-      };
-    };
+  let teamRepository: {
+    findPublicById: jest.Mock;
   };
 
   beforeEach(() => {
@@ -33,17 +29,13 @@ describe('ApplicationRulesService', () => {
       findById: jest.fn(),
     };
 
-    prismaService = {
-      client: {
-        team: {
-          findUnique: jest.fn(),
-        },
-      },
+    teamRepository = {
+      findPublicById: jest.fn(),
     };
 
     service = new ApplicationRulesService(
       callsRepository as never,
-      prismaService as never,
+      teamRepository as never,
     );
   });
 
@@ -65,15 +57,18 @@ describe('ApplicationRulesService', () => {
     };
 
     callsRepository.findById.mockResolvedValue(call);
-    prismaService.client.team.findUnique.mockResolvedValue(team);
+    teamRepository.findPublicById.mockResolvedValue(team);
 
-    const result = await service.validateApplicationCreationRules(
+    await service.validateApplicationCreationRules(
       'call-1',
       'team-1',
       'user-1',
     );
 
-    expect(result).toEqual({ call, team });
+    expect(teamRepository.findPublicById).toHaveBeenCalledWith(
+      'team-1',
+      undefined,
+    );
   });
 
   it('uses provided transaction client for team lookup when db is passed', async () => {
@@ -100,20 +95,19 @@ describe('ApplicationRulesService', () => {
     };
 
     callsRepository.findById.mockResolvedValue(call);
-    prismaService.client.team.findUnique.mockResolvedValue(null);
+    teamRepository.findPublicById.mockResolvedValue(team);
 
-    const result = await service.validateApplicationCreationRules(
+    await service.validateApplicationCreationRules(
       'call-1',
       'team-1',
       'user-1',
       transactionDb as never,
     );
 
-    expect(transactionDb.team.findUnique).toHaveBeenCalledWith({
-      where: { id: 'team-1' },
-    });
-    expect(prismaService.client.team.findUnique).not.toHaveBeenCalled();
-    expect(result).toEqual({ call, team });
+    expect(teamRepository.findPublicById).toHaveBeenCalledWith(
+      'team-1',
+      transactionDb as never,
+    );
   });
 
   it('throws not found when call does not exist', async () => {
@@ -172,7 +166,7 @@ describe('ApplicationRulesService', () => {
       opensAt: null,
       closesAt: null,
     });
-    prismaService.client.team.findUnique.mockResolvedValue(null);
+    teamRepository.findPublicById.mockResolvedValue(null);
 
     await expect(
       service.validateApplicationCreationRules('call-1', 'team-404', 'user-1'),
@@ -186,7 +180,7 @@ describe('ApplicationRulesService', () => {
       opensAt: null,
       closesAt: null,
     });
-    prismaService.client.team.findUnique.mockResolvedValue({
+    teamRepository.findPublicById.mockResolvedValue({
       id: 'team-1',
       name: 'Archived Team',
       leaderId: 'user-1',
@@ -205,7 +199,7 @@ describe('ApplicationRulesService', () => {
       opensAt: null,
       closesAt: null,
     });
-    prismaService.client.team.findUnique.mockResolvedValue({
+    teamRepository.findPublicById.mockResolvedValue({
       id: 'team-1',
       name: 'Test Team',
       leaderId: 'user-1',

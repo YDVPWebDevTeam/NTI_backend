@@ -44,7 +44,7 @@ export class OrganizationInviteRepository extends BaseRepository<
     });
   }
 
-  async findByTokenForUpdate(token: string, tx: Prisma.TransactionClient) {
+  async findByTokenForUpdate(token: string, tx: Prisma.TransactionClient): Promise<OrgInvitation | null> {
     const result = await tx.$queryRaw<OrgInvitation[]>`
       SELECT * FROM "OrgInvitation"
       WHERE token = ${token}

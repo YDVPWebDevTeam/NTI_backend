@@ -50,6 +50,7 @@ import { EmailVerificationService } from './email-verification/email-verificatio
 import { AuthService, FORCE_PASSWORD_CHANGE_PURPOSE } from './auth.service';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
 import { ResetTokenService } from './reset-token/reset-token.service';
+import { OrganizationInviteRepository } from 'src/organization/organization-invitation.repository';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -157,6 +158,10 @@ describe('AuthService', () => {
     queueService = {
       addEmail: jest.fn().mockResolvedValue(undefined),
     };
+    const organizationInvites = {
+      findByToken: jest.fn(),
+      update: jest.fn(),
+    };
     jwtService = {
       signAsync: jest
         .fn()
@@ -188,6 +193,7 @@ describe('AuthService', () => {
       resetTokens as unknown as ResetTokenService,
       queueService as unknown as QueueService,
       invites as unknown as InvitesService,
+      organizationInvites as unknown as OrganizationInviteRepository,
     );
   });
 

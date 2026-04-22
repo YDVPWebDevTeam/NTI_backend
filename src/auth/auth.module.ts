@@ -18,6 +18,7 @@ import { ResetTokenRepository } from './reset-token/reset-token.repository';
 import { ResetTokenService } from './reset-token/reset-token.service';
 import { InvitesModule } from '../invites/invites.module';
 import { RolesGuard } from './guards/roles.guard';
+import { OrganizationInviteRepository } from 'src/organization/organization-invitation.repository';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { RolesGuard } from './guards/roles.guard';
     RolesGuard,
     JwtAuthStrategy,
     RefreshJwtStrategy,
+    OrganizationInviteRepository,
   ],
   exports: [
     AuthService,

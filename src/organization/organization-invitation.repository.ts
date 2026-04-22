@@ -43,4 +43,14 @@ export class OrganizationInviteRepository extends BaseRepository<
       },
     });
   }
+
+  async findByTokenForUpdate(token: string, tx: Prisma.TransactionClient) {
+    const result = await tx.$queryRaw<OrgInvitation[]>`
+      SELECT * FROM "OrgInvitation"
+      WHERE token = ${token}
+      FOR UPDATE
+    `;
+
+    return result[0] ?? null;
+  }
 }

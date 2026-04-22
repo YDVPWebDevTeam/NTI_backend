@@ -159,7 +159,7 @@ describe('AuthService', () => {
       addEmail: jest.fn().mockResolvedValue(undefined),
     };
     const organizationInvites = {
-      findByToken: jest.fn(),
+      findByTokenForUpdate: jest.fn(),
       update: jest.fn(),
     };
     jwtService = {

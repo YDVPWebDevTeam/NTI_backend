@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { OrgInvitation, Prisma, PrismaClient } from 'generated/prisma/client';
-import { InvitationStatus } from 'generated/prisma/enums';
+import { InvitationStatus } from '../../generated/prisma/enums';
 import {
   BaseRepository,
   PrismaDbClient,

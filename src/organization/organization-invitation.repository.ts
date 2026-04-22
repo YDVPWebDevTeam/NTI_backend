@@ -5,7 +5,7 @@ import {
   BaseRepository,
   PrismaDbClient,
   PrismaService,
-} from 'src/infrastructure/database';
+} from '../infrastructure/database';
 
 type OrgInvitationDelegate = PrismaClient['orgInvitation'];
 

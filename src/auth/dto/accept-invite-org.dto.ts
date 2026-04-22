@@ -1,11 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, MaxLength, MinLength } from 'class-validator';
-import { Match } from 'src/common/validation/match.validation';
+import { Match } from '../../common/validation/match.validation';
 import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
   PasswordValidation,
-} from 'src/common/validation/password.validation';
+} from '../../common/validation/password.validation';
 
 export class AcceptInviteOrgDto {
   @ApiProperty({

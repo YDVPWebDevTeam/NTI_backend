@@ -31,7 +31,7 @@ import { InvitesService } from '../invites/invites.service';
 import { isAdminRole } from './admin-role.helper';
 import { toAuthenticatedUserContext } from '../user/user.mapper';
 import { AcceptInviteOrgDto } from './dto/accept-invite-org.dto';
-import { OrganizationInviteRepository } from 'src/organization/organization-invitation.repository';
+import { OrganizationInviteRepository } from '../organization/organization-invitation.repository';
 
 export type AuthTokensResponse = {
   accessToken: string;

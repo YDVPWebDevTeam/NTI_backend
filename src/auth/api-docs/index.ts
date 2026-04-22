@@ -12,4 +12,5 @@ export {
   ResetPasswordApi,
   ResendConfirmationEmailApi,
   RegisterCompanyOwnerApi,
+  AcceptOrgInviteApi,
 } from './auth-api-docs.decorators';

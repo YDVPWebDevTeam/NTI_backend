@@ -8,7 +8,11 @@ import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import type { StringValue } from 'ms';
 import type { User } from '../../generated/prisma/client';
-import { UserRole, UserStatus } from '../../generated/prisma/enums';
+import {
+  InvitationStatus,
+  UserRole,
+  UserStatus,
+} from '../../generated/prisma/enums';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
@@ -26,6 +30,8 @@ import { RegisterViaInviteDto } from './dto/register-via-invite.dto';
 import { InvitesService } from '../invites/invites.service';
 import { isAdminRole } from './admin-role.helper';
 import { toAuthenticatedUserContext } from '../user/user.mapper';
+import { AcceptInviteOrgDto } from './dto/accept-invite-org.dto';
+import { OrganizationInviteRepository } from '../organization/organization-invitation.repository';
 
 export type AuthTokensResponse = {
   accessToken: string;
@@ -74,6 +80,7 @@ export class AuthService {
     private readonly resetTokenService: ResetTokenService,
     private readonly queueService: QueueService,
     private readonly invitesService: InvitesService,
+    private readonly organizationInviteRepository: OrganizationInviteRepository,
   ) {
     this.refreshTokenValidityDays = parseInt(
       this.configService.jwtRefreshExpirationDays,
@@ -198,6 +205,73 @@ export class AuthService {
     });
 
     return { message: REGISTER_VIA_INVITE_SUCCESS_MESSAGE };
+  }
+
+  async acceptOrgInvite(dto: AcceptInviteOrgDto): Promise<AuthTokensResponse> {
+    const passwordHash = await this.hashingService.hashStrong(dto.password);
+
+    const user = await this.usersService.transaction(async (transaction) => {
+      const invitation =
+        await this.organizationInviteRepository.findByTokenForUpdate(
+          dto.token,
+          transaction,
+        );
+
+      if (!invitation) {
+        throw new BadRequestException('Invitation was not found');
+      }
+
+      if (invitation.status !== InvitationStatus.PENDING) {
+        throw new BadRequestException('Invitation has already been accepted');
+      }
+
+      const now = new Date();
+
+      if (invitation.expiresAt <= now) {
+        throw new BadRequestException('Invitation has expired');
+      }
+
+      if (invitation.revokedAt !== null) {
+        throw new BadRequestException('Invitation has been canceled');
+      }
+
+      const existingUser = await this.usersService.findByEmail(
+        invitation.email,
+        transaction,
+      );
+
+      if (existingUser) {
+        throw new ConflictException('User is already registered');
+      }
+
+      const newUser = await this.usersService.create(
+        {
+          email: invitation.email,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          passwordHash,
+          role: UserRole.COMPANY_EMPLOYEE,
+          organizationId: invitation.organizationId,
+          isEmailConfirmed: true,
+          status: UserStatus.ACTIVE,
+          isAdminConfirmed: true,
+        },
+        transaction,
+      );
+
+      await this.organizationInviteRepository.update(
+        { id: invitation.id },
+        {
+          status: InvitationStatus.ACCEPTED,
+          acceptedAt: now,
+        },
+        transaction,
+      );
+
+      return newUser;
+    });
+
+    return this.issueAuthTokens(user);
   }
 
   async login(dto: LoginDto): Promise<AuthTokensResponse> {

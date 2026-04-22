@@ -227,7 +227,7 @@ export class AuthService {
 
       const now = new Date();
 
-      if (invitation.expiresAt < now) {
+      if (invitation.expiresAt <= now) {
         throw new BadRequestException('Invitation has expired');
       }
 

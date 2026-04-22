@@ -50,7 +50,10 @@ export class AcceptInviteOrgDto {
   @ApiProperty({
     description: 'Password confirmation, must match password.',
     example: 'StrongPass123!',
+    minLength: PASSWORD_MIN_LENGTH,
+    maxLength: PASSWORD_MAX_LENGTH,
   })
+  @PasswordValidation()
   @Match('password', { message: 'Passwords do not match' })
   confirmPassword!: string;
 }

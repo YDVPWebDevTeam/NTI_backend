@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -15,7 +17,6 @@ import { GetUserContext } from '../auth/decorators/get-user-context.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { TeamLeadGuard } from '../auth/guards/team-lead.guard';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import {
   CreateTeamApi,
@@ -79,7 +80,7 @@ export class TeamController {
 
   @RemoveTeamMemberApi()
   @Delete(':teamId/members/:memberId')
-  @UseGuards(JwtAuthGuard, TeamLeadGuard)
+  @UseGuards(JwtAuthGuard)
   removeMember(
     @Param('teamId', ParseUUIDPipe) teamId: string,
     @Param('memberId', ParseUUIDPipe) memberId: string,
@@ -90,6 +91,7 @@ export class TeamController {
 
   @LeaveTeamApi()
   @Post(':teamId/leave')
+  @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   leaveTeam(
     @Param('teamId', ParseUUIDPipe) teamId: string,
@@ -100,7 +102,7 @@ export class TeamController {
 
   @TransferTeamLeadershipApi()
   @Patch(':teamId/leader')
-  @UseGuards(JwtAuthGuard, TeamLeadGuard)
+  @UseGuards(JwtAuthGuard)
   transferLeadership(
     @Param('teamId', ParseUUIDPipe) teamId: string,
     @Body() dto: TransferTeamLeadershipDto,

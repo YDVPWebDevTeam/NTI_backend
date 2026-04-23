@@ -1,4 +1,6 @@
 import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiConflictResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
@@ -17,6 +19,10 @@ const teamIdParam = ApiParam({
   example: 'c2bb920c-a8cb-4d95-85be-13c6215fb9dd',
 });
 
+const invalidTeamIdResponse = ApiBadRequestResponse({
+  description: 'Team identifier must be a valid UUID.',
+});
+
 export const RemoveTeamMemberApi = () =>
   createApiDecorator({
     summary: 'Remove a team member',
@@ -27,12 +33,19 @@ export const RemoveTeamMemberApi = () =>
       type: RemoveTeamMemberResponseDto,
       description: 'The team member was removed successfully.',
     },
-    errors: [
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
       teamIdParam,
       ApiParam({
         name: 'memberId',
         description: 'Identifier of the member to remove.',
         example: '8b6d4c1b-5899-4f86-a0d4-b9504dd3d4b7',
+      }),
+    ],
+    errors: [
+      invalidTeamIdResponse,
+      ApiBadRequestResponse({
+        description: 'Member identifier must be a valid UUID.',
       }),
       ApiUnauthorizedResponse({
         description: 'Bearer token is missing or invalid.',
@@ -59,8 +72,9 @@ export const LeaveTeamApi = () =>
       type: LeaveTeamResponseDto,
       description: 'The authenticated user left the team successfully.',
     },
+    extraDecorators: [ApiBearerAuth('access-token'), teamIdParam],
     errors: [
-      teamIdParam,
+      invalidTeamIdResponse,
       ApiUnauthorizedResponse({
         description: 'Bearer token is missing or invalid.',
       }),
@@ -85,8 +99,12 @@ export const TransferTeamLeadershipApi = () =>
       type: TeamSummaryResponseDto,
       description: 'Leadership was transferred successfully.',
     },
+    extraDecorators: [ApiBearerAuth('access-token'), teamIdParam],
     errors: [
-      teamIdParam,
+      invalidTeamIdResponse,
+      ApiBadRequestResponse({
+        description: 'New leader identifier must be a valid UUID.',
+      }),
       ApiUnauthorizedResponse({
         description: 'Bearer token is missing or invalid.',
       }),

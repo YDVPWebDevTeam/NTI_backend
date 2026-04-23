@@ -8,10 +8,14 @@ import {
 } from '@nestjs/common';
 import type { Team } from '../../generated/prisma/client';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import type { PrismaDbClient } from '../infrastructure/database';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { CreateTeamWithInvitesDto } from './dto/create-team-with-invites.dto';
-import { CreatedInvitationDto } from './invitations/dto/created-invitation.dto';
+import { LeaveTeamResponseDto } from './dto/leave-team-response.dto';
+import { RemoveTeamMemberResponseDto } from './dto/remove-team-member-response.dto';
+import { TeamSummaryResponseDto } from './dto/team-summary-response.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
+import { CreatedInvitationDto } from './invitations/dto/created-invitation.dto';
 import { InvitationService } from './invitations/invitation.service';
 import {
   TeamPublicView,
@@ -174,6 +178,123 @@ export class TeamService {
     };
   }
 
+  async removeMember(
+    teamId: string,
+    actorId: string,
+    memberId: string,
+  ): Promise<RemoveTeamMemberResponseDto> {
+    return this.teamRepository.transaction(async (db) => {
+      const team = await this.getTeamOrThrow(teamId, db);
+
+      this.ensureTeamLeader(team, actorId);
+      this.ensureTeamIsUnlocked(team);
+
+      if (memberId === team.leaderId) {
+        throw new ConflictException('Cannot remove current team leader');
+      }
+
+      const membership = await this.teamRepository.findMember(
+        team.id,
+        memberId,
+        db,
+      );
+
+      if (!membership) {
+        throw new NotFoundException('Team member not found');
+      }
+
+      const deletedMembership = await this.teamRepository.deleteMembership(
+        team.id,
+        memberId,
+        db,
+      );
+
+      if (deletedMembership.count === 0) {
+        throw new NotFoundException('Team member not found');
+      }
+
+      return {
+        teamId: team.id,
+        memberId,
+        removed: true,
+      };
+    });
+  }
+
+  async leaveTeam(
+    teamId: string,
+    actorId: string,
+  ): Promise<LeaveTeamResponseDto> {
+    return this.teamRepository.transaction(async (db) => {
+      const team = await this.getTeamOrThrow(teamId, db);
+
+      this.ensureTeamIsUnlocked(team);
+
+      const membership = await this.teamRepository.findMember(
+        team.id,
+        actorId,
+        db,
+      );
+
+      if (!membership) {
+        throw new NotFoundException('Team member not found');
+      }
+
+      if (actorId === team.leaderId) {
+        throw new ConflictException(
+          'Current team leader must transfer leadership before leaving team',
+        );
+      }
+
+      const deletedMembership = await this.teamRepository.deleteMembership(
+        team.id,
+        actorId,
+        db,
+      );
+
+      if (deletedMembership.count === 0) {
+        throw new NotFoundException('Team member not found');
+      }
+
+      return {
+        teamId: team.id,
+        userId: actorId,
+        left: true,
+      };
+    });
+  }
+
+  async transferLeadership(
+    teamId: string,
+    actorId: string,
+    newLeaderId: string,
+  ): Promise<TeamSummaryResponseDto> {
+    const updatedTeam = await this.teamRepository.transaction(async (db) => {
+      const team = await this.getTeamOrThrow(teamId, db);
+
+      this.ensureTeamLeader(team, actorId);
+      this.ensureTeamIsUnlocked(team);
+
+      const newLeaderMembership = await this.teamRepository.findMember(
+        team.id,
+        newLeaderId,
+        db,
+      );
+
+      if (!newLeaderMembership) {
+        throw new NotFoundException('Team member not found');
+      }
+
+      return this.teamRepository.updateLeader(team.id, newLeaderId, db);
+    });
+
+    return {
+      id: updatedTeam.id,
+      leaderId: updatedTeam.leaderId,
+      updatedAt: updatedTeam.updatedAt,
+    };
+  }
+
   private async findByIdOrThrow(id: string): Promise<TeamWithRelations> {
     const team = await this.teamRepository.findById(id);
 
@@ -182,5 +303,30 @@ export class TeamService {
     }
 
     return team;
+  }
+
+  private async getTeamOrThrow(
+    teamId: string,
+    db?: PrismaDbClient,
+  ): Promise<Team> {
+    const team = await this.teamRepository.findUnique({ id: teamId }, db);
+
+    if (!team) {
+      throw new NotFoundException('Team not found');
+    }
+
+    return team;
+  }
+
+  private ensureTeamLeader(team: Team, actorId: string): void {
+    if (team.leaderId !== actorId) {
+      throw new ForbiddenException();
+    }
+  }
+
+  private ensureTeamIsUnlocked(team: Team): void {
+    if (team.lockedAt) {
+      throw new ConflictException('Team is locked');
+    }
   }
 }

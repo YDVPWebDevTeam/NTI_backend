@@ -183,63 +183,85 @@ export class TeamService {
     actorId: string,
     memberId: string,
   ): Promise<RemoveTeamMemberResponseDto> {
-    const team = await this.getTeamOrThrow(teamId);
+    return this.teamRepository.transaction(async (db) => {
+      const team = await this.getTeamOrThrow(teamId, db);
 
-    this.ensureTeamLeader(team, actorId);
-    this.ensureTeamIsUnlocked(team);
+      this.ensureTeamLeader(team, actorId);
+      this.ensureTeamIsUnlocked(team);
 
-    if (memberId === team.leaderId) {
-      throw new ConflictException('Cannot remove current team leader');
-    }
+      if (memberId === team.leaderId) {
+        throw new ConflictException('Cannot remove current team leader');
+      }
 
-    const membership = await this.teamRepository.findMembership(
-      team.id,
-      memberId,
-    );
+      const membership = await this.teamRepository.findMember(
+        team.id,
+        memberId,
+        db,
+      );
 
-    if (!membership) {
-      throw new NotFoundException('Team member not found');
-    }
+      if (!membership) {
+        throw new NotFoundException('Team member not found');
+      }
 
-    await this.teamRepository.deleteMembership(team.id, memberId);
+      const deletedMembership = await this.teamRepository.deleteMembership(
+        team.id,
+        memberId,
+        db,
+      );
 
-    return {
-      teamId: team.id,
-      memberId,
-      removed: true,
-    };
+      if (deletedMembership.count === 0) {
+        throw new NotFoundException('Team member not found');
+      }
+
+      return {
+        teamId: team.id,
+        memberId,
+        removed: true,
+      };
+    });
   }
 
   async leaveTeam(
     teamId: string,
     actorId: string,
   ): Promise<LeaveTeamResponseDto> {
-    const team = await this.getTeamOrThrow(teamId);
+    return this.teamRepository.transaction(async (db) => {
+      const team = await this.getTeamOrThrow(teamId, db);
 
-    this.ensureTeamIsUnlocked(team);
+      this.ensureTeamIsUnlocked(team);
 
-    const membership = await this.teamRepository.findMembership(
-      team.id,
-      actorId,
-    );
-
-    if (!membership) {
-      throw new NotFoundException('Team member not found');
-    }
-
-    if (actorId === team.leaderId) {
-      throw new ConflictException(
-        'Current team leader must transfer leadership before leaving team',
+      const membership = await this.teamRepository.findMember(
+        team.id,
+        actorId,
+        db,
       );
-    }
 
-    await this.teamRepository.deleteMembership(team.id, actorId);
+      if (!membership) {
+        throw new NotFoundException('Team member not found');
+      }
 
-    return {
-      teamId: team.id,
-      userId: actorId,
-      left: true,
-    };
+      if (actorId === team.leaderId) {
+        throw new ConflictException(
+          'Current team leader must transfer leadership before leaving team',
+        );
+      }
+
+      const deletedMembership = await this.teamRepository.deleteMembership(
+        team.id,
+        actorId,
+        db,
+      );
+
+      if (deletedMembership.count === 0) {
+        throw new NotFoundException('Team member not found');
+      }
+
+      return {
+        teamId: team.id,
+        userId: actorId,
+        left: true,
+      };
+    });
   }
 
   async transferLeadership(
@@ -253,7 +275,7 @@ export class TeamService {
       this.ensureTeamLeader(team, actorId);
       this.ensureTeamIsUnlocked(team);
 
-      const newLeaderMembership = await this.teamRepository.findMembership(
+      const newLeaderMembership = await this.teamRepository.findMember(
         team.id,
         newLeaderId,
         db,

@@ -10,10 +10,6 @@ jest.mock('../auth/guards/roles.guard', () => ({
   RolesGuard: class RolesGuard {},
 }));
 
-jest.mock('../auth/guards/team-lead.guard', () => ({
-  TeamLeadGuard: class TeamLeadGuard {},
-}));
-
 import { TeamController } from './team.controller';
 import { TeamService } from './team.service';
 
@@ -79,11 +75,9 @@ describe('TeamController', () => {
   });
 
   it('delegates member removal to the team service', async () => {
-    const result = await controller.removeMember(
-      'team-1',
-      'member-1',
-      { id: 'leader-1' } as never,
-    );
+    const result = await controller.removeMember('team-1', 'member-1', {
+      id: 'leader-1',
+    } as never);
 
     expect(teamService.removeMember).toHaveBeenCalledWith(
       'team-1',
@@ -98,10 +92,9 @@ describe('TeamController', () => {
   });
 
   it('delegates leave-team to the team service', async () => {
-    const result = await controller.leaveTeam(
-      'team-1',
-      { id: 'member-1' } as never,
-    );
+    const result = await controller.leaveTeam('team-1', {
+      id: 'member-1',
+    } as never);
 
     expect(teamService.leaveTeam).toHaveBeenCalledWith('team-1', 'member-1');
     expect(result).toEqual({

@@ -48,7 +48,6 @@ describe('TeamService', () => {
     remove: jest.Mock;
     addMember: jest.Mock;
     findMember: jest.Mock;
-    findMembership: jest.Mock;
     deleteMembership: jest.Mock;
     updateLeader: jest.Mock;
   };
@@ -115,15 +114,11 @@ describe('TeamService', () => {
         userId: 'user-1',
         teamId: 'team-1',
       }),
-      findMember: jest.fn().mockResolvedValue(null),
-      findMembership: jest.fn().mockResolvedValue({
+      findMember: jest.fn().mockResolvedValue({
         teamId: 'team-1',
         userId: 'member-1',
       }),
-      deleteMembership: jest.fn().mockResolvedValue({
-        teamId: 'team-1',
-        userId: 'member-1',
-      }),
+      deleteMembership: jest.fn().mockResolvedValue({ count: 1 }),
       updateLeader: jest.fn().mockResolvedValue({
         id: 'team-1',
         leaderId: 'member-2',
@@ -309,15 +304,17 @@ describe('TeamService', () => {
 
     expect(teamRepository.findUnique).toHaveBeenCalledWith(
       { id: 'team-1' },
-      undefined,
+      transactionClient,
     );
-    expect(teamRepository.findMembership).toHaveBeenCalledWith(
+    expect(teamRepository.findMember).toHaveBeenCalledWith(
       'team-1',
       'member-1',
+      transactionClient,
     );
     expect(teamRepository.deleteMembership).toHaveBeenCalledWith(
       'team-1',
       'member-1',
+      transactionClient,
     );
     expect(result).toEqual({
       teamId: 'team-1',
@@ -354,19 +351,27 @@ describe('TeamService', () => {
       service.removeMember('team-1', 'leader-1', 'leader-1'),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    expect(teamRepository.findMembership).not.toHaveBeenCalled();
+    expect(teamRepository.findMember).not.toHaveBeenCalled();
   });
 
   it('rejects member removal when membership does not exist', async () => {
-    teamRepository.findMembership.mockResolvedValueOnce(null);
+    teamRepository.findMember.mockResolvedValueOnce(null);
 
     await expect(
       service.removeMember('team-1', 'leader-1', 'missing-member'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('rejects member removal when membership disappears before delete', async () => {
+    teamRepository.deleteMembership.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      service.removeMember('team-1', 'leader-1', 'member-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('allows a non-leader member to leave a team', async () => {
-    teamRepository.findMembership.mockResolvedValueOnce({
+    teamRepository.findMember.mockResolvedValueOnce({
       teamId: 'team-1',
       userId: 'member-1',
     });
@@ -376,6 +381,7 @@ describe('TeamService', () => {
     expect(teamRepository.deleteMembership).toHaveBeenCalledWith(
       'team-1',
       'member-1',
+      transactionClient,
     );
     expect(result).toEqual({
       teamId: 'team-1',
@@ -385,7 +391,7 @@ describe('TeamService', () => {
   });
 
   it('rejects leave-team when membership does not exist', async () => {
-    teamRepository.findMembership.mockResolvedValueOnce(null);
+    teamRepository.findMember.mockResolvedValueOnce(null);
 
     await expect(
       service.leaveTeam('team-1', 'member-1'),
@@ -393,7 +399,7 @@ describe('TeamService', () => {
   });
 
   it('rejects leave-team for the current leader', async () => {
-    teamRepository.findMembership.mockResolvedValueOnce({
+    teamRepository.findMember.mockResolvedValueOnce({
       teamId: 'team-1',
       userId: 'leader-1',
     });
@@ -437,7 +443,7 @@ describe('TeamService', () => {
       { id: 'team-1' },
       transactionClient,
     );
-    expect(teamRepository.findMembership).toHaveBeenCalledWith(
+    expect(teamRepository.findMember).toHaveBeenCalledWith(
       'team-1',
       'member-2',
       transactionClient,
@@ -463,7 +469,7 @@ describe('TeamService', () => {
   });
 
   it('rejects leadership transfer when the new leader is not a team member', async () => {
-    teamRepository.findMembership.mockResolvedValueOnce(null);
+    teamRepository.findMember.mockResolvedValueOnce(null);
 
     await expect(
       service.transferLeadership('team-1', 'leader-1', 'missing-member'),
@@ -490,6 +496,14 @@ describe('TeamService', () => {
 
     await expect(
       service.removeMember('missing-team', 'leader-1', 'member-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects leave-team when membership disappears before delete', async () => {
+    teamRepository.deleteMembership.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      service.leaveTeam('team-1', 'member-1'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

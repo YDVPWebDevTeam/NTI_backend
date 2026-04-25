@@ -18,6 +18,7 @@ import { ResetTokenRepository } from './reset-token/reset-token.repository';
 import { ResetTokenService } from './reset-token/reset-token.service';
 import { InvitesModule } from '../invites/invites.module';
 import { RolesGuard } from './guards/roles.guard';
+import { AuthRegistrationService } from './auth-registration.service';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { RolesGuard } from './guards/roles.guard';
   providers: [
     AuthCookieService,
     AuthService,
+    AuthRegistrationService,
     EmailVerificationRepository,
     EmailVerificationService,
     ResetTokenRepository,

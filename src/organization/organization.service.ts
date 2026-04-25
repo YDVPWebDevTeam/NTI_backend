@@ -13,8 +13,7 @@ import { Organization, Prisma } from 'generated/prisma/client';
 import { OrganizationInviteRepository } from './organization-invitation.repository';
 import { CreateOrganizationInviteDto } from './dto/create-organization-invite.dto';
 import { InvitationStatus, UserRole } from 'generated/prisma/enums';
-import { ConfigService } from 'src/infrastructure/config';
-import { HashingService } from 'src/infrastructure/hashing';
+import { InvitationTokenService } from 'src/common/invitations/invitation-token.service';
 
 @Injectable()
 export class OrganizationService {
@@ -23,8 +22,7 @@ export class OrganizationService {
     private readonly userRepo: UserRepository,
     private readonly queueService: QueueService,
     private readonly organizationInviteRepository: OrganizationInviteRepository,
-    private readonly hashingService: HashingService,
-    private readonly configService: ConfigService,
+    private readonly invitationTokenService: InvitationTokenService,
   ) {}
 
   private mapCreateDto(
@@ -125,11 +123,12 @@ export class OrganizationService {
 
     const invitation = await this.organizationInviteRepository.create({
       email: dto.email,
-      token: this.generateToken(),
+      token: this.invitationTokenService.generateToken(),
       status: InvitationStatus.PENDING,
       organizationId,
       roleToAssign: UserRole.COMPANY_EMPLOYEE,
-      expiresAt: this.resolveExpirationDate(),
+      expiresAt:
+        this.invitationTokenService.resolveOrganizationInvitationExpirationDate(),
     });
 
     const { token, ...response } = invitation;
@@ -146,22 +145,5 @@ export class OrganizationService {
     }
 
     return response;
-  }
-
-  private generateToken(): string {
-    return this.hashingService.generateHexToken(
-      this.configService.tokenByteLength,
-    );
-  }
-
-  private resolveExpirationDate(): Date {
-    return new Date(
-      Date.now() +
-        this.configService.organizationInvitationExpirationDays *
-          24 *
-          60 *
-          60 *
-          1000,
-    );
   }
 }

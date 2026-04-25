@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import type { Invitation, Prisma } from '../../../generated/prisma/client';
+import type {
+  Invitation,
+  Prisma,
+  Team,
+} from '../../../generated/prisma/client';
 import { InvitationStatus } from '../../../generated/prisma/enums';
 import { BaseRepository, PrismaDbClient } from '../../infrastructure/database';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
@@ -19,6 +23,16 @@ export class InvitationRepository extends BaseRepository<
 
   protected getDelegate(db?: PrismaDbClient) {
     return (db ?? this.prisma.client).invitation;
+  }
+
+  findByTokenWithTeam(
+    token: string,
+    db?: PrismaDbClient,
+  ): Promise<InvitationWithTeam | null> {
+    return (db ?? this.prisma.client).invitation.findUnique({
+      where: { token },
+      include: { team: true },
+    });
   }
 
   create(
@@ -148,3 +162,5 @@ export class InvitationRepository extends BaseRepository<
     });
   }
 }
+
+export type InvitationWithTeam = Invitation & { team: Team };

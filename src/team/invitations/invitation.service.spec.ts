@@ -11,17 +11,12 @@ jest.mock('../team.repository', () => ({
   TeamRepository: class TeamRepository {},
 }));
 
-jest.mock('../../infrastructure/hashing', () => ({
-  HashingService: class HashingService {},
-}));
-
-jest.mock('../../infrastructure/config', () => ({
-  ConfigService: class ConfigService {},
+jest.mock('../../common/invitations/invitation-token.service', () => ({
+  InvitationTokenService: class InvitationTokenService {},
 }));
 
 import type { PrismaDbClient } from '../../infrastructure/database';
-import { ConfigService } from '../../infrastructure/config';
-import { HashingService } from '../../infrastructure/hashing';
+import { InvitationTokenService } from '../../common/invitations/invitation-token.service';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { TeamRepository } from '../team.repository';
 import { InvitationRepository } from './invitation.repository';
@@ -47,8 +42,9 @@ describe('InvitationService', () => {
     addMember: jest.Mock;
   };
   let transactionClient: PrismaDbClient;
-  let hashingService: {
-    generateHexToken: jest.Mock;
+  let invitationTokenService: {
+    generateToken: jest.Mock;
+    resolveTeamInvitationExpirationDate: jest.Mock;
   };
   let tokenCounter: number;
 
@@ -109,21 +105,20 @@ describe('InvitationService', () => {
       }),
     };
 
-    hashingService = {
-      generateHexToken: jest.fn(() => {
+    invitationTokenService = {
+      generateToken: jest.fn(() => {
         tokenCounter += 1;
         return `token-${tokenCounter}`;
       }),
+      resolveTeamInvitationExpirationDate: jest
+        .fn()
+        .mockReturnValue(new Date(Date.now() + 24 * 60 * 60 * 1000)),
     };
 
     service = new InvitationService(
       invitationRepository as unknown as InvitationRepository,
       teamRepository as unknown as TeamRepository,
-      hashingService as unknown as HashingService,
-      {
-        tokenByteLength: 32,
-        emailVerificationExpirationHours: 24,
-      } as unknown as ConfigService,
+      invitationTokenService as unknown as InvitationTokenService,
     );
   });
 

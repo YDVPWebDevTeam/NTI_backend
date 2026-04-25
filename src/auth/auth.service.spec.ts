@@ -28,12 +28,14 @@ jest.mock('./reset-token/reset-token.service', () => ({
 jest.mock('../invites/invites.service', () => ({
   InvitesService: class InvitesService {},
 }));
+jest.mock('./auth-registration.service', () => ({
+  AuthRegistrationService: class AuthRegistrationService {},
+}));
 
 jest.mock('../infrastructure/queue', () => ({
   EMAIL_JOBS: {
     PASSWORD_RESET: 'password-reset',
     USER_CONFIRMATION: 'user-confirmation',
-    TEAM_CONFIRMATION: 'team-confirmation',
   },
   QueueService: class QueueService {},
 }));
@@ -45,11 +47,11 @@ import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { UserService } from '../user/user.service';
-import { InvitesService } from '../invites/invites.service';
 import { EmailVerificationService } from './email-verification/email-verification.service';
 import { AuthService, FORCE_PASSWORD_CHANGE_PURPOSE } from './auth.service';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
 import { ResetTokenService } from './reset-token/reset-token.service';
+import { AuthRegistrationService } from './auth-registration.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -77,10 +79,10 @@ describe('AuthService', () => {
     findByToken: jest.Mock;
     markUsed: jest.Mock;
   };
-  let invites: {
-    validateTokenOrThrow: jest.Mock;
-    createTeamMember: jest.Mock;
-    markAccepted: jest.Mock;
+  let authRegistration: {
+    register: jest.Mock;
+    registerCompanyOwner: jest.Mock;
+    registerViaInvite: jest.Mock;
   };
   let queueService: {
     addEmail: jest.Mock;
@@ -149,13 +151,13 @@ describe('AuthService', () => {
       findByToken: jest.fn(),
       markUsed: jest.fn(),
     };
-    invites = {
-      validateTokenOrThrow: jest.fn(),
-      createTeamMember: jest.fn(),
-      markAccepted: jest.fn(),
-    };
     queueService = {
       addEmail: jest.fn().mockResolvedValue(undefined),
+    };
+    authRegistration = {
+      register: jest.fn(),
+      registerCompanyOwner: jest.fn(),
+      registerViaInvite: jest.fn(),
     };
     jwtService = {
       signAsync: jest
@@ -187,7 +189,7 @@ describe('AuthService', () => {
       emailVerification as unknown as EmailVerificationService,
       resetTokens as unknown as ResetTokenService,
       queueService as unknown as QueueService,
-      invites as unknown as InvitesService,
+      authRegistration as unknown as AuthRegistrationService,
     );
   });
 
@@ -196,15 +198,7 @@ describe('AuthService', () => {
   });
 
   it('registers a user and enqueues a verification email', async () => {
-    users.findByEmail.mockResolvedValue(null);
-    users.create.mockResolvedValue(unconfirmedUser);
-    emailVerification.createForUser.mockResolvedValue({
-      id: 'verification-1',
-      userId: user.id,
-      token: 'verification-token',
-      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
-      acceptedAt: null,
-    });
+    authRegistration.register.mockResolvedValue(safeUser);
 
     const result = await service.register({
       email: user.email,
@@ -213,34 +207,17 @@ describe('AuthService', () => {
       password: 'strongpass123',
     });
 
-    expect(users.findByEmail).toHaveBeenCalledWith(user.email);
-    expect(hashingService.hashStrong).toHaveBeenCalledWith('strongpass123');
-    expect(users.transaction).toHaveBeenCalled();
-    expect(users.create).toHaveBeenCalledWith(
-      {
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        passwordHash: 'password-hash',
-      },
-      transactionClient,
-    );
-    expect(emailVerification.createForUser).toHaveBeenCalledWith(
-      user.id,
-      transactionClient,
-    );
-    expect(queueService.addEmail).toHaveBeenCalledWith(
-      EMAIL_JOBS.USER_CONFIRMATION,
-      {
-        email: user.email,
-        token: 'verification-token',
-      },
-    );
+    expect(authRegistration.register).toHaveBeenCalledWith({
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      password: 'strongpass123',
+    });
     expect(result).toEqual(safeUser);
   });
 
   it('throws on register when email is already taken', async () => {
-    users.findByEmail.mockResolvedValue(user);
+    authRegistration.register.mockRejectedValue(new ConflictException());
 
     await expect(
       service.register({
@@ -253,15 +230,8 @@ describe('AuthService', () => {
   });
 
   it('registers a confirmed user via invite and accepts the invitation', async () => {
-    invites.validateTokenOrThrow.mockResolvedValue({
-      id: 'invite-1',
-      email: 'student@example.com',
-      teamId: 'team-1',
-    });
-    users.findByEmail.mockResolvedValue(null);
-    users.create.mockResolvedValue({
-      ...user,
-      isEmailConfirmed: true,
+    authRegistration.registerViaInvite.mockResolvedValue({
+      message: 'Registration via invite completed successfully.',
     });
 
     const result = await service.registerViaInvite({
@@ -271,50 +241,21 @@ describe('AuthService', () => {
       password: 'strongpass123',
     });
 
-    expect(users.transaction).toHaveBeenCalled();
-    expect(invites.validateTokenOrThrow).toHaveBeenCalledWith(
-      'invite-token',
-      transactionClient,
-    );
-    expect(users.findByEmail).toHaveBeenCalledWith(
-      'student@example.com',
-      transactionClient,
-    );
-    expect(users.create).toHaveBeenCalledWith(
-      {
-        email: 'student@example.com',
-        firstName: 'Student',
-        lastName: 'User',
-        passwordHash: 'password-hash',
-        isEmailConfirmed: true,
-      },
-      transactionClient,
-    );
-    expect(invites.createTeamMember).toHaveBeenCalledWith(
-      'user-1',
-      'team-1',
-      transactionClient,
-    );
-    expect(invites.markAccepted).toHaveBeenCalledWith(
-      'invite-1',
-      transactionClient,
-    );
-    expect(queueService.addEmail).not.toHaveBeenCalledWith(
-      EMAIL_JOBS.USER_CONFIRMATION,
-      expect.anything(),
-    );
+    expect(authRegistration.registerViaInvite).toHaveBeenCalledWith({
+      firstName: 'Student',
+      lastName: 'User',
+      token: 'invite-token',
+      password: 'strongpass123',
+    });
     expect(result).toEqual({
       message: 'Registration via invite completed successfully.',
     });
   });
 
   it('throws on invite registration when user already exists', async () => {
-    invites.validateTokenOrThrow.mockResolvedValue({
-      id: 'invite-1',
-      email: 'student@example.com',
-      teamId: 'team-1',
-    });
-    users.findByEmail.mockResolvedValue(user);
+    authRegistration.registerViaInvite.mockRejectedValue(
+      new ConflictException(),
+    );
 
     await expect(
       service.registerViaInvite({
@@ -324,10 +265,6 @@ describe('AuthService', () => {
         password: 'strongpass123',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
-
-    expect(users.create).not.toHaveBeenCalled();
-    expect(invites.createTeamMember).not.toHaveBeenCalled();
-    expect(invites.markAccepted).not.toHaveBeenCalled();
   });
 
   it('logs in a confirmed user and returns tokens', async () => {

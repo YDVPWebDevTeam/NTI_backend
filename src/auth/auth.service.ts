@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -23,9 +22,9 @@ import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { ResetTokenService } from './reset-token/reset-token.service';
 import { RegisterCompanyOwnerDto } from './dto/register-company-owner.dto';
 import { RegisterViaInviteDto } from './dto/register-via-invite.dto';
-import { InvitesService } from '../invites/invites.service';
 import { isAdminRole } from './admin-role.helper';
 import { toAuthenticatedUserContext } from '../user/user.mapper';
+import { AuthRegistrationService } from './auth-registration.service';
 
 export type AuthTokensResponse = {
   accessToken: string;
@@ -57,8 +56,6 @@ const FORGOT_PASSWORD_SUCCESS_MESSAGE =
   'If the email exists, a reset link was sent.';
 const RESET_PASSWORD_SUCCESS_MESSAGE = 'Password reset successfully.';
 const INVALID_RESET_TOKEN_MESSAGE = 'Invalid or expired password reset token';
-const REGISTER_VIA_INVITE_SUCCESS_MESSAGE =
-  'Registration via invite completed successfully.';
 
 @Injectable()
 export class AuthService {
@@ -73,7 +70,7 @@ export class AuthService {
     private readonly emailVerificationService: EmailVerificationService,
     private readonly resetTokenService: ResetTokenService,
     private readonly queueService: QueueService,
-    private readonly invitesService: InvitesService,
+    private readonly authRegistrationService: AuthRegistrationService,
   ) {
     this.refreshTokenValidityDays = parseInt(
       this.configService.jwtRefreshExpirationDays,
@@ -81,123 +78,17 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto): Promise<AuthenticatedUserContext> {
-    const existingUser = await this.usersService.findByEmail(dto.email);
-
-    if (existingUser) {
-      throw new ConflictException('User with this email already exists');
-    }
-
-    const passwordHash = await this.hashingService.hashStrong(dto.password);
-
-    const { user, verificationToken } = await this.usersService.transaction(
-      async (transaction) => {
-        const user = await this.usersService.create(
-          {
-            email: dto.email,
-            firstName: dto.firstName,
-            lastName: dto.lastName,
-            passwordHash,
-          },
-          transaction,
-        );
-
-        const verificationToken =
-          await this.emailVerificationService.createForUser(
-            user.id,
-            transaction,
-          );
-
-        return { user, verificationToken };
-      },
-    );
-
-    await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
-      email: user.email,
-      token: verificationToken.token,
-    });
-
-    return toAuthenticatedUserContext(user);
+    return this.authRegistrationService.register(dto);
   }
 
   async registerCompanyOwner(
     dto: RegisterCompanyOwnerDto,
   ): Promise<AuthenticatedUserContext> {
-    const existingUser = await this.usersService.findByEmail(dto.email);
-
-    if (existingUser) {
-      throw new ConflictException('User with this email already exists');
-    }
-
-    const passwordHash = await this.hashingService.hashStrong(dto.password);
-
-    const { user, verificationToken } = await this.usersService.transaction(
-      async (transaction) => {
-        const user = await this.usersService.create(
-          {
-            email: dto.email,
-            firstName: dto.firstName,
-            lastName: dto.lastName,
-            passwordHash,
-            role: UserRole.COMPANY_OWNER,
-            isEmailConfirmed: false,
-          },
-          transaction,
-        );
-
-        const verificationToken =
-          await this.emailVerificationService.createForUser(
-            user.id,
-            transaction,
-          );
-
-        return { user, verificationToken };
-      },
-    );
-
-    await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
-      email: user.email,
-      token: verificationToken.token,
-    });
-
-    return toAuthenticatedUserContext(user);
+    return this.authRegistrationService.registerCompanyOwner(dto);
   }
 
   async registerViaInvite(dto: RegisterViaInviteDto): Promise<MessageResponse> {
-    await this.usersService.transaction(async (transaction) => {
-      const invitation = await this.invitesService.validateTokenOrThrow(
-        dto.token,
-        transaction,
-      );
-      const existingUser = await this.usersService.findByEmail(
-        invitation.email,
-        transaction,
-      );
-
-      if (existingUser) {
-        throw new ConflictException('User with this email already exists');
-      }
-
-      const passwordHash = await this.hashingService.hashStrong(dto.password);
-      const user = await this.usersService.create(
-        {
-          email: invitation.email,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          passwordHash,
-          isEmailConfirmed: true,
-        },
-        transaction,
-      );
-
-      await this.invitesService.createTeamMember(
-        user.id,
-        invitation.teamId,
-        transaction,
-      );
-      await this.invitesService.markAccepted(invitation.id, transaction);
-    });
-
-    return { message: REGISTER_VIA_INVITE_SUCCESS_MESSAGE };
+    return this.authRegistrationService.registerViaInvite(dto);
   }
 
   async login(dto: LoginDto): Promise<AuthTokensResponse> {

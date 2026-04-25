@@ -142,10 +142,11 @@ describe('TeamService', () => {
       'user-1',
       transactionClient,
     );
-    expect(invitationService.createInvites).toHaveBeenCalledWith('team-1', [
-      'a@example.com',
-      'b@example.com',
-    ]);
+    expect(invitationService.createInvites).toHaveBeenCalledWith(
+      'team-1',
+      ['a@example.com', 'b@example.com'],
+      transactionClient,
+    );
     expect(queueService.addEmail).toHaveBeenNthCalledWith(
       1,
       EMAIL_JOBS.TEAM_INVITATION,
@@ -231,11 +232,9 @@ describe('TeamService', () => {
       }),
     ).rejects.toThrow('At least 2 invitations must be created');
 
-    expect(invitationService.revokeInvitations).toHaveBeenCalledWith([
-      'invite-1',
-    ]);
+    expect(invitationService.revokeInvitations).not.toHaveBeenCalled();
     expect(queueService.addEmail).not.toHaveBeenCalled();
-    expect(teamRepository.remove).toHaveBeenCalledWith({ id: 'team-1' });
+    expect(teamRepository.remove).not.toHaveBeenCalled();
   });
 
   it('returns public team data without access check', async () => {

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -8,12 +9,14 @@ import type { Invitation, TeamMember } from '../../../generated/prisma/client';
 import { Prisma } from '../../../generated/prisma/client';
 import { InvitationStatus } from '../../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import { InvitationTokenService } from '../../common/invitations/invitation-token.service';
 import { normalizeInviteEmail } from '../../common/validation/invite-email.validation';
-import { ConfigService } from '../../infrastructure/config';
 import type { PrismaDbClient } from '../../infrastructure/database';
-import { HashingService } from '../../infrastructure/hashing';
 import { TeamRepository } from '../team.repository';
-import { InvitationRepository } from './invitation.repository';
+import {
+  InvitationRepository,
+  type InvitationWithTeam,
+} from './invitation.repository';
 
 const INVITATION_TOKEN_MAX_RETRIES = 5;
 
@@ -22,11 +25,14 @@ export class InvitationService {
   constructor(
     private readonly invitationRepository: InvitationRepository,
     private readonly teamRepository: TeamRepository,
-    private readonly hashingService: HashingService,
-    private readonly configService: ConfigService,
+    private readonly invitationTokenService: InvitationTokenService,
   ) {}
 
-  async createInvites(teamId: string, emails: string[]): Promise<Invitation[]> {
+  async createInvites(
+    teamId: string,
+    emails: string[],
+    db?: PrismaDbClient,
+  ): Promise<Invitation[]> {
     const normalizedEmails = [...new Set(emails.map(normalizeInviteEmail))];
 
     for (
@@ -35,11 +41,11 @@ export class InvitationService {
       attempt += 1
     ) {
       try {
-        return await this.invitationRepository.transaction(async (db) => {
+        const createWithClient = async (tx: PrismaDbClient) => {
           const availableEmails = await this.filterInvitableEmails(
             teamId,
             normalizedEmails,
-            db,
+            tx,
           );
 
           if (availableEmails.length === 0) {
@@ -51,12 +57,12 @@ export class InvitationService {
             availableEmails,
           );
 
-          await this.invitationRepository.createMany(invitationsToCreate, db);
+          await this.invitationRepository.createMany(invitationsToCreate, tx);
 
           const createdInvitations =
             await this.invitationRepository.findByTokens(
               invitationsToCreate.map(({ token }) => token),
-              db,
+              tx,
             );
 
           const invitationByToken = new Map(
@@ -72,7 +78,13 @@ export class InvitationService {
               (invitation): invitation is Invitation =>
                 invitation !== undefined,
             );
-        });
+        };
+
+        if (db) {
+          return await createWithClient(db);
+        }
+
+        return await this.invitationRepository.transaction(createWithClient);
       } catch (error: unknown) {
         if (
           !this.isTokenUniqueConstraintError(error) ||
@@ -126,9 +138,10 @@ export class InvitationService {
   async accept(
     token: string,
     user: Pick<AuthenticatedUserContext, 'id' | 'email'>,
+    db?: PrismaDbClient,
   ): Promise<TeamMember> {
-    return this.invitationRepository.transaction(async (db) => {
-      const invitation = await this.invitationRepository.findByToken(token, db);
+    const acceptWithClient = async (tx: PrismaDbClient) => {
+      const invitation = await this.invitationRepository.findByToken(token, tx);
       const normalizedUserEmail = normalizeInviteEmail(user.email);
 
       if (!invitation) {
@@ -145,7 +158,7 @@ export class InvitationService {
         );
       }
 
-      const team = await this.teamRepository.findById(invitation.teamId, db);
+      const team = await this.teamRepository.findById(invitation.teamId, tx);
 
       if (!team) {
         throw new NotFoundException('Team not found');
@@ -167,7 +180,7 @@ export class InvitationService {
       const existingMember = await this.teamRepository.findMember(
         invitation.teamId,
         user.id,
-        db,
+        tx,
       );
 
       if (existingMember) {
@@ -178,13 +191,13 @@ export class InvitationService {
         invitation.id,
         normalizedUserEmail,
         now,
-        db,
+        tx,
       );
 
       if (accepted.count === 0) {
         const latestInvitation = await this.invitationRepository.findById(
           invitation.id,
-          db,
+          tx,
         );
 
         if (!latestInvitation) {
@@ -204,7 +217,7 @@ export class InvitationService {
         membership = await this.teamRepository.addMember(
           invitation.teamId,
           user.id,
-          db,
+          tx,
         );
       } catch (error: unknown) {
         if (this.isTeamMemberUniqueConstraintError(error)) {
@@ -215,7 +228,39 @@ export class InvitationService {
       }
 
       return membership;
-    });
+    };
+
+    if (db) {
+      return acceptWithClient(db);
+    }
+
+    return this.invitationRepository.transaction(acceptWithClient);
+  }
+
+  async validateTokenOrThrow(
+    token: string,
+    db?: PrismaDbClient,
+  ): Promise<InvitationWithTeam> {
+    const invitation = await this.invitationRepository.findByTokenWithTeam(
+      token,
+      db,
+    );
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (
+      invitation.status !== InvitationStatus.PENDING ||
+      invitation.revokedAt !== null ||
+      invitation.expiresAt <= new Date()
+    ) {
+      throw new BadRequestException(
+        'Invitation is expired, revoked, or already accepted',
+      );
+    }
+
+    return invitation;
   }
 
   revokeInvitations(
@@ -262,18 +307,15 @@ export class InvitationService {
     teamId: string,
     emails: string[],
   ): Prisma.InvitationUncheckedCreateInput[] {
-    const expiresAt = this.resolveExpirationDate();
+    const expiresAt =
+      this.invitationTokenService.resolveTeamInvitationExpirationDate();
     const generatedTokens = new Set<string>();
 
     return emails.map((email) => {
-      let token = this.hashingService.generateHexToken(
-        this.configService.tokenByteLength,
-      );
+      let token = this.invitationTokenService.generateToken();
 
       while (generatedTokens.has(token)) {
-        token = this.hashingService.generateHexToken(
-          this.configService.tokenByteLength,
-        );
+        token = this.invitationTokenService.generateToken();
       }
 
       generatedTokens.add(token);
@@ -286,13 +328,6 @@ export class InvitationService {
         expiresAt,
       };
     });
-  }
-
-  private resolveExpirationDate(): Date {
-    return new Date(
-      Date.now() +
-        this.configService.emailVerificationExpirationHours * 60 * 60 * 1000,
-    );
   }
 
   private isTokenUniqueConstraintError(

@@ -156,7 +156,8 @@ model User {
 
   uploads UploadedFile[]
 
-  applicationsCreated Application[] @relation("ApplicationCreatedBy")
+  applicationsCreated        Application[]        @relation("ApplicationCreatedBy")
+  updatedApplicationSections ApplicationSection[] @relation("ApplicationSectionUpdatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -264,12 +265,32 @@ model Application {
   submittedAt DateTime?
   decidedAt   DateTime?
 
+  sections ApplicationSection[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([callId, status])
   @@index([teamId, status])
   @@index([createdById, status])
+}
+
+model ApplicationSection {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  key       String
+  valueJson Json
+  version   Int    @default(1)
+
+  updatedById String
+  updatedBy   User   @relation("ApplicationSectionUpdatedBy", fields: [updatedById], references: [id])
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([applicationId, key])
 }
 
 enum InvitationStatus {

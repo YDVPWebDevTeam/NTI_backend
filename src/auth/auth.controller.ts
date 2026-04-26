@@ -138,7 +138,6 @@ export class AuthController {
     const authResult = await this.authService.forceChangePassword(
       tempToken,
       dto.newPassword,
-      dto.confirmNewPassword,
     );
 
     this.authCookieService.applyAuthTokens(reply, authResult);

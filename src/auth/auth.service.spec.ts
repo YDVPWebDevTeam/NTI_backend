@@ -434,7 +434,6 @@ describe('AuthService', () => {
     const result = await service.forceChangePassword(
       'temp-token',
       'NewStrongPass123!',
-      'NewStrongPass123!',
     );
 
     expect(jwtService.verifyAsync).toHaveBeenCalledWith('temp-token', {

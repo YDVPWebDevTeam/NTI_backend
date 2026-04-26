@@ -373,12 +373,7 @@ export class AuthService {
   async forceChangePassword(
     tempToken: string,
     newPassword: string,
-    confirmNewPassword: string,
   ): Promise<AuthTokensResponse> {
-    if (newPassword !== confirmNewPassword) {
-      throw new BadRequestException('Passwords do not match');
-    }
-
     const tokenPayload =
       await this.validateForcePasswordChangeTokenOrThrow(tempToken);
     const user = await this.usersService.findById(tokenPayload.sub);

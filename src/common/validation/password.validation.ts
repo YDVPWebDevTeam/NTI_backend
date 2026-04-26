@@ -6,7 +6,7 @@ import {
   MinLength,
   ValidationOptions,
 } from 'class-validator';
-import { Match } from './match.validation';
+import { MatchesField } from './match-fields.validation';
 
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
@@ -37,6 +37,6 @@ export function ConfirmPasswordValidation(
 ): PropertyDecorator {
   return applyDecorators(
     PasswordValidation(),
-    Match(matchesField, validationOptions),
+    MatchesField(matchesField, validationOptions),
   );
 }

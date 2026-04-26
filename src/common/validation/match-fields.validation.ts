@@ -4,7 +4,7 @@ import {
   registerDecorator,
 } from 'class-validator';
 
-export function Match(
+export function MatchesField(
   property: string,
   validationOptions?: ValidationOptions,
 ): PropertyDecorator {
@@ -19,9 +19,7 @@ export function Match(
       validator: {
         validate(value: unknown, args: ValidationArguments) {
           const currentValue = value as string;
-
           const relatedPropertyName = args.constraints[0] as string;
-
           const obj = args.object as Record<string, unknown>;
           const relatedValue = obj[relatedPropertyName];
 

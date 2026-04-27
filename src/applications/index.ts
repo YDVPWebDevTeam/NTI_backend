@@ -1,6 +1,7 @@
 export { ApplicationsModule } from './applications.module';
 export { ApplicationsService } from './applications.service';
 export { ApplicationsRepository } from './applications.repository';
+export { ApplicationSectionsRepository } from './application-sections.repository';
 export { ApplicationsController } from './applications.controller';
 export { ApplicationRulesService } from './rules/application-rules.service';
 export { CallsRepository } from './calls.repository';

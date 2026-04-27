@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { ApplicationSectionsRepository } from './application-sections.repository';
 import { ApplicationsController } from './applications.controller';
-import { ApplicationRulesService } from './application-rules.service';
 import { ApplicationsRepository } from './applications.repository';
 import { ApplicationsService } from './applications.service';
 import { CallsRepository } from './calls.repository';
@@ -13,6 +13,7 @@ import { TeamModule } from '../team/team.module';
   controllers: [ApplicationsController],
   providers: [
     ApplicationsRepository,
+    ApplicationSectionsRepository,
     CallsRepository,
     ApplicationRulesService,
     ApplicationsService,

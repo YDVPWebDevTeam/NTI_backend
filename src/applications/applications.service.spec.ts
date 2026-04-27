@@ -2,7 +2,7 @@ jest.mock('./applications.repository', () => ({
   ApplicationsRepository: class ApplicationsRepository {},
 }));
 
-jest.mock('./application-rules.service', () => ({
+jest.mock('./rules/application-rules.service', () => ({
   ApplicationRulesService: class ApplicationRulesService {},
 }));
 

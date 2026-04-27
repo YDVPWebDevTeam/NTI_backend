@@ -12,7 +12,7 @@ import {
   ApplicationWithRelations,
   ApplicationsRepository,
 } from './applications.repository';
-import { ApplicationRulesService } from './application-rules.service';
+import { ApplicationRulesService } from './rules/application-rules.service';
 
 @Injectable()
 export class ApplicationsService {

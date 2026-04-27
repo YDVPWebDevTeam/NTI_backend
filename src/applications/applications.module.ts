@@ -5,6 +5,7 @@ import { ApplicationRulesService } from './application-rules.service';
 import { ApplicationsRepository } from './applications.repository';
 import { ApplicationsService } from './applications.service';
 import { CallsRepository } from './calls.repository';
+import { ApplicationRulesService } from './rules/application-rules.service';
 import { TeamModule } from '../team/team.module';
 
 @Module({

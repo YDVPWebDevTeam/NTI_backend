@@ -77,4 +77,19 @@ export class UserRepository extends BaseRepository<
       db,
     );
   }
+
+  findOrganizationOwner(
+    organizationId: string,
+    db?: PrismaDbClient,
+  ): Promise<User | null> {
+    return this.getDelegate(db).findFirst({
+      where: {
+        organizationId,
+        role: UserRole.COMPANY_OWNER,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+  }
 }

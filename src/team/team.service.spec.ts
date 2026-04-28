@@ -1,4 +1,14 @@
-jest.mock('../../generated/prisma/client', () => ({}), { virtual: true });
+jest.mock(
+  '../../generated/prisma/client',
+  () => ({
+    Prisma: {
+      TransactionIsolationLevel: {
+        Serializable: 'Serializable',
+      },
+    },
+  }),
+  { virtual: true },
+);
 jest.mock('@prisma/client', () => ({}), { virtual: true });
 
 jest.mock('./invitations/invitation.service', () => ({
@@ -21,6 +31,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import type { PrismaDbClient } from '../infrastructure/database';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
@@ -302,6 +313,12 @@ describe('TeamService', () => {
   it('removes a non-leader member when requested by the team leader', async () => {
     const result = await service.removeMember('team-1', 'leader-1', 'member-1');
 
+    expect(teamRepository.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
     expect(teamRepository.findUnique).toHaveBeenCalledWith(
       { id: 'team-1' },
       transactionClient,
@@ -378,6 +395,12 @@ describe('TeamService', () => {
 
     const result = await service.leaveTeam('team-1', 'member-1');
 
+    expect(teamRepository.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
     expect(teamRepository.deleteMembership).toHaveBeenCalledWith(
       'team-1',
       'member-1',
@@ -439,6 +462,12 @@ describe('TeamService', () => {
       'member-2',
     );
 
+    expect(teamRepository.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
     expect(teamRepository.findUnique).toHaveBeenCalledWith(
       { id: 'team-1' },
       transactionClient,
@@ -497,6 +526,16 @@ describe('TeamService', () => {
     await expect(
       service.removeMember('missing-team', 'leader-1', 'member-1'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects leadership transfer when the team does not exist', async () => {
+    teamRepository.findUnique.mockResolvedValueOnce(null);
+
+    await expect(
+      service.transferLeadership('missing-team', 'leader-1', 'member-2'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(teamRepository.updateLeader).not.toHaveBeenCalled();
   });
 
   it('rejects leave-team when membership disappears before delete', async () => {

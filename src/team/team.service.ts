@@ -6,9 +6,12 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import type { Team } from '../../generated/prisma/client';
+import { Prisma, type Team } from '../../generated/prisma/client';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import type { PrismaDbClient } from '../infrastructure/database';
+import type {
+  PrismaDbClient,
+  PrismaTransactionOptions,
+} from '../infrastructure/database';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { CreateTeamWithInvitesDto } from './dto/create-team-with-invites.dto';
 import { LeaveTeamResponseDto } from './dto/leave-team-response.dto';
@@ -26,6 +29,10 @@ import {
 @Injectable()
 export class TeamService {
   private readonly logger = new Logger(TeamService.name);
+  private readonly membershipLifecycleTransactionOptions: PrismaTransactionOptions =
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    };
 
   constructor(
     private readonly teamRepository: TeamRepository,
@@ -93,13 +100,8 @@ export class TeamService {
   ): Promise<TeamWithRelations> {
     const team = await this.findByIdOrThrow(teamId);
 
-    if (team.leaderId !== requesterId) {
-      throw new ForbiddenException();
-    }
-
-    if (team.lockedAt) {
-      throw new ConflictException('Team is locked');
-    }
+    this.ensureTeamLeader(team, requesterId);
+    this.ensureTeamIsUnlocked(team);
 
     if (Object.keys(dto).length === 0) {
       return team;
@@ -183,7 +185,7 @@ export class TeamService {
     actorId: string,
     memberId: string,
   ): Promise<RemoveTeamMemberResponseDto> {
-    return this.teamRepository.transaction(async (db) => {
+    return this.runMembershipLifecycleTransaction(async (db) => {
       const team = await this.getTeamOrThrow(teamId, db);
 
       this.ensureTeamLeader(team, actorId);
@@ -225,7 +227,7 @@ export class TeamService {
     teamId: string,
     actorId: string,
   ): Promise<LeaveTeamResponseDto> {
-    return this.teamRepository.transaction(async (db) => {
+    return this.runMembershipLifecycleTransaction(async (db) => {
       const team = await this.getTeamOrThrow(teamId, db);
 
       this.ensureTeamIsUnlocked(team);
@@ -269,24 +271,26 @@ export class TeamService {
     actorId: string,
     newLeaderId: string,
   ): Promise<TeamSummaryResponseDto> {
-    const updatedTeam = await this.teamRepository.transaction(async (db) => {
-      const team = await this.getTeamOrThrow(teamId, db);
+    const updatedTeam = await this.runMembershipLifecycleTransaction(
+      async (db) => {
+        const team = await this.getTeamOrThrow(teamId, db);
 
-      this.ensureTeamLeader(team, actorId);
-      this.ensureTeamIsUnlocked(team);
+        this.ensureTeamLeader(team, actorId);
+        this.ensureTeamIsUnlocked(team);
 
-      const newLeaderMembership = await this.teamRepository.findMember(
-        team.id,
-        newLeaderId,
-        db,
-      );
+        const newLeaderMembership = await this.teamRepository.findMember(
+          team.id,
+          newLeaderId,
+          db,
+        );
 
-      if (!newLeaderMembership) {
-        throw new NotFoundException('Team member not found');
-      }
+        if (!newLeaderMembership) {
+          throw new NotFoundException('Team member not found');
+        }
 
-      return this.teamRepository.updateLeader(team.id, newLeaderId, db);
-    });
+        return this.teamRepository.updateLeader(team.id, newLeaderId, db);
+      },
+    );
 
     return {
       id: updatedTeam.id,
@@ -328,5 +332,14 @@ export class TeamService {
     if (team.lockedAt) {
       throw new ConflictException('Team is locked');
     }
+  }
+
+  private runMembershipLifecycleTransaction<T>(
+    fn: (db: PrismaDbClient) => Promise<T>,
+  ): Promise<T> {
+    return this.teamRepository.transaction(
+      fn,
+      this.membershipLifecycleTransactionOptions,
+    );
   }
 }

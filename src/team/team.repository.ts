@@ -18,6 +18,8 @@ export type TeamPublicView = Pick<
   | 'archivedAt'
 >;
 
+export type TeamLeadershipUpdate = Pick<Team, 'id' | 'leaderId' | 'updatedAt'>;
+
 @Injectable()
 export class TeamRepository extends BaseRepository<
   Team,
@@ -118,6 +120,37 @@ export class TeamRepository extends BaseRepository<
           userId,
           teamId,
         },
+      },
+    });
+  }
+
+  deleteMembership(
+    teamId: string,
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<Prisma.BatchPayload> {
+    return (db ?? this.prisma.client).teamMember.deleteMany({
+      where: {
+        userId,
+        teamId,
+      },
+    });
+  }
+
+  updateLeader(
+    teamId: string,
+    leaderId: string,
+    db?: PrismaDbClient,
+  ): Promise<TeamLeadershipUpdate> {
+    return (db ?? this.prisma.client).team.update({
+      where: { id: teamId },
+      data: {
+        leaderId,
+      },
+      select: {
+        id: true,
+        leaderId: true,
+        updatedAt: true,
       },
     });
   }

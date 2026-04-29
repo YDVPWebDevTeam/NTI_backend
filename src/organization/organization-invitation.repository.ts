@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { OrgInvitation, Prisma, PrismaClient } from 'generated/prisma/client';
-import { InvitationStatus } from 'generated/prisma/enums';
+import { InvitationStatus } from '../../generated/prisma/enums';
 import {
   BaseRepository,
   PrismaDbClient,
   PrismaService,
-} from 'src/infrastructure/database';
+} from '../infrastructure/database';
 
 type OrgInvitationDelegate = PrismaClient['orgInvitation'];
 
@@ -42,5 +42,18 @@ export class OrganizationInviteRepository extends BaseRepository<
         expiresAt: { gt: at },
       },
     });
+  }
+
+  async findByTokenForUpdate(
+    token: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<OrgInvitation | null> {
+    const result = await tx.$queryRaw<OrgInvitation[]>`
+      SELECT * FROM "OrgInvitation"
+      WHERE token = ${token}
+      FOR UPDATE
+    `;
+
+    return result[0] ?? null;
   }
 }

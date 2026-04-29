@@ -52,6 +52,7 @@ import { AuthService, FORCE_PASSWORD_CHANGE_PURPOSE } from './auth.service';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
 import { ResetTokenService } from './reset-token/reset-token.service';
 import { AuthRegistrationService } from './auth-registration.service';
+import { OrganizationInviteRepository } from 'src/organization/organization-invitation.repository';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -159,6 +160,10 @@ describe('AuthService', () => {
       registerCompanyOwner: jest.fn(),
       registerViaInvite: jest.fn(),
     };
+    const organizationInvites = {
+      findByTokenForUpdate: jest.fn(),
+      update: jest.fn(),
+    };
     jwtService = {
       signAsync: jest
         .fn()
@@ -190,6 +195,7 @@ describe('AuthService', () => {
       resetTokens as unknown as ResetTokenService,
       queueService as unknown as QueueService,
       authRegistration as unknown as AuthRegistrationService,
+      organizationInvites as unknown as OrganizationInviteRepository,
     );
   });
 
@@ -364,7 +370,6 @@ describe('AuthService', () => {
 
     const result = await service.forceChangePassword(
       'temp-token',
-      'NewStrongPass123!',
       'NewStrongPass123!',
     );
 

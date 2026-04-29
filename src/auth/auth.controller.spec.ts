@@ -223,7 +223,6 @@ describe('AuthController', () => {
     expect(authService.forceChangePassword).toHaveBeenCalledWith(
       'temp-token',
       'NewStrongPass123!',
-      'NewStrongPass123!',
     );
     expect(replyMock.setCookie).toHaveBeenCalledWith(
       'accessToken',

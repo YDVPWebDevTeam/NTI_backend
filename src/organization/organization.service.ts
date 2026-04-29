@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -9,12 +10,17 @@ import { UserRepository } from 'src/user/user.repository';
 import { EMAIL_JOBS, QueueService } from 'src/infrastructure/queue';
 import { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
-import { Organization, Prisma } from 'generated/prisma/client';
+import { OrgInvitation, Organization, Prisma } from 'generated/prisma/client';
 import { OrganizationInviteRepository } from './organization-invitation.repository';
 import { CreateOrganizationInviteDto } from './dto/create-organization-invite.dto';
 import { InvitationStatus, UserRole } from 'generated/prisma/enums';
 import { ConfigService } from 'src/infrastructure/config';
 import { HashingService } from 'src/infrastructure/hashing';
+import { GetOrganizationInvitesQueryDto } from './dto/get-organization-invites-query.dto';
+import { GetOrganizationInvitesResponseDto } from './dto/get-organization-invites-response.dto';
+import { OrganizationInviteItemDto } from './dto/organization-invite-item.dto';
+import { ResendOrganizationInviteResponseDto } from './dto/resend-organization-invite-response.dto';
+import { RevokeOrganizationInviteResponseDto } from './dto/revoke-organization-invite-response.dto';
 
 @Injectable()
 export class OrganizationService {
@@ -26,6 +32,11 @@ export class OrganizationService {
     private readonly hashingService: HashingService,
     private readonly configService: ConfigService,
   ) {}
+
+  private static readonly REVOKE_INVALID_STATE_MESSAGE =
+    'Only pending and non-expired invites can be revoked';
+  private static readonly RESEND_INVALID_STATE_MESSAGE =
+    'Only pending and non-expired invites can be resent';
 
   private mapCreateDto(
     dto: CreateOrganizationDto,
@@ -93,17 +104,10 @@ export class OrganizationService {
     dto: CreateOrganizationInviteDto,
     user: AuthenticatedUserContext,
   ) {
-    const organization = await this.organizationRepository.findUnique({
-      id: organizationId,
-    });
-
-    if (!organization) {
-      throw new NotFoundException('Organization not found');
-    }
-
-    if (user.organizationId !== organizationId) {
-      throw new ForbiddenException();
-    }
+    const organization = await this.ensureOrganizationOwnerAccess(
+      organizationId,
+      user,
+    );
 
     const existingUser = await this.userRepo.findByEmail(dto.email);
 
@@ -148,20 +152,319 @@ export class OrganizationService {
     return response;
   }
 
+  async listInvites(
+    organizationId: string,
+    query: GetOrganizationInvitesQueryDto,
+    user: AuthenticatedUserContext,
+  ): Promise<GetOrganizationInvitesResponseDto> {
+    await this.ensureOrganizationOwnerAccess(organizationId, user);
+
+    const now = new Date();
+    const where = this.buildInvitationListWhere(organizationId, query, now);
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const [invitations, total] = await Promise.all([
+      this.organizationInviteRepository.findMany({
+        where,
+        orderBy: [{ createdAt: this.resolveSortOrder(query.sort) }],
+        skip,
+        take: limit,
+      }),
+      this.organizationInviteRepository.count(where),
+    ]);
+
+    return {
+      data: invitations.map((invitation) =>
+        this.toInviteItemDto(invitation, now),
+      ),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async revokeInvite(
+    organizationId: string,
+    inviteId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<RevokeOrganizationInviteResponseDto> {
+    await this.ensureOrganizationOwnerAccess(organizationId, user);
+
+    const invitation = await this.findOrganizationInviteOrThrow(
+      inviteId,
+      organizationId,
+    );
+
+    const now = new Date();
+    this.ensureInviteCanBeRevoked(invitation, now);
+
+    const revoked = await this.organizationInviteRepository.update(
+      { id: invitation.id },
+      {
+        status: InvitationStatus.REVOKED,
+        revokedAt: now,
+        revokedById: user.id,
+      },
+    );
+
+    return {
+      id: revoked.id,
+      status: 'REVOKED',
+      revokedAt: revoked.revokedAt ?? now,
+    };
+  }
+
+  async resendInvite(
+    organizationId: string,
+    inviteId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ResendOrganizationInviteResponseDto> {
+    const organization = await this.ensureOrganizationOwnerAccess(
+      organizationId,
+      user,
+    );
+
+    const invitation = await this.findOrganizationInviteOrThrow(
+      inviteId,
+      organizationId,
+    );
+
+    const now = new Date();
+    this.ensureInviteCanBeResent(invitation, now);
+
+    const previousToken = invitation.token;
+    const previousExpiresAt = invitation.expiresAt;
+    const newToken = this.generateToken();
+    const newExpiresAt = this.resolveExpirationDate(now);
+
+    const updated = await this.organizationInviteRepository.update(
+      { id: invitation.id },
+      {
+        token: newToken,
+        status: InvitationStatus.PENDING,
+        expiresAt: newExpiresAt,
+      },
+    );
+
+    try {
+      await this.queueService.addEmail(EMAIL_JOBS.ORG_INVITE, {
+        email: updated.email,
+        token: newToken,
+        organizationName: organization.name,
+      });
+    } catch (error) {
+      await this.organizationInviteRepository.update(
+        { id: invitation.id },
+        {
+          token: previousToken,
+          expiresAt: previousExpiresAt,
+        },
+      );
+      throw error;
+    }
+
+    return {
+      id: updated.id,
+      email: updated.email,
+      status: 'PENDING',
+      expiresAt: updated.expiresAt,
+    };
+  }
+
   private generateToken(): string {
     return this.hashingService.generateHexToken(
       this.configService.tokenByteLength,
     );
   }
 
-  private resolveExpirationDate(): Date {
+  private resolveExpirationDate(baseDate = new Date()): Date {
     return new Date(
-      Date.now() +
+      baseDate.getTime() +
         this.configService.organizationInvitationExpirationDays *
           24 *
           60 *
           60 *
           1000,
     );
+  }
+
+  private async ensureOrganizationOwnerAccess(
+    organizationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<Organization> {
+    const organization = await this.organizationRepository.findUnique({
+      id: organizationId,
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    if (user.organizationId !== organizationId) {
+      throw new ForbiddenException();
+    }
+
+    return organization;
+  }
+
+  private async findOrganizationInviteOrThrow(
+    inviteId: string,
+    organizationId: string,
+  ): Promise<OrgInvitation> {
+    const invitation =
+      await this.organizationInviteRepository.findByIdAndOrganization(
+        inviteId,
+        organizationId,
+      );
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    return invitation;
+  }
+
+  private ensureInviteCanBeRevoked(invitation: OrgInvitation, at: Date): void {
+    if (!this.isPendingAndUnexpired(invitation, at)) {
+      throw new BadRequestException(
+        OrganizationService.REVOKE_INVALID_STATE_MESSAGE,
+      );
+    }
+  }
+
+  private ensureInviteCanBeResent(invitation: OrgInvitation, at: Date): void {
+    if (!this.isPendingAndUnexpired(invitation, at)) {
+      throw new BadRequestException(
+        OrganizationService.RESEND_INVALID_STATE_MESSAGE,
+      );
+    }
+  }
+
+  private isPendingAndUnexpired(invitation: OrgInvitation, at: Date): boolean {
+    return (
+      invitation.status === InvitationStatus.PENDING &&
+      invitation.acceptedAt === null &&
+      invitation.revokedAt === null &&
+      invitation.expiresAt > at
+    );
+  }
+
+  private buildInvitationListWhere(
+    organizationId: string,
+    query: GetOrganizationInvitesQueryDto,
+    now: Date,
+  ): Prisma.OrgInvitationWhereInput {
+    const and: Prisma.OrgInvitationWhereInput[] = [{ organizationId }];
+    const normalizedQuery = query.q?.trim();
+
+    if (normalizedQuery) {
+      and.push({
+        email: {
+          contains: normalizedQuery,
+          mode: 'insensitive',
+        },
+      });
+    }
+
+    if (query.status) {
+      and.push(this.buildStatusWhere(query.status, now));
+    }
+
+    return and.length === 1 ? and[0] : { AND: and };
+  }
+
+  private buildStatusWhere(
+    status: InvitationStatus,
+    now: Date,
+  ): Prisma.OrgInvitationWhereInput {
+    switch (status) {
+      case InvitationStatus.PENDING:
+        return {
+          status: InvitationStatus.PENDING,
+          acceptedAt: null,
+          revokedAt: null,
+          expiresAt: { gt: now },
+        };
+      case InvitationStatus.EXPIRED:
+        return {
+          OR: [
+            { status: InvitationStatus.EXPIRED },
+            {
+              status: InvitationStatus.PENDING,
+              acceptedAt: null,
+              revokedAt: null,
+              expiresAt: { lte: now },
+            },
+          ],
+        };
+      case InvitationStatus.ACCEPTED:
+        return {
+          OR: [
+            { status: InvitationStatus.ACCEPTED },
+            { acceptedAt: { not: null } },
+          ],
+        };
+      case InvitationStatus.REVOKED:
+        return {
+          OR: [
+            { status: InvitationStatus.REVOKED },
+            { revokedAt: { not: null } },
+          ],
+        };
+    }
+  }
+
+  private resolveSortOrder(
+    sort: GetOrganizationInvitesQueryDto['sort'],
+  ): Prisma.SortOrder {
+    return sort === 'createdAt:asc' ? 'asc' : 'desc';
+  }
+
+  private toInviteItemDto(
+    invitation: OrgInvitation,
+    now: Date,
+  ): OrganizationInviteItemDto {
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      status: this.resolveInvitationStatus(invitation, now),
+      createdAt: invitation.createdAt,
+      expiresAt: invitation.expiresAt,
+      acceptedAt: invitation.acceptedAt,
+      revokedAt: invitation.revokedAt,
+    };
+  }
+
+  private resolveInvitationStatus(
+    invitation: OrgInvitation,
+    now: Date,
+  ): InvitationStatus {
+    if (
+      invitation.status === InvitationStatus.REVOKED ||
+      invitation.revokedAt !== null
+    ) {
+      return InvitationStatus.REVOKED;
+    }
+
+    if (
+      invitation.status === InvitationStatus.ACCEPTED ||
+      invitation.acceptedAt !== null
+    ) {
+      return InvitationStatus.ACCEPTED;
+    }
+
+    if (
+      invitation.status === InvitationStatus.EXPIRED ||
+      invitation.expiresAt <= now
+    ) {
+      return InvitationStatus.EXPIRED;
+    }
+
+    return InvitationStatus.PENDING;
   }
 }

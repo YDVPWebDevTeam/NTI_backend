@@ -4,7 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { OrganizationStatus, UserRole } from '../../../generated/prisma/enums';
+import { OrganizationStatus } from '../../../generated/prisma/enums';
 import { ensureAdminRole } from '../../auth/admin-role.helper';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { EMAIL_JOBS, QueueService } from '../../infrastructure/queue';
@@ -66,16 +66,10 @@ export class AdminOrganizationsService {
       throw new NotFoundException('Organization not found');
     }
 
-    const owners = await this.userRepository.findMany({
-      where: {
-        organizationId,
-        role: UserRole.COMPANY_OWNER,
-      },
-    });
+    const owner =
+      await this.userRepository.findOrganizationOwner(organizationId);
 
-    const ownerEmails = owners.map((owner) => owner.email);
-
-    if (ownerEmails.length === 0) {
+    if (!owner) {
       this.logger.warn(
         `No company owners found for organization ${organizationId}; notification skipped`,
       );
@@ -86,7 +80,7 @@ export class AdminOrganizationsService {
       await this.queueService.addEmail(EMAIL_JOBS.ORG_APPROVED, {
         organizationId,
         organizationName: updatedOrganization.name,
-        ownerEmails,
+        ownerEmails: [owner.email],
       });
 
       return updatedOrganization;
@@ -95,7 +89,7 @@ export class AdminOrganizationsService {
     await this.queueService.addEmail(EMAIL_JOBS.ORG_REJECTED, {
       organizationId,
       organizationName: updatedOrganization.name,
-      ownerEmails,
+      ownerEmails: [owner.email],
       rejectionReason: dto.rejectionReason ?? 'No reason provided',
     });
 

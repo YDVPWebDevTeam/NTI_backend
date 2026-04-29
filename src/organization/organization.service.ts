@@ -21,6 +21,7 @@ import { GetOrganizationInvitesResponseDto } from './dto/get-organization-invite
 import { OrganizationInviteItemDto } from './dto/organization-invite-item.dto';
 import { ResendOrganizationInviteResponseDto } from './dto/resend-organization-invite-response.dto';
 import { RevokeOrganizationInviteResponseDto } from './dto/revoke-organization-invite-response.dto';
+import { InvitationTokenService } from 'src/common/invitations/invitation-token.service';
 
 @Injectable()
 export class OrganizationService {
@@ -29,8 +30,7 @@ export class OrganizationService {
     private readonly userRepo: UserRepository,
     private readonly queueService: QueueService,
     private readonly organizationInviteRepository: OrganizationInviteRepository,
-    private readonly hashingService: HashingService,
-    private readonly configService: ConfigService,
+    private readonly invitationTokenService: InvitationTokenService,
   ) {}
 
   private static readonly REVOKE_INVALID_STATE_MESSAGE =
@@ -129,11 +129,12 @@ export class OrganizationService {
 
     const invitation = await this.organizationInviteRepository.create({
       email: dto.email,
-      token: this.generateToken(),
+      token: this.invitationTokenService.generateToken(),
       status: InvitationStatus.PENDING,
       organizationId,
       roleToAssign: UserRole.COMPANY_EMPLOYEE,
-      expiresAt: this.resolveExpirationDate(),
+      expiresAt:
+        this.invitationTokenService.resolveOrganizationInvitationExpirationDate(),
     });
 
     const { token, ...response } = invitation;

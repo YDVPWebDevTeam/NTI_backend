@@ -36,7 +36,7 @@ describe('AdminOrganizationsService', () => {
     updateMany: jest.Mock;
   };
   let userRepository: {
-    findMany: jest.Mock;
+    findOrganizationOwner: jest.Mock;
   };
   let queueService: {
     addEmail: jest.Mock;
@@ -78,7 +78,7 @@ describe('AdminOrganizationsService', () => {
     };
 
     userRepository = {
-      findMany: jest.fn(),
+      findOrganizationOwner: jest.fn(),
     };
 
     queueService = {
@@ -131,10 +131,10 @@ describe('AdminOrganizationsService', () => {
       ...pendingOrganization,
       status: OrganizationStatus.ACTIVE,
     });
-    userRepository.findMany.mockResolvedValue([
-      { id: 'owner-1', email: 'owner1@example.com' },
-      { id: 'owner-2', email: 'owner2@example.com' },
-    ]);
+    userRepository.findOrganizationOwner.mockResolvedValue({
+      id: 'owner-1',
+      email: 'owner1@example.com',
+    });
 
     const result = await service.updateStatus(actorAdmin, 'org-1', {
       status: MANAGEABLE_ORG_STATUSES.ACTIVE,
@@ -149,7 +149,7 @@ describe('AdminOrganizationsService', () => {
       {
         organizationId: 'org-1',
         organizationName: pendingOrganization.name,
-        ownerEmails: ['owner1@example.com', 'owner2@example.com'],
+        ownerEmails: ['owner1@example.com'],
       },
     );
     expect(result.status).toBe(OrganizationStatus.ACTIVE);
@@ -161,9 +161,10 @@ describe('AdminOrganizationsService', () => {
       ...pendingOrganization,
       status: OrganizationStatus.REJECTED,
     });
-    userRepository.findMany.mockResolvedValue([
-      { id: 'owner-1', email: 'owner1@example.com' },
-    ]);
+    userRepository.findOrganizationOwner.mockResolvedValue({
+      id: 'owner-1',
+      email: 'owner1@example.com',
+    });
 
     const result = await service.updateStatus(actorAdmin, 'org-1', {
       status: MANAGEABLE_ORG_STATUSES.REJECTED,
@@ -188,7 +189,7 @@ describe('AdminOrganizationsService', () => {
       ...pendingOrganization,
       status: OrganizationStatus.ACTIVE,
     });
-    userRepository.findMany.mockResolvedValue([]);
+    userRepository.findOrganizationOwner.mockResolvedValue(null);
 
     await service.updateStatus(actorAdmin, 'org-1', {
       status: MANAGEABLE_ORG_STATUSES.ACTIVE,

@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -20,11 +22,18 @@ import {
   CreateTeamApi,
   DeleteTeamApi,
   GetTeamApi,
+  LeaveTeamApi,
+  RemoveTeamMemberApi,
+  TransferTeamLeadershipApi,
   UpdateTeamApi,
 } from './api-docs';
 import { CreateTeamWithInvitesDto } from './dto/create-team-with-invites.dto';
+import { LeaveTeamResponseDto } from './dto/leave-team-response.dto';
+import { RemoveTeamMemberResponseDto } from './dto/remove-team-member-response.dto';
 import { TeamDetailDto } from './dto/team-detail.dto';
 import { TeamPublicDto } from './dto/team-public.dto';
+import { TeamSummaryResponseDto } from './dto/team-summary-response.dto';
+import { TransferTeamLeadershipDto } from './dto/transfer-team-leadership.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { TeamService } from './team.service';
 
@@ -67,5 +76,42 @@ export class TeamController {
   @Roles(UserRole.ADMIN)
   remove(@Param('id', ParseUUIDPipe) id: string): Promise<TeamPublicDto> {
     return this.teamService.remove(id);
+  }
+
+  @RemoveTeamMemberApi()
+  @Delete(':teamId/members/:memberId')
+  @UseGuards(JwtAuthGuard)
+  removeMember(
+    @Param('teamId', ParseUUIDPipe) teamId: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<RemoveTeamMemberResponseDto> {
+    return this.teamService.removeMember(teamId, user.id, memberId);
+  }
+
+  @LeaveTeamApi()
+  @Post(':teamId/leave')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  leaveTeam(
+    @Param('teamId', ParseUUIDPipe) teamId: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<LeaveTeamResponseDto> {
+    return this.teamService.leaveTeam(teamId, user.id);
+  }
+
+  @TransferTeamLeadershipApi()
+  @Patch(':teamId/leader')
+  @UseGuards(JwtAuthGuard)
+  transferLeadership(
+    @Param('teamId', ParseUUIDPipe) teamId: string,
+    @Body() dto: TransferTeamLeadershipDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<TeamSummaryResponseDto> {
+    return this.teamService.transferLeadership(
+      teamId,
+      user.id,
+      dto.newLeaderId,
+    );
   }
 }

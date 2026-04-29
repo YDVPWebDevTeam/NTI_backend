@@ -3,7 +3,6 @@ import {
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import type { Invitation, Team } from '../../generated/prisma/client';
@@ -23,8 +22,6 @@ type TeamInvitationEmailPayload = Pick<Invitation, 'id' | 'email' | 'token'>;
 
 @Injectable()
 export class TeamService {
-  private readonly logger = new Logger(TeamService.name);
-
   constructor(
     private readonly teamRepository: TeamRepository,
     private readonly invitationService: InvitationService,
@@ -77,7 +74,7 @@ export class TeamService {
       },
     );
 
-    await this.enqueueInvitationEmailsBestEffort(team.name, invitations);
+    await this.enqueueInvitationEmailsOrRevoke(team, invitations);
 
     return team;
   }
@@ -154,37 +151,6 @@ export class TeamService {
       createdCount: invitations.length,
       invitations: invitations.map(({ id, email }) => ({ id, email })),
     };
-  }
-
-  private async enqueueInvitationEmailsBestEffort(
-    teamName: string,
-    invitations: TeamInvitationEmailPayload[],
-  ): Promise<void> {
-    const failedEmails: string[] = [];
-
-    for (const invitation of invitations) {
-      const jobId = `team-invitation:${invitation.id}`;
-
-      try {
-        await this.queueService.addEmail(
-          EMAIL_JOBS.TEAM_INVITATION,
-          {
-            email: invitation.email,
-            teamName,
-            token: invitation.token,
-          },
-          { jobId },
-        );
-      } catch {
-        failedEmails.push(invitation.email);
-      }
-    }
-
-    if (failedEmails.length > 0) {
-      this.logger.warn(
-        `Failed to enqueue ${failedEmails.length} invitation emails for team "${teamName}"`,
-      );
-    }
   }
 
   private async enqueueInvitationEmailsOrRevoke(

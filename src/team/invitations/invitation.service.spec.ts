@@ -150,6 +150,22 @@ describe('InvitationService', () => {
     expect(result).toHaveLength(2);
   });
 
+  it('does not retry token collisions inside a caller transaction', async () => {
+    const uniqueError = {
+      code: 'P2002',
+      meta: { target: 'token' },
+    };
+
+    invitationRepository.createMany.mockRejectedValue(uniqueError);
+
+    await expect(
+      service.createInvites('team-1', ['a@example.com'], transactionClient),
+    ).rejects.toBe(uniqueError);
+
+    expect(invitationRepository.createMany).toHaveBeenCalledTimes(1);
+    expect(invitationRepository.transaction).not.toHaveBeenCalled();
+  });
+
   it('throws after max retries when token unique collision keeps happening', async () => {
     invitationRepository.createMany.mockRejectedValue({
       code: 'P2002',

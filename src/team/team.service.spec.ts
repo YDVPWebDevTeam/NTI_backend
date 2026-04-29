@@ -164,6 +164,30 @@ describe('TeamService', () => {
     });
   });
 
+  it('revokes created invitations when initial invite email enqueue fails', async () => {
+    queueService.addEmail.mockRejectedValueOnce(new Error('queue unavailable'));
+
+    const user = {
+      id: 'user-1',
+      email: 'a@example.com',
+      role: 'STUDENT',
+      status: 'ACTIVE',
+    } as AuthenticatedUserContext;
+
+    await expect(
+      service.create(user, {
+        name: 'Alpha Team',
+        emails: ['a@example.com', 'b@example.com'],
+      }),
+    ).rejects.toThrow('Failed to enqueue invitation emails');
+
+    expect(queueService.removeEmailJob).not.toHaveBeenCalled();
+    expect(invitationService.revokeInvitations).toHaveBeenCalledWith([
+      'invite-1',
+      'invite-2',
+    ]);
+  });
+
   it('enqueues emails after invitation creation', async () => {
     const result = await service.createInvites(
       {

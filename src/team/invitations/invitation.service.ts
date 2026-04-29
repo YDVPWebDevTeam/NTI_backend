@@ -87,6 +87,7 @@ export class InvitationService {
         return await this.invitationRepository.transaction(createWithClient);
       } catch (error: unknown) {
         if (
+          db ||
           !this.isTokenUniqueConstraintError(error) ||
           attempt === INVITATION_TOKEN_MAX_RETRIES - 1
         ) {

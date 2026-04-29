@@ -3,7 +3,7 @@ jest.mock('./admin-org-invites.service', () => ({
 }));
 
 import {
-  InvitationStatus,
+  OrganizationStatus,
   UserRole,
   UserStatus,
 } from '../../../generated/prisma/enums';
@@ -37,20 +37,19 @@ describe('AdminOrgInvitesController', () => {
     );
   });
 
-  it('lists all organization invites', async () => {
+  it('lists all organization applications', async () => {
     service.listAll.mockResolvedValue([
       {
-        id: 'org-invite-1',
-        email: 'employee@example.com',
-        roleToAssign: UserRole.COMPANY_EMPLOYEE,
-        status: InvitationStatus.PENDING,
-        organizationId: 'org-1',
-        revokedById: null,
+        id: 'org-1',
+        name: 'Acme Labs s.r.o.',
+        ico: '12345678',
+        status: OrganizationStatus.PENDING,
+        website: null,
+        sector: null,
+        description: null,
+        logoUrl: null,
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-        expiresAt: new Date('2026-01-08T00:00:00.000Z'),
-        acceptedAt: null,
-        revokedAt: null,
       },
     ]);
 
@@ -60,8 +59,21 @@ describe('AdminOrgInvitesController', () => {
     expect(result).toHaveLength(1);
   });
 
-  it('lists organization invites by organization id', async () => {
-    service.listByOrganization.mockResolvedValue([]);
+  it('gets organization application by organization id', async () => {
+    service.listByOrganization.mockResolvedValue([
+      {
+        id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        name: 'Acme Labs s.r.o.',
+        ico: '12345678',
+        status: OrganizationStatus.PENDING,
+        website: null,
+        sector: null,
+        description: null,
+        logoUrl: null,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ]);
 
     await controller.listByOrganization(
       actor,

@@ -5,18 +5,18 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { createApiDecorator } from '../../../infrastructure/api-docs/api-docs-factory';
-import { OrgInviteResponseDto } from '../dto/org-invite-response.dto';
+import { OrganizationStatusResponseDto } from '../dto/organization-status-response.dto';
 
 export const GetAllOrgInvitesApi = () =>
   createApiDecorator({
-    summary: 'List organization invitations',
+    summary: 'List organization applications',
     description:
-      'Returns all organization invitations across organizations for ADMIN and SUPER_ADMIN.',
+      'Returns pending organization applications (organization records awaiting review) for ADMIN and SUPER_ADMIN.',
     successResponse: {
       status: 200,
-      type: OrgInviteResponseDto,
+      type: OrganizationStatusResponseDto,
       isArray: true,
-      description: 'Organization invitations were retrieved successfully.',
+      description: 'Organization applications were retrieved successfully.',
     },
     extraDecorators: [ApiBearerAuth('access-token')],
     errors: [
@@ -24,21 +24,22 @@ export const GetAllOrgInvitesApi = () =>
         description: 'Bearer token is missing or invalid.',
       }),
       ApiForbiddenResponse({
-        description: 'Only administrators can access organization invitations.',
+        description:
+          'Only administrators can access organization applications.',
       }),
     ],
   });
 
 export const GetOrganizationInvitesApi = () =>
   createApiDecorator({
-    summary: 'List organization invitations by organization',
+    summary: 'Get organization application by organization',
     description:
-      'Returns all invitations for a specific organization for ADMIN and SUPER_ADMIN.',
+      'Returns the organization application for a specific organization id for ADMIN and SUPER_ADMIN.',
     successResponse: {
       status: 200,
-      type: OrgInviteResponseDto,
+      type: OrganizationStatusResponseDto,
       isArray: true,
-      description: 'Organization invitations were retrieved successfully.',
+      description: 'Organization application was retrieved successfully.',
     },
     extraDecorators: [ApiBearerAuth('access-token')],
     errors: [
@@ -46,7 +47,8 @@ export const GetOrganizationInvitesApi = () =>
         description: 'Bearer token is missing or invalid.',
       }),
       ApiForbiddenResponse({
-        description: 'Only administrators can access organization invitations.',
+        description:
+          'Only administrators can access organization applications.',
       }),
       ApiNotFoundResponse({
         description: 'Organization was not found.',

@@ -3,10 +3,10 @@ import {
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, type Team } from '../../generated/prisma/client';
+import type { Invitation, Team } from '../../generated/prisma/client';
+import { Prisma } from '../../generated/prisma/client';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import type {
   PrismaDbClient,
@@ -26,9 +26,10 @@ import {
   TeamWithRelations,
 } from './team.repository';
 
+type TeamInvitationEmailPayload = Pick<Invitation, 'id' | 'email' | 'token'>;
+
 @Injectable()
 export class TeamService {
-  private readonly logger = new Logger(TeamService.name);
   private readonly membershipLifecycleTransactionOptions: PrismaTransactionOptions =
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -44,41 +45,49 @@ export class TeamService {
     user: AuthenticatedUserContext,
     dto: CreateTeamWithInvitesDto,
   ): Promise<TeamWithRelations> {
-    const team = await this.teamRepository.transaction(async (db) => {
-      const createdTeam = await this.teamRepository.create(
-        {
-          name: dto.name,
-          leaderId: user.id,
-        },
-        db,
-      );
+    const minimumCreatedCount = 2;
 
-      await this.teamRepository.addMember(createdTeam.id, user.id, db);
-
-      const loadedTeam = await this.teamRepository.findById(createdTeam.id, db);
-
-      if (!loadedTeam) {
-        throw new InternalServerErrorException('Failed to load created team');
-      }
-
-      return loadedTeam;
-    });
-
-    try {
-      await this.createInvites(team, dto.emails, {
-        minimumCreatedCount: 2,
-      });
-    } catch (error) {
-      try {
-        await this.teamRepository.remove({ id: team.id });
-      } catch (cleanupError) {
-        this.logger.error(
-          `Failed to rollback team ${team.id} after invite creation failure`,
-          cleanupError instanceof Error ? cleanupError.stack : undefined,
+    const { team, invitations } = await this.teamRepository.transaction(
+      async (db) => {
+        const createdTeam = await this.teamRepository.create(
+          {
+            name: dto.name,
+            leaderId: user.id,
+          },
+          db,
         );
-      }
-      throw error;
-    }
+
+        await this.teamRepository.addMember(createdTeam.id, user.id, db);
+
+        const loadedTeam = await this.teamRepository.findById(
+          createdTeam.id,
+          db,
+        );
+
+        if (!loadedTeam) {
+          throw new InternalServerErrorException('Failed to load created team');
+        }
+
+        const createdInvitations = await this.invitationService.createInvites(
+          createdTeam.id,
+          dto.emails,
+          db,
+        );
+
+        if (createdInvitations.length < minimumCreatedCount) {
+          throw new ConflictException(
+            `At least ${minimumCreatedCount} invitations must be created`,
+          );
+        }
+
+        return {
+          team: loadedTeam,
+          invitations: createdInvitations,
+        };
+      },
+    );
+
+    await this.enqueueInvitationEmailsOrRevoke(team, invitations);
 
     return team;
   }
@@ -144,6 +153,18 @@ export class TeamService {
       );
     }
 
+    await this.enqueueInvitationEmailsOrRevoke(team, invitations);
+
+    return {
+      createdCount: invitations.length,
+      invitations: invitations.map(({ id, email }) => ({ id, email })),
+    };
+  }
+
+  private async enqueueInvitationEmailsOrRevoke(
+    team: Pick<Team, 'id' | 'name'>,
+    invitations: TeamInvitationEmailPayload[],
+  ): Promise<void> {
     const queuedJobIds: string[] = [];
 
     try {
@@ -173,11 +194,6 @@ export class TeamService {
         'Failed to enqueue invitation emails',
       );
     }
-
-    return {
-      createdCount: invitations.length,
-      invitations: invitations.map(({ id, email }) => ({ id, email })),
-    };
   }
 
   async removeMember(

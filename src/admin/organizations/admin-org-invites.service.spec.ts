@@ -1,31 +1,25 @@
 jest.mock('../../../generated/prisma/client', () => ({}), { virtual: true });
 jest.mock('@prisma/client', () => ({}), { virtual: true });
 
-jest.mock('./org-invitation.repository', () => ({
-  OrgInvitationRepository: class OrgInvitationRepository {},
-}));
 jest.mock('../../organization/organization.repository', () => ({
   OrganizationRepository: class OrganizationRepository {},
 }));
 
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import {
-  InvitationStatus,
+  OrganizationStatus,
   UserRole,
   UserStatus,
 } from '../../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { OrganizationRepository } from '../../organization/organization.repository';
 import { AdminOrgInvitesService } from './admin-org-invites.service';
-import { OrgInvitationRepository } from './org-invitation.repository';
 
 describe('AdminOrgInvitesService', () => {
   let service: AdminOrgInvitesService;
-  let orgInvitationRepository: {
-    findMany: jest.Mock;
-  };
   let organizationRepository: {
     findUnique: jest.Mock;
+    findMany: jest.Mock;
   };
 
   const actorAdmin: AuthenticatedUserContext = {
@@ -45,16 +39,12 @@ describe('AdminOrgInvitesService', () => {
   };
 
   beforeEach(() => {
-    orgInvitationRepository = {
+    organizationRepository = {
+      findUnique: jest.fn(),
       findMany: jest.fn(),
     };
 
-    organizationRepository = {
-      findUnique: jest.fn(),
-    };
-
     service = new AdminOrgInvitesService(
-      orgInvitationRepository as unknown as OrgInvitationRepository,
       organizationRepository as unknown as OrganizationRepository,
     );
   });
@@ -65,49 +55,45 @@ describe('AdminOrgInvitesService', () => {
     );
   });
 
-  it('lists all organization invites ordered by createdAt desc', async () => {
+  it('lists all pending organization applications ordered by createdAt desc', async () => {
     const createdAt = new Date('2026-01-01T00:00:00.000Z');
     const updatedAt = new Date('2026-01-01T00:00:00.000Z');
-    const expiresAt = new Date('2026-01-08T00:00:00.000Z');
 
-    orgInvitationRepository.findMany.mockResolvedValue([
+    organizationRepository.findMany.mockResolvedValue([
       {
-        id: 'invite-1',
-        email: 'employee@example.com',
-        token: 'secret-token',
-        roleToAssign: UserRole.COMPANY_EMPLOYEE,
-        status: InvitationStatus.PENDING,
-        organizationId: 'org-1',
-        revokedById: null,
+        id: 'org-1',
+        name: 'Acme Labs s.r.o.',
+        ico: '12345678',
+        status: OrganizationStatus.PENDING,
+        website: null,
+        sector: null,
+        description: null,
+        logoUrl: null,
         createdAt,
         updatedAt,
-        expiresAt,
-        acceptedAt: null,
-        revokedAt: null,
       },
     ]);
 
     const result = await service.listAll(actorAdmin);
 
-    expect(orgInvitationRepository.findMany).toHaveBeenCalledWith({
+    expect(organizationRepository.findMany).toHaveBeenCalledWith({
+      where: { status: OrganizationStatus.PENDING },
       orderBy: [{ createdAt: 'desc' }],
     });
     expect(result).toEqual([
       {
-        id: 'invite-1',
-        email: 'employee@example.com',
-        roleToAssign: UserRole.COMPANY_EMPLOYEE,
-        status: InvitationStatus.PENDING,
-        organizationId: 'org-1',
-        revokedById: null,
+        id: 'org-1',
+        name: 'Acme Labs s.r.o.',
+        ico: '12345678',
+        status: OrganizationStatus.PENDING,
+        website: null,
+        sector: null,
+        description: null,
+        logoUrl: null,
         createdAt,
         updatedAt,
-        expiresAt,
-        acceptedAt: null,
-        revokedAt: null,
       },
     ]);
-    expect(result[0]).not.toHaveProperty('token');
   });
 
   it('throws not found when organization does not exist', async () => {
@@ -118,31 +104,46 @@ describe('AdminOrgInvitesService', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('lists invites filtered by organization id', async () => {
-    organizationRepository.findUnique.mockResolvedValue({ id: 'org-1' });
-    orgInvitationRepository.findMany.mockResolvedValue([
-      {
-        id: 'invite-2',
-        email: 'employee2@example.com',
-        token: 'secret-token-2',
-        roleToAssign: UserRole.COMPANY_EMPLOYEE,
-        status: InvitationStatus.PENDING,
-        organizationId: 'org-1',
-        revokedById: null,
-        createdAt: new Date('2026-01-02T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-02T00:00:00.000Z'),
-        expiresAt: new Date('2026-01-09T00:00:00.000Z'),
-        acceptedAt: null,
-        revokedAt: null,
-      },
-    ]);
+  it('returns application for organization id', async () => {
+    const application = {
+      id: 'org-1',
+      name: 'Acme Labs s.r.o.',
+      ico: '12345678',
+      status: OrganizationStatus.PENDING,
+      website: null,
+      sector: null,
+      description: null,
+      logoUrl: null,
+      createdAt: new Date('2026-01-02T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    };
+    organizationRepository.findUnique.mockResolvedValue(application);
 
     const result = await service.listByOrganization(actorAdmin, 'org-1');
 
-    expect(orgInvitationRepository.findMany).toHaveBeenCalledWith({
-      where: { organizationId: 'org-1' },
-      orderBy: [{ createdAt: 'desc' }],
+    expect(organizationRepository.findUnique).toHaveBeenCalledWith({
+      id: 'org-1',
     });
-    expect(result[0]).not.toHaveProperty('token');
+    expect(result).toEqual([application]);
+  });
+
+  it('returns even non-pending application for organization id', async () => {
+    const application = {
+      id: 'org-1',
+      name: 'Acme Labs s.r.o.',
+      ico: '12345678',
+      status: OrganizationStatus.ACTIVE,
+      website: null,
+      sector: null,
+      description: null,
+      logoUrl: null,
+      createdAt: new Date('2026-01-02T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    };
+    organizationRepository.findUnique.mockResolvedValue(application);
+
+    const result = await service.listByOrganization(actorAdmin, 'org-1');
+
+    expect(result).toEqual([application]);
   });
 });

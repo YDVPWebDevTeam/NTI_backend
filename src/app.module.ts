@@ -15,6 +15,8 @@ import { TeamModule } from './team/team.module';
 import { UserModule } from './user/user.module';
 import { FilesModule } from './files';
 import { OrganizationModule } from './organization/organization.module';
+import { StudentProfileModule } from './student-profile';
+import { ApplicationsModule } from './applications';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { OrganizationModule } from './organization/organization.module';
     }),
     UserModule,
     FilesModule,
+    StudentProfileModule,
+    ApplicationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

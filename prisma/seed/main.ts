@@ -9,7 +9,11 @@ async function loadSeeds(): Promise<SeedTask[]> {
       superadminSeed: SeedTask;
     };
 
-  return [superadminSeed];
+  const { callsSeed } = (await import('./seeds/002-calls.seed.ts')) as {
+    callsSeed: SeedTask;
+  };
+
+  return [superadminSeed, callsSeed];
 }
 
 async function main(): Promise<void> {

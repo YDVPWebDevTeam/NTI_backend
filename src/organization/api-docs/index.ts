@@ -1,4 +1,9 @@
-export { CreateOrganizationApi } from './organization-api-docs.decorators';
-export { CreateOrganizationInviteApi } from './organization-api-docs.decorators';
-export { GetMyOrganizationApi } from './organization-api-docs.decorators';
-export { UpdateMyOrganizationApi } from './organization-api-docs.decorators';
+export {
+  CreateOrganizationApi,
+  CreateOrganizationInviteApi,
+  GetMyOrganizationApi,
+  GetOrganizationInvitesApi,
+  ResendOrganizationInviteApi,
+  RevokeOrganizationInviteApi,
+  UpdateMyOrganizationApi,
+} from './organization-api-docs.decorators';

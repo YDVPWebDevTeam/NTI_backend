@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { OrganizationStatus } from 'generated/prisma/enums';
+import { OrganizationStatus } from '../../../generated/prisma/enums';
 
 export class OrganizationResponseDto {
   @ApiProperty({

@@ -181,10 +181,11 @@ describe('TeamService', () => {
       'user-1',
       transactionClient,
     );
-    expect(invitationService.createInvites).toHaveBeenCalledWith('team-1', [
-      'a@example.com',
-      'b@example.com',
-    ]);
+    expect(invitationService.createInvites).toHaveBeenCalledWith(
+      'team-1',
+      ['a@example.com', 'b@example.com'],
+      transactionClient,
+    );
     expect(queueService.addEmail).toHaveBeenNthCalledWith(
       1,
       EMAIL_JOBS.TEAM_INVITATION,
@@ -200,6 +201,30 @@ describe('TeamService', () => {
       name: 'Alpha Team',
       leaderId: 'user-1',
     });
+  });
+
+  it('revokes created invitations when initial invite email enqueue fails', async () => {
+    queueService.addEmail.mockRejectedValueOnce(new Error('queue unavailable'));
+
+    const user = {
+      id: 'user-1',
+      email: 'a@example.com',
+      role: 'STUDENT',
+      status: 'ACTIVE',
+    } as AuthenticatedUserContext;
+
+    await expect(
+      service.create(user, {
+        name: 'Alpha Team',
+        emails: ['a@example.com', 'b@example.com'],
+      }),
+    ).rejects.toThrow('Failed to enqueue invitation emails');
+
+    expect(queueService.removeEmailJob).not.toHaveBeenCalled();
+    expect(invitationService.revokeInvitations).toHaveBeenCalledWith([
+      'invite-1',
+      'invite-2',
+    ]);
   });
 
   it('enqueues emails after invitation creation', async () => {
@@ -270,11 +295,9 @@ describe('TeamService', () => {
       }),
     ).rejects.toThrow('At least 2 invitations must be created');
 
-    expect(invitationService.revokeInvitations).toHaveBeenCalledWith([
-      'invite-1',
-    ]);
+    expect(invitationService.revokeInvitations).not.toHaveBeenCalled();
     expect(queueService.addEmail).not.toHaveBeenCalled();
-    expect(teamRepository.remove).toHaveBeenCalledWith({ id: 'team-1' });
+    expect(teamRepository.remove).not.toHaveBeenCalled();
   });
 
   it('returns public team data without access check', async () => {

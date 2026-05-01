@@ -38,6 +38,7 @@ import {
   RegisterViaInviteApi,
   ResendConfirmationEmailApi,
   ResetPasswordApi,
+  AcceptOrgInviteApi,
 } from './api-docs';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -47,6 +48,7 @@ import {
   PASSWORD_CHANGE_COOKIE,
   PasswordChangeRequiredHttpResponse,
 } from './auth-cookie.service';
+import { AcceptInviteOrgDto } from './dto/accept-invite-org.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -92,6 +94,18 @@ export class AuthController {
     return this.authCookieService.toHttpAuthResponse(authResult);
   }
 
+  @AcceptOrgInviteApi()
+  @Post('join-company')
+  @HttpCode(HttpStatus.CREATED)
+  async joinCompany(
+    @Body() dto: AcceptInviteOrgDto,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<AuthHttpResponse> {
+    const authResult = await this.authService.acceptOrgInvite(dto);
+    this.authCookieService.applyAuthTokens(reply, authResult);
+    return this.authCookieService.toHttpAuthResponse(authResult);
+  }
+
   @ApiTags('Admin')
   @AdminLoginApi()
   @HttpCode(HttpStatus.OK)
@@ -124,7 +138,6 @@ export class AuthController {
     const authResult = await this.authService.forceChangePassword(
       tempToken,
       dto.newPassword,
-      dto.confirmNewPassword,
     );
 
     this.authCookieService.applyAuthTokens(reply, authResult);

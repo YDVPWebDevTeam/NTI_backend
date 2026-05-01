@@ -10,6 +10,12 @@ jest.mock(
       EXPIRED: 'EXPIRED',
       REVOKED: 'REVOKED',
     },
+    OrganizationStatus: {
+      PENDING: 'PENDING',
+      ACTIVE: 'ACTIVE',
+      REJECTED: 'REJECTED',
+      SUSPENDED: 'SUSPENDED',
+    },
     UserRole: {
       COMPANY_OWNER: 'COMPANY_OWNER',
       COMPANY_EMPLOYEE: 'COMPANY_EMPLOYEE',
@@ -60,8 +66,17 @@ jest.mock(
   { virtual: true },
 );
 
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { InvitationStatus, UserRole, UserStatus } from 'generated/prisma/enums';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  InvitationStatus,
+  OrganizationStatus,
+  UserRole,
+  UserStatus,
+} from 'generated/prisma/enums';
 import type { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
 import { ConfigService } from 'src/infrastructure/config';
 import { HashingService } from 'src/infrastructure/hashing';
@@ -77,6 +92,7 @@ describe('OrganizationService', () => {
     findUnique: jest.Mock;
     transaction: jest.Mock;
     create: jest.Mock;
+    update: jest.Mock;
   };
   let userRepository: {
     findByEmail: jest.Mock;
@@ -111,11 +127,25 @@ describe('OrganizationService', () => {
     organizationId: 'org-1',
   };
 
+  const existingOrganization = {
+    id: 'org-1',
+    name: 'Acme Labs s.r.o.',
+    ico: '12345678',
+    sector: null,
+    description: null,
+    website: null,
+    logoUrl: null,
+    status: OrganizationStatus.PENDING,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+  };
+
   beforeEach(() => {
     organizationRepository = {
       findUnique: jest.fn(),
       transaction: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     };
 
     userRepository = {
@@ -159,6 +189,87 @@ describe('OrganizationService', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  describe('getMyOrganization', () => {
+    it('throws 404 when user has no organizationId', async () => {
+      await expect(
+        service.getMyOrganization({ ...owner, organizationId: null }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws 404 when organization does not exist', async () => {
+      organizationRepository.findUnique.mockResolvedValue(null);
+
+      await expect(service.getMyOrganization(owner)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('returns organization when found', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      const result = await service.getMyOrganization(owner);
+      expect(result.id).toBe(existingOrganization.id);
+    });
+  });
+
+  describe('updateMyOrganization', () => {
+    it('throws 404 when user has no organizationId', async () => {
+      await expect(
+        service.updateMyOrganization({ name: 'X' } as any, {
+          ...owner,
+          organizationId: null,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws 404 when organization does not exist', async () => {
+      organizationRepository.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.updateMyOrganization({ name: 'New Name' } as any, owner),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws 400 when body is empty', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      await expect(
+        service.updateMyOrganization({} as any, owner),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('throws 400 when ico is changed after org is processed', async () => {
+      organizationRepository.findUnique.mockResolvedValue({
+        ...existingOrganization,
+        status: OrganizationStatus.ACTIVE,
+      });
+
+      await expect(
+        service.updateMyOrganization({ ico: '87654321' } as any, owner),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('allows patching nullable fields to null', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+      organizationRepository.update.mockResolvedValue({
+        ...existingOrganization,
+        sector: null,
+        website: null,
+      });
+
+      const result = await service.updateMyOrganization(
+        { sector: null, website: null } as any,
+        owner,
+      );
+
+      expect(organizationRepository.update).toHaveBeenCalledWith(
+        { id: 'org-1' },
+        { sector: null, website: null },
+      );
+      expect(result.id).toBe('org-1');
+    });
   });
 
   it('lists invitations with computed EXPIRED status and pagination meta', async () => {

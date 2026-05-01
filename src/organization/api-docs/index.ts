@@ -1,7 +1,9 @@
 export {
   CreateOrganizationApi,
   CreateOrganizationInviteApi,
+  GetMyOrganizationApi,
   GetOrganizationInvitesApi,
-  RevokeOrganizationInviteApi,
   ResendOrganizationInviteApi,
+  RevokeOrganizationInviteApi,
+  UpdateMyOrganizationApi,
 } from './organization-api-docs.decorators';

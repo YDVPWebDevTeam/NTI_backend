@@ -18,10 +18,16 @@ export const envSchema = z.object({
   SMTP_PASSWORD: z.string().min(1, 'SMTP_PASSWORD is required'),
   SMTP_FROM: z.string().min(1, 'SMTP_FROM is required'),
   FRONTEND_URL: z.string().min(1, 'FRONTEND_URL is required'),
-  R2_ENDPOINT: z.string().url('R2_ENDPOINT must be a valid URL'),
-  R2_BUCKET_NAME: z.string().min(1, 'R2_BUCKET_NAME is required'),
-  R2_ACCESS_KEY_ID: z.string().min(1, 'R2_ACCESS_KEY_ID is required'),
-  R2_SECRET_ACCESS_KEY: z.string().min(1, 'R2_SECRET_ACCESS_KEY is required'),
+  R2_ENDPOINT: z.string().url('R2_ENDPOINT must be a valid URL').optional(),
+  R2_BUCKET_NAME: z.string().min(1, 'R2_BUCKET_NAME is required').optional(),
+  R2_ACCESS_KEY_ID: z
+    .string()
+    .min(1, 'R2_ACCESS_KEY_ID is required')
+    .optional(),
+  R2_SECRET_ACCESS_KEY: z
+    .string()
+    .min(1, 'R2_SECRET_ACCESS_KEY is required')
+    .optional(),
   R2_REGION: z.string().default('auto'),
   R2_PUBLIC_BASE_URL: z.string().url().optional(),
   FILE_UPLOAD_PRESIGN_EXPIRES_SECONDS: z.coerce

@@ -43,19 +43,19 @@ export class ConfigService {
     return this.env.FRONTEND_URL;
   }
 
-  get r2Endpoint(): string {
+  get r2Endpoint(): string | undefined {
     return this.env.R2_ENDPOINT;
   }
 
-  get r2BucketName(): string {
+  get r2BucketName(): string | undefined {
     return this.env.R2_BUCKET_NAME;
   }
 
-  get r2AccessKeyId(): string {
+  get r2AccessKeyId(): string | undefined {
     return this.env.R2_ACCESS_KEY_ID;
   }
 
-  get r2SecretAccessKey(): string {
+  get r2SecretAccessKey(): string | undefined {
     return this.env.R2_SECRET_ACCESS_KEY;
   }
 

@@ -5,22 +5,27 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrganizationRepository } from './organization.repository';
-import { UserRepository } from 'src/user/user.repository';
-import { EMAIL_JOBS, QueueService } from 'src/infrastructure/queue';
-import { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
-import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { OrgInvitation, Organization, Prisma } from 'generated/prisma/client';
-import { OrganizationInviteRepository } from './organization-invitation.repository';
-import { CreateOrganizationInviteDto } from './dto/create-organization-invite.dto';
-import { InvitationStatus, UserRole } from 'generated/prisma/enums';
+import {
+  InvitationStatus,
+  OrganizationStatus,
+  UserRole,
+} from 'generated/prisma/enums';
+import { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
 import { ConfigService } from 'src/infrastructure/config';
 import { HashingService } from 'src/infrastructure/hashing';
+import { EMAIL_JOBS, QueueService } from 'src/infrastructure/queue';
+import { UserRepository } from 'src/user/user.repository';
+import { CreateOrganizationInviteDto } from './dto/create-organization-invite.dto';
+import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { GetOrganizationInvitesQueryDto } from './dto/get-organization-invites-query.dto';
 import { GetOrganizationInvitesResponseDto } from './dto/get-organization-invites-response.dto';
 import { OrganizationInviteItemDto } from './dto/organization-invite-item.dto';
 import { ResendOrganizationInviteResponseDto } from './dto/resend-organization-invite-response.dto';
 import { RevokeOrganizationInviteResponseDto } from './dto/revoke-organization-invite-response.dto';
+import { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
+import { OrganizationInviteRepository } from './organization-invitation.repository';
+import { OrganizationRepository } from './organization.repository';
 
 @Injectable()
 export class OrganizationService {
@@ -49,6 +54,90 @@ export class OrganizationService {
       website: dto.website,
       logoUrl: dto.logoUrl,
     };
+  }
+
+  async getMyOrganization(
+    user: AuthenticatedUserContext,
+  ): Promise<Organization> {
+    if (!user.organizationId) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const organization = await this.organizationRepository.findUnique({
+      id: user.organizationId,
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    return organization;
+  }
+
+  async updateMyOrganization(
+    dto: UpdateOrganizationProfileDto,
+    user: AuthenticatedUserContext,
+  ): Promise<Organization> {
+    if (!user.organizationId) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const organization = await this.organizationRepository.findUnique({
+      id: user.organizationId,
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const updateData: Prisma.OrganizationUpdateInput = {};
+
+    if (dto.name !== undefined) {
+      updateData.name = dto.name;
+    }
+    if (dto.ico !== undefined) {
+      if (
+        organization.status !== OrganizationStatus.PENDING &&
+        dto.ico !== organization.ico
+      ) {
+        throw new BadRequestException(
+          'ICO cannot be changed after organization is processed',
+        );
+      }
+      updateData.ico = dto.ico;
+    }
+    if (dto.sector !== undefined) {
+      updateData.sector = dto.sector;
+    }
+    if (dto.description !== undefined) {
+      updateData.description = dto.description;
+    }
+    if (dto.website !== undefined) {
+      updateData.website = dto.website;
+    }
+    if (dto.logoUrl !== undefined) {
+      updateData.logoUrl = dto.logoUrl;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      throw new BadRequestException('Request body is empty');
+    }
+
+    try {
+      return await this.organizationRepository.update(
+        { id: user.organizationId },
+        updateData,
+      );
+    } catch (e: unknown) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        throw new ConflictException('ICO already exists');
+      }
+
+      throw e;
+    }
   }
 
   async create(dto: CreateOrganizationDto, user: AuthenticatedUserContext) {

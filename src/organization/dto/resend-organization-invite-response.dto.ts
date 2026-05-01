@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { InvitationStatus } from 'generated/prisma/enums';
 
 export class ResendOrganizationInviteResponseDto {
   @ApiProperty({
@@ -16,9 +17,10 @@ export class ResendOrganizationInviteResponseDto {
 
   @ApiProperty({
     description: 'Resend result status.',
-    example: 'PENDING',
+    enum: InvitationStatus,
+    example: InvitationStatus.PENDING,
   })
-  status = 'PENDING' as const;
+  status: InvitationStatus = InvitationStatus.PENDING;
 
   @ApiProperty({
     description: 'New invitation expiration timestamp.',

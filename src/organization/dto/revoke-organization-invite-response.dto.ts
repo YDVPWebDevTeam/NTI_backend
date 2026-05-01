@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { InvitationStatus } from 'generated/prisma/enums';
 
 export class RevokeOrganizationInviteResponseDto {
   @ApiProperty({
@@ -10,9 +11,10 @@ export class RevokeOrganizationInviteResponseDto {
 
   @ApiProperty({
     description: 'Revoke result status.',
-    example: 'REVOKED',
+    enum: InvitationStatus,
+    example: InvitationStatus.REVOKED,
   })
-  status = 'REVOKED' as const;
+  status: InvitationStatus = InvitationStatus.REVOKED;
 
   @ApiProperty({
     description: 'When the invitation was revoked.',

@@ -40,13 +40,14 @@ describe('ApplicationRulesService', () => {
   });
 
   it('validates all rules successfully when call and team are valid', async () => {
+    const now = Date.now();
     const call = {
       id: 'call-1',
       type: 'PROGRAM_A',
       title: 'Test Call',
       status: CallStatus.OPEN,
-      opensAt: new Date('2026-04-10T00:00:00.000Z'),
-      closesAt: new Date('2026-04-30T23:59:59.000Z'),
+      opensAt: new Date(now - 7 * 24 * 60 * 60 * 1000),
+      closesAt: new Date(now + 7 * 24 * 60 * 60 * 1000),
     };
 
     const team = {

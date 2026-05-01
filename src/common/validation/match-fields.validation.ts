@@ -4,7 +4,7 @@ import {
   registerDecorator,
 } from 'class-validator';
 
-export function MatchesField(
+export function MatchFields(
   property: string,
   validationOptions?: ValidationOptions,
 ): PropertyDecorator {

@@ -44,6 +44,19 @@ export class OrganizationInviteRepository extends BaseRepository<
     });
   }
 
+  findByIdAndOrganization(
+    id: string,
+    organizationId: string,
+    db?: PrismaDbClient,
+  ): Promise<OrgInvitation | null> {
+    return (db ?? this.prisma.client).orgInvitation.findFirst({
+      where: {
+        id,
+        organizationId,
+      },
+    });
+  }
+
   async findByTokenForUpdate(
     token: string,
     tx: Prisma.TransactionClient,

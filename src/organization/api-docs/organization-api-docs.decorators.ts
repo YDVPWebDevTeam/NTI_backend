@@ -12,6 +12,7 @@ import { CreateOrganizationInviteDto } from '../dto/create-organization-invite.d
 import { CreateOrganizationDto } from '../dto/create-organization.dto';
 import { OrganizationInviteResponseDto } from '../dto/organization-invite-response.dto';
 import { OrganizationResponseDto } from '../dto/organization-response.dto';
+import { UpdateOrganizationProfileDto } from '../dto/update-organization-profile.dto';
 
 export const CreateOrganizationApi = () =>
   createApiDecorator({
@@ -79,6 +80,63 @@ export const CreateOrganizationInviteApi = () =>
       ApiConflictResponse({
         description:
           'A user with this email already exists or an active invitation already exists.',
+      }),
+    ],
+  });
+
+export const GetMyOrganizationApi = () =>
+  createApiDecorator({
+    summary: 'Get my organization',
+    description:
+      'Returns the organization linked to the authenticated user via user.organizationId.',
+    successResponse: {
+      status: 200,
+      type: OrganizationResponseDto,
+      description: 'Organization payload.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'The authenticated user is not allowed to access this resource.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Organization not found.',
+      }),
+    ],
+  });
+
+export const UpdateMyOrganizationApi = () =>
+  createApiDecorator({
+    summary: 'Update my organization profile',
+    description:
+      'Partially updates the organization profile for the authenticated company owner.',
+    body: UpdateOrganizationProfileDto,
+    successResponse: {
+      status: 200,
+      type: OrganizationResponseDto,
+      description: 'Updated organization payload.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiBadRequestResponse({
+        description:
+          'Request body is invalid, empty, or contains no updatable fields.',
+      }),
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only company owners may update organization profiles.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Organization not found.',
+      }),
+      ApiConflictResponse({
+        description: 'ICO already exists.',
       }),
     ],
   });

@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -16,14 +18,41 @@ import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { GetUserContext } from 'src/auth/decorators/get-user-context.decorator';
 import type { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
 import { CreateOrganizationInviteDto } from './dto/create-organization-invite.dto';
-import { CreateOrganizationApi, CreateOrganizationInviteApi } from './api-docs';
+import {
+  CreateOrganizationApi,
+  CreateOrganizationInviteApi,
+  GetMyOrganizationApi,
+  UpdateMyOrganizationApi,
+} from './api-docs';
 import { OrganizationInviteResponseDto } from './dto/organization-invite-response.dto';
 import { OrganizationResponseDto } from './dto/organization-response.dto';
+import { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
 
 @ApiTags('Organizations')
 @Controller('/organizations')
 export class OrganizationController {
   constructor(private readonly service: OrganizationService) {}
+
+  @Get('me')
+  @GetMyOrganizationApi()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE)
+  async getMyOrganization(
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<OrganizationResponseDto> {
+    return this.service.getMyOrganization(user);
+  }
+
+  @Patch('me')
+  @UpdateMyOrganizationApi()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.COMPANY_OWNER)
+  async updateMyOrganization(
+    @Body() dto: UpdateOrganizationProfileDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<OrganizationResponseDto> {
+    return this.service.updateMyOrganization(dto, user);
+  }
 
   @Post()
   @CreateOrganizationApi()

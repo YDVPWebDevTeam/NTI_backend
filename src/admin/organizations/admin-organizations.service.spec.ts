@@ -37,6 +37,7 @@ describe('AdminOrganizationsService', () => {
   };
   let userRepository: {
     findMany: jest.Mock;
+    findOrganizationOwner?: jest.Mock;
   };
   let queueService: {
     addEmail: jest.Mock;
@@ -79,6 +80,7 @@ describe('AdminOrganizationsService', () => {
 
     userRepository = {
       findMany: jest.fn(),
+      findOrganizationOwner: jest.fn(),
     };
 
     queueService = {
@@ -195,5 +197,44 @@ describe('AdminOrganizationsService', () => {
     });
 
     expect(queueService.addEmail).not.toHaveBeenCalled();
+  });
+
+  describe('getOrganization', () => {
+    it('returns organization with owner summary', async () => {
+      organizationRepository.findUnique.mockResolvedValue({
+        ...pendingOrganization,
+        status: OrganizationStatus.ACTIVE,
+      });
+      (userRepository.findOrganizationOwner as jest.Mock).mockResolvedValue({
+        id: 'owner-1',
+        email: 'owner1@example.com',
+        firstName: 'Jane',
+        lastName: 'Doe',
+      });
+
+      const result = await service.getOrganization(actorAdmin, 'org-1');
+
+      expect(result.id).toBe('org-1');
+      expect(result.owner.email).toBe('owner1@example.com');
+    });
+
+    it('throws when organization is missing', async () => {
+      organizationRepository.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getOrganization(actorAdmin, 'missing-org'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws when owner is missing', async () => {
+      organizationRepository.findUnique.mockResolvedValue(pendingOrganization);
+      (userRepository.findOrganizationOwner as jest.Mock).mockResolvedValue(
+        null,
+      );
+
+      await expect(
+        service.getOrganization(actorAdmin, 'org-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
   });
 });

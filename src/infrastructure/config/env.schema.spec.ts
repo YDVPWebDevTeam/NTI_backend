@@ -10,10 +10,6 @@ describe('envSchema', () => {
       SMTP_PASSWORD: 'smtp-password',
       SMTP_FROM: 'noreply@example.com',
       FRONTEND_URL: 'http://localhost:3000',
-      R2_ENDPOINT: 'https://example.r2.cloudflarestorage.com',
-      R2_BUCKET_NAME: 'nti-bucket',
-      R2_ACCESS_KEY_ID: 'access-key-id',
-      R2_SECRET_ACCESS_KEY: 'secret-access-key',
       JWT_ACCESS_SECRET: '12345678901234567890123456789012',
       JWT_REFRESH_SECRET: '12345678901234567890123456789012',
       JWT_FORCE_PASSWORD_CHANGE_SECRET: '12345678901234567890123456789012',
@@ -28,5 +24,7 @@ describe('envSchema', () => {
     expect(parsed.PUPPETEER_EXECUTABLE_PATH).toBeUndefined();
     expect(parsed.DEV_EMAIL_VERIFICATION_BYPASS_ENABLED).toBe(false);
     expect(parsed.DEV_EMAIL_VERIFICATION_BYPASS_TOKEN).toBeUndefined();
+    expect(parsed.R2_ENDPOINT).toBeUndefined();
+    expect(parsed.R2_BUCKET_NAME).toBeUndefined();
   });
 });

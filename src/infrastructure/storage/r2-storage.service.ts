@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   GetObjectCommand,
   HeadObjectCommand,
@@ -29,28 +33,55 @@ export type PutObjectInput = {
 
 @Injectable()
 export class R2StorageService {
-  private readonly client: S3Client;
+  private client: S3Client | null = null;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(private readonly configService: ConfigService) {}
+
+  private getClient(): S3Client {
+    if (this.client) {
+      return this.client;
+    }
+
+    const endpoint = this.configService.r2Endpoint;
+    const bucketName = this.configService.r2BucketName;
+    const accessKeyId = this.configService.r2AccessKeyId;
+    const secretAccessKey = this.configService.r2SecretAccessKey;
+
+    if (!endpoint || !bucketName || !accessKeyId || !secretAccessKey) {
+      throw new InternalServerErrorException('R2 storage is not configured');
+    }
+
     this.client = new S3Client({
       region: this.configService.r2Region,
-      endpoint: this.configService.r2Endpoint,
+      endpoint,
       forcePathStyle: true,
       credentials: {
-        accessKeyId: this.configService.r2AccessKeyId,
-        secretAccessKey: this.configService.r2SecretAccessKey,
+        accessKeyId,
+        secretAccessKey,
       },
     });
+
+    return this.client;
+  }
+
+  private getBucketName(): string {
+    const bucketName = this.configService.r2BucketName;
+
+    if (!bucketName) {
+      throw new InternalServerErrorException('R2 storage is not configured');
+    }
+
+    return bucketName;
   }
 
   async createPresignedUploadUrl(input: PresignedUploadInput): Promise<string> {
     const command = new PutObjectCommand({
-      Bucket: this.configService.r2BucketName,
+      Bucket: this.getBucketName(),
       Key: input.key,
       ContentType: input.contentType,
     });
 
-    return getSignedUrl(this.client, command, {
+    return getSignedUrl(this.getClient(), command, {
       expiresIn: this.configService.fileUploadPresignExpiresSeconds,
     });
   }
@@ -59,7 +90,7 @@ export class R2StorageService {
     input: PresignedDownloadInput,
   ): Promise<string> {
     const command = new GetObjectCommand({
-      Bucket: this.configService.r2BucketName,
+      Bucket: this.getBucketName(),
       Key: input.key,
       ResponseContentDisposition: this.buildContentDisposition(
         input.filename,
@@ -67,15 +98,15 @@ export class R2StorageService {
       ),
     });
 
-    return getSignedUrl(this.client, command, {
+    return getSignedUrl(this.getClient(), command, {
       expiresIn: this.configService.fileDownloadPresignExpiresSeconds,
     });
   }
 
   async putObject(input: PutObjectInput): Promise<void> {
-    await this.client.send(
+    await this.getClient().send(
       new PutObjectCommand({
-        Bucket: this.configService.r2BucketName,
+        Bucket: this.getBucketName(),
         Key: input.key,
         Body: input.body,
         ContentType: input.contentType,
@@ -97,9 +128,9 @@ export class R2StorageService {
 
   async headObjectOrThrow(key: string): Promise<HeadObjectCommandOutput> {
     try {
-      return await this.client.send(
+      return await this.getClient().send(
         new HeadObjectCommand({
-          Bucket: this.configService.r2BucketName,
+          Bucket: this.getBucketName(),
           Key: key,
         }),
       );

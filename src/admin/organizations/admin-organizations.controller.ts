@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -13,8 +14,12 @@ import { GetUserContext } from '../../auth/decorators/get-user-context.decorator
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
-import { UpdateOrganizationStatusApi } from './api-docs/admin-organizations-api-docs.decorators';
+import {
+  GetAdminOrganizationApi,
+  UpdateOrganizationStatusApi,
+} from './api-docs/admin-organizations-api-docs.decorators';
 import { AdminOrganizationsService } from './admin-organizations.service';
+import { AdminOrganizationResponseDto } from './dto/admin-organization-response.dto';
 import { OrganizationStatusResponseDto } from './dto/organization-status-response.dto';
 import { UpdateOrgStatusDto } from './dto/update-org-status.dto';
 
@@ -24,6 +29,20 @@ export class AdminOrganizationsController {
   constructor(
     private readonly adminOrganizationsService: AdminOrganizationsService,
   ) {}
+
+  @GetAdminOrganizationApi()
+  @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  getOrganization(
+    @GetUserContext() actor: AuthenticatedUserContext,
+    @Param('id', ParseUUIDPipe) organizationId: string,
+  ): Promise<AdminOrganizationResponseDto> {
+    return this.adminOrganizationsService.getOrganization(
+      actor,
+      organizationId,
+    );
+  }
 
   @UpdateOrganizationStatusApi()
   @Patch(':id/status')

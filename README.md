@@ -42,6 +42,7 @@ Important variables:
 | --- | --- |
 | `PORT` | HTTP port for the API |
 | `NODE_ENV` | Runtime mode |
+| `APP_ENV` | Deployment mode used for environment-specific behavior such as auth cookie policy |
 | `DATABASE_URL` | PostgreSQL connection string used by Prisma |
 | `CORS_ORIGINS` | Comma-separated list of allowed frontend origins |
 | `REDIS_HOST` / `REDIS_PORT` | Redis connection used by BullMQ |
@@ -110,6 +111,9 @@ Behavior that is worth knowing:
 - refresh tokens are stored in an HttpOnly `refreshToken` cookie
 - forced password changes use a short-lived `requiresPasswordChangeToken` cookie
 - admin login can require an immediate password change before the session is usable
+- `APP_ENV=local` uses `SameSite=Lax` cookies for local backend/frontend development
+- deployed environments such as `APP_ENV=development`, `staging`, or `production` use `SameSite=None; Secure`
+- if your frontend origin differs from the backend origin, that frontend must be listed in `CORS_ORIGINS` and requests must use credentials
 
 ### Files
 

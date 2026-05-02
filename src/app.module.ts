@@ -17,6 +17,7 @@ import { FilesModule } from './files';
 import { OrganizationModule } from './organization/organization.module';
 import { StudentProfileModule } from './student-profile';
 import { ApplicationsModule } from './applications';
+import { PublicModule } from './public';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { ApplicationsModule } from './applications';
     FilesModule,
     StudentProfileModule,
     ApplicationsModule,
+    PublicModule,
   ],
   controllers: [AppController],
   providers: [AppService],

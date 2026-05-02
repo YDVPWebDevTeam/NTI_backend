@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { SeedTask } from '../types';
 
+type CallRow = {
+  id: string;
+};
+
 export const callsSeed: SeedTask = {
   name: '002-calls',
   async run(context) {
@@ -32,7 +36,7 @@ export const callsSeed: SeedTask = {
     ];
 
     for (const call of calls) {
-      const existingCall = await context.client.query(
+      const existingCall = await context.client.query<CallRow>(
         'SELECT id FROM "Call" WHERE type = $1 LIMIT 1',
         [call.type],
       );
@@ -54,6 +58,38 @@ export const callsSeed: SeedTask = {
           call.createdAt,
           call.updatedAt,
         ],
+      );
+    }
+
+    const programACall = await context.client.query<CallRow>(
+      'SELECT id FROM "Call" WHERE type = $1 LIMIT 1',
+      ['PROGRAM_A'],
+    );
+
+    const programACallId = programACall.rows[0]?.id;
+
+    if (!programACallId) {
+      return;
+    }
+
+    const requiredDocumentTypes = [
+      'EXECUTIVE_SUMMARY',
+      'TECHNICAL_ARCHITECTURE',
+      'ROADMAP',
+      'BUDGET',
+      'RISK_ANALYSIS',
+      'MONETIZATION_MODEL',
+      'CV',
+      'MOTIVATION_LETTER',
+      'SOLUTION_PROPOSAL',
+    ];
+
+    for (const documentType of requiredDocumentTypes) {
+      await context.client.query(
+        `INSERT INTO "RequiredDocumentType" (id, "callId", "documentType", "isRequired", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT ("callId", "documentType") DO NOTHING`,
+        [randomUUID(), programACallId, documentType, true, now, now],
       );
     }
   },

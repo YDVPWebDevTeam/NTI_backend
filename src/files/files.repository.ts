@@ -41,6 +41,22 @@ export class FilesRepository extends BaseRepository<
     );
   }
 
+  findByIdForOwners(
+    id: string,
+    ownerIds: string[],
+    db?: PrismaDbClient,
+  ): Promise<UploadedFile | null> {
+    return this.findFirst(
+      {
+        id,
+        ownerId: {
+          in: ownerIds,
+        },
+      },
+      db,
+    );
+  }
+
   markUploaded(
     id: string,
     uploadedAt = new Date(),

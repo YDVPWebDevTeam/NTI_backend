@@ -5,6 +5,9 @@ export const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),
+  APP_ENV: z
+    .enum(['local', 'development', 'staging', 'production', 'test'])
+    .optional(),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   LOG_LEVEL: z

@@ -33,7 +33,8 @@ describe('AuthController', () => {
     };
 
     const authCookieService = new AuthCookieService({
-      isProduction: false,
+      authCookieSameSite: 'lax',
+      authCookieSecure: false,
       jwtAccessExpiration: '15m',
       jwtRefreshExpirationDays: '7',
       forcePasswordChangeTokenExpirationMinutes: 15,
@@ -144,9 +145,15 @@ describe('AuthController', () => {
 
     expect(authService.logout).toHaveBeenCalledWith('refresh-token-id');
     expect(replyMock.clearCookie).toHaveBeenCalledWith('refreshToken', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: false,
       path: '/',
     });
     expect(replyMock.clearCookie).toHaveBeenCalledWith('accessToken', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: false,
       path: '/',
     });
     expect(result).toEqual({ success: true });
@@ -179,9 +186,15 @@ describe('AuthController', () => {
       }),
     );
     expect(replyMock.clearCookie).toHaveBeenCalledWith('refreshToken', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: false,
       path: '/',
     });
     expect(replyMock.clearCookie).toHaveBeenCalledWith('accessToken', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: false,
       path: '/',
     });
     expect(result).toEqual({
@@ -240,7 +253,12 @@ describe('AuthController', () => {
     );
     expect(replyMock.clearCookie).toHaveBeenCalledWith(
       'requiresPasswordChangeToken',
-      { path: '/' },
+      {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: false,
+        path: '/',
+      },
     );
     expect(result).toEqual({
       user: {
@@ -274,5 +292,62 @@ describe('AuthController', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
     expect(authService.forceChangePassword).not.toHaveBeenCalled();
+  });
+
+  it('uses cross-site cookie settings in production', async () => {
+    const authCookieService = new AuthCookieService({
+      authCookieSameSite: 'none',
+      authCookieSecure: true,
+      jwtAccessExpiration: '15m',
+      jwtRefreshExpirationDays: '7',
+      forcePasswordChangeTokenExpirationMinutes: 15,
+    } as never);
+    controller = new AuthController(
+      authService as unknown as AuthService,
+      authCookieService,
+    );
+
+    authService.login.mockResolvedValue({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      user: {
+        id: 'user-1',
+        email: 'student@example.com',
+        role: 'STUDENT',
+        status: 'PENDING',
+      },
+    });
+
+    const replyMock = {
+      setCookie: jest.fn(),
+      clearCookie: jest.fn(),
+    };
+
+    await controller.login(
+      {
+        email: 'student@example.com',
+        password: 'strongpass123',
+      },
+      replyMock as unknown as FastifyReply,
+    );
+
+    expect(replyMock.setCookie).toHaveBeenCalledWith(
+      'accessToken',
+      'access-token',
+      expect.objectContaining({
+        httpOnly: true,
+        sameSite: 'none',
+        secure: true,
+      }),
+    );
+    expect(replyMock.setCookie).toHaveBeenCalledWith(
+      'refreshToken',
+      'refresh-token',
+      expect.objectContaining({
+        httpOnly: true,
+        sameSite: 'none',
+        secure: true,
+      }),
+    );
   });
 });

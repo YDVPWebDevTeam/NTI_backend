@@ -113,6 +113,18 @@ export class ConfigService {
     return this.env.NODE_ENV;
   }
 
+  get appEnv(): 'local' | 'development' | 'staging' | 'production' | 'test' {
+    if (this.env.APP_ENV) {
+      return this.env.APP_ENV;
+    }
+
+    if (this.env.NODE_ENV === 'test') {
+      return 'test';
+    }
+
+    return 'local';
+  }
+
   get databaseUrl(): string {
     return this.env.DATABASE_URL;
   }
@@ -123,6 +135,14 @@ export class ConfigService {
 
   get isDevelopment(): boolean {
     return this.env.NODE_ENV === 'development';
+  }
+
+  get authCookieSameSite(): 'lax' | 'none' {
+    return this.appEnv === 'local' || this.appEnv === 'test' ? 'lax' : 'none';
+  }
+
+  get authCookieSecure(): boolean {
+    return this.appEnv !== 'local' && this.appEnv !== 'test';
   }
 
   get corsOrigins(): string[] {

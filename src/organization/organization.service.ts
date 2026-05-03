@@ -92,10 +92,32 @@ export class OrganizationService {
 
     const updateData: Prisma.OrganizationUpdateInput = {};
 
-    if (dto.name !== undefined) {
-      updateData.name = dto.name;
+    const directUpdateFields = [
+      'name',
+      'sector',
+      'description',
+      'website',
+      'logoUrl',
+    ] as const;
+
+    for (const field of directUpdateFields) {
+      const value = (dto as Record<string, unknown>)[field];
+      if (value !== undefined) {
+        // name must not be explicitly null
+        if (field === 'name' && value === null) {
+          throw new BadRequestException('Name cannot be null');
+        }
+
+        // assign
+        (updateData as Record<string, unknown>)[field] = value as any;
+      }
     }
+
     if (dto.ico !== undefined) {
+      if (dto.ico === null) {
+        throw new BadRequestException('ICO cannot be null');
+      }
+
       if (
         organization.status !== OrganizationStatus.PENDING &&
         dto.ico !== organization.ico
@@ -104,19 +126,8 @@ export class OrganizationService {
           'ICO cannot be changed after organization is processed',
         );
       }
+
       updateData.ico = dto.ico;
-    }
-    if (dto.sector !== undefined) {
-      updateData.sector = dto.sector;
-    }
-    if (dto.description !== undefined) {
-      updateData.description = dto.description;
-    }
-    if (dto.website !== undefined) {
-      updateData.website = dto.website;
-    }
-    if (dto.logoUrl !== undefined) {
-      updateData.logoUrl = dto.logoUrl;
     }
 
     if (Object.keys(updateData).length === 0) {

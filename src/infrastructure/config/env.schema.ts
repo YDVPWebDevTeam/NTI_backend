@@ -120,4 +120,26 @@ export const envSchema = z.object({
     .default(30),
 });
 
-export type Env = z.infer<typeof envSchema>;
+export const envSchemaWithR2Checks = envSchema.superRefine((env, ctx) => {
+  const coreKeys: Array<keyof typeof env> = [
+    'R2_ENDPOINT',
+    'R2_BUCKET_NAME',
+    'R2_ACCESS_KEY_ID',
+    'R2_SECRET_ACCESS_KEY',
+  ];
+
+  const provided = coreKeys.filter((k) => {
+    const v = env[k];
+    return v !== undefined && v !== null && String(v).trim() !== '';
+  });
+
+  if (provided.length > 0 && provided.length < coreKeys.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'R2 configuration must be either fully specified (R2_ENDPOINT, R2_BUCKET_NAME, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) or entirely omitted',
+    });
+  }
+});
+
+export type Env = z.infer<typeof envSchemaWithR2Checks>;

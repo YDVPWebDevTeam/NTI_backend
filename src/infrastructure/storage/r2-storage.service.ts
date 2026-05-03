@@ -41,15 +41,11 @@ export class R2StorageService {
     if (this.client) {
       return this.client;
     }
+    this.ensureConfigured();
 
-    const endpoint = this.configService.r2Endpoint;
-    const bucketName = this.configService.r2BucketName;
-    const accessKeyId = this.configService.r2AccessKeyId;
-    const secretAccessKey = this.configService.r2SecretAccessKey;
-
-    if (!endpoint || !bucketName || !accessKeyId || !secretAccessKey) {
-      throw new InternalServerErrorException('R2 storage is not configured');
-    }
+    const endpoint = this.configService.r2Endpoint as string;
+    const accessKeyId = this.configService.r2AccessKeyId as string;
+    const secretAccessKey = this.configService.r2SecretAccessKey as string;
 
     this.client = new S3Client({
       region: this.configService.r2Region,
@@ -65,13 +61,20 @@ export class R2StorageService {
   }
 
   private getBucketName(): string {
-    const bucketName = this.configService.r2BucketName;
+    this.getClient();
 
-    if (!bucketName) {
+    return this.configService.r2BucketName as string;
+  }
+
+  private ensureConfigured(): void {
+    const endpoint = this.configService.r2Endpoint;
+    const bucketName = this.configService.r2BucketName;
+    const accessKeyId = this.configService.r2AccessKeyId;
+    const secretAccessKey = this.configService.r2SecretAccessKey;
+
+    if (!endpoint || !bucketName || !accessKeyId || !secretAccessKey) {
       throw new InternalServerErrorException('R2 storage is not configured');
     }
-
-    return bucketName;
   }
 
   async createPresignedUploadUrl(input: PresignedUploadInput): Promise<string> {

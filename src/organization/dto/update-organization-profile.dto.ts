@@ -6,6 +6,7 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdateOrganizationProfileDto {
@@ -15,7 +16,7 @@ export class UpdateOrganizationProfileDto {
     minLength: 2,
     maxLength: 120,
   })
-  @IsOptional()
+  @ValidateIf((o: UpdateOrganizationProfileDto) => o.name !== undefined)
   @IsString()
   @MinLength(2)
   @MaxLength(120)
@@ -26,7 +27,7 @@ export class UpdateOrganizationProfileDto {
     example: '12345678',
     pattern: '^\\d{8}$',
   })
-  @IsOptional()
+  @ValidateIf((o: UpdateOrganizationProfileDto) => o.ico !== undefined)
   @Matches(/^\d{8}$/, {
     message: 'ICO must be 8 digits',
   })

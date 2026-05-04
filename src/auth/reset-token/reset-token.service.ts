@@ -4,6 +4,7 @@ import type {
   Prisma,
 } from '../../../generated/prisma/client';
 import type { PrismaDbClient } from '../../infrastructure/database';
+import { addMinutes } from '../../common/time/time.utils';
 import { ConfigService } from '../../infrastructure/config';
 import { HashingService } from '../../infrastructure/hashing';
 import { ResetTokenRepository } from './reset-token.repository';
@@ -96,6 +97,6 @@ export class ResetTokenService {
   resolveExpirationDate(
     minutes = this.configService.passwordResetExpirationMinutes,
   ): Date {
-    return new Date(Date.now() + minutes * 60 * 1000);
+    return addMinutes(new Date(), minutes);
   }
 }

@@ -10,6 +10,7 @@ import { Prisma } from '../../../generated/prisma/client';
 import { InvitationStatus } from '../../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { InvitationTokenService } from '../../common/invitations/invitation-token.service';
+import { isUniqueConstraintOnFields } from '../../common/prisma/prisma-error.utils';
 import { normalizeInviteEmail } from '../../common/validation/invite-email.validation';
 import type { PrismaDbClient } from '../../infrastructure/database';
 import { TeamRepository } from '../team.repository';
@@ -221,7 +222,7 @@ export class InvitationService {
           tx,
         );
       } catch (error: unknown) {
-        if (this.isTeamMemberUniqueConstraintError(error)) {
+        if (isUniqueConstraintOnFields(error, ['userId', 'teamId'])) {
           throw new ConflictException('User is already a team member');
         }
 
@@ -337,49 +338,6 @@ export class InvitationService {
     if (typeof error !== 'object' || error === null) {
       return false;
     }
-
-    const candidate = error as {
-      code?: unknown;
-      meta?: { target?: unknown };
-    };
-    const target = candidate.meta?.target;
-
-    return (
-      candidate.code === 'P2002' &&
-      (Array.isArray(target) ? target.includes('token') : target === 'token')
-    );
-  }
-
-  private isTeamMemberUniqueConstraintError(
-    error: unknown,
-  ): error is { code: string; meta?: { target?: string | string[] } } {
-    if (typeof error !== 'object' || error === null) {
-      return false;
-    }
-
-    const candidate = error as {
-      code?: unknown;
-      meta?: { target?: unknown };
-    };
-
-    if (candidate.code !== 'P2002') {
-      return false;
-    }
-
-    const target = candidate.meta?.target;
-
-    if (Array.isArray(target)) {
-      return target.includes('userId') && target.includes('teamId');
-    }
-
-    if (typeof target === 'string') {
-      return (
-        target.includes('userId_teamId') ||
-        (target.includes('userId') && target.includes('teamId')) ||
-        target.includes('TeamMember')
-      );
-    }
-
-    return false;
+    return isUniqueConstraintOnFields(error, ['token']);
   }
 }

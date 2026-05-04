@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { OrganizationStatus } from 'generated/prisma/enums';
+import { OrganizationStatus } from '../../../generated/prisma/enums';
 
 export class OrganizationResponseDto {
   @ApiProperty({
@@ -22,6 +22,7 @@ export class OrganizationResponseDto {
   ico!: string;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Organization sector or industry.',
     example: 'IT',
     nullable: true,
@@ -29,6 +30,7 @@ export class OrganizationResponseDto {
   sector!: string | null;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Short organization description.',
     example: 'Software development company.',
     nullable: true,
@@ -36,6 +38,7 @@ export class OrganizationResponseDto {
   description!: string | null;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Organization website URL.',
     example: 'https://example.com',
     nullable: true,
@@ -43,6 +46,7 @@ export class OrganizationResponseDto {
   website!: string | null;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Organization logo URL.',
     example: 'https://example.com/logo.png',
     nullable: true,

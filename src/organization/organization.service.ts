@@ -92,24 +92,21 @@ export class OrganizationService {
 
     const updateData: Prisma.OrganizationUpdateInput = {};
 
-    const directUpdateFields = [
-      'name',
+    if (dto.name !== undefined) {
+      updateData.name = dto.name;
+    }
+
+    const nullableDirectUpdateFields = [
       'sector',
       'description',
       'website',
       'logoUrl',
     ] as const;
 
-    for (const field of directUpdateFields) {
-      const value = (dto as Record<string, unknown>)[field];
+    for (const field of nullableDirectUpdateFields) {
+      const value = dto[field];
       if (value !== undefined) {
-        // name must not be explicitly null
-        if (field === 'name' && value === null) {
-          throw new BadRequestException('Name cannot be null');
-        }
-
-        // assign
-        (updateData as Record<string, unknown>)[field] = value as any;
+        updateData[field] = value;
       }
     }
 

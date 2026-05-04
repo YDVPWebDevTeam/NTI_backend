@@ -260,8 +260,28 @@ describe('ApplicationsService', () => {
       ['user-1'],
       { tx: 'db-client' },
     );
+    expect(applicationsRepository.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      { isolationLevel: 'Serializable' },
+    );
     expect(result.documentScope).toBe(ApplicationDocumentScope.APPLICATION);
     expect(result.version).toBe(2);
+  });
+
+  it('maps concurrent attach unique conflicts to ConflictException', async () => {
+    applicationsRepository.transaction.mockRejectedValue({ code: 'P2002' });
+
+    await expect(
+      service.attachDocument(
+        'application-1',
+        {
+          id: 'user-1',
+          email: 'lead@example.com',
+          role: UserRole.STUDENT,
+        } as never,
+        { fileId: 'file-1', documentType: DocumentType.BUDGET },
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('rejects CV attachment without memberUserId', async () => {

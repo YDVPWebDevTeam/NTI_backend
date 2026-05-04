@@ -19,7 +19,10 @@ export class ApplicationDocumentDto {
   @ApiProperty({ enum: ApplicationDocumentScope })
   documentScope!: ApplicationDocumentScope;
 
-  @ApiPropertyOptional({ example: 'b91e88db-5d96-443d-956b-ac4fdcbf95f7' })
+  @ApiPropertyOptional({
+    example: 'b91e88db-5d96-443d-956b-ac4fdcbf95f7',
+    nullable: true,
+  })
   memberUserId!: string | null;
 
   @ApiProperty({ example: 'd8d89d76-1a4c-4cc8-b804-e7fcf58567af' })

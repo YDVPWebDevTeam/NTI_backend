@@ -39,6 +39,10 @@ type RequiredDocumentSlot = {
 
 @Injectable()
 export class ApplicationsService {
+  private readonly applicationDocumentAttachTransactionOptions = {
+    isolationLevel: 'Serializable' as const,
+  } as const;
+
   constructor(
     private readonly applicationsRepository: ApplicationsRepository,
     private readonly applicationDocumentsRepository: ApplicationDocumentsRepository,
@@ -140,8 +144,12 @@ export class ApplicationsService {
     user: AuthenticatedUserContext,
     dto: AttachApplicationDocumentDto,
   ): Promise<ApplicationDocumentDto> {
-    const document = await this.applicationsRepository.transaction(
-      async (db) => {
+    let document: Awaited<
+      ReturnType<ApplicationDocumentsRepository['createVersioned']>
+    >;
+
+    try {
+      document = await this.applicationsRepository.transaction(async (db) => {
         const application = await this.loadWorkflowApplicationOrThrow(
           applicationId,
           db,
@@ -200,8 +208,16 @@ export class ApplicationsService {
           },
           db,
         );
-      },
-    );
+      }, this.applicationDocumentAttachTransactionOptions);
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException(
+          'Another document was attached to this slot concurrently. Please retry.',
+        );
+      }
+
+      throw error;
+    }
 
     return this.toApplicationDocumentDto(document);
   }
@@ -309,7 +325,7 @@ export class ApplicationsService {
   private ensureApplicationIsDraft(application: ApplicationWorkflowView): void {
     if (application.status !== ApplicationStatus.DRAFT) {
       throw new ConflictException(
-        `Only draft applications can be submitted (status: ${application.status})`,
+        `Only draft applications can be modified or submitted (status: ${application.status})`,
       );
     }
   }

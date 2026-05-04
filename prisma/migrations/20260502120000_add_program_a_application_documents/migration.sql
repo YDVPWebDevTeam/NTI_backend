@@ -43,6 +43,12 @@ CREATE INDEX "ApplicationDocument_applicationId_documentType_isActive_idx" ON "A
 CREATE INDEX "ApplicationDocument_applicationId_documentScope_isActive_idx" ON "ApplicationDocument"("applicationId", "documentScope", "isActive");
 CREATE INDEX "ApplicationDocument_applicationId_memberUserId_documentType_isActive_idx" ON "ApplicationDocument"("applicationId", "memberUserId", "documentType", "isActive");
 CREATE INDEX "ApplicationDocument_uploadedFileId_idx" ON "ApplicationDocument"("uploadedFileId");
+CREATE UNIQUE INDEX "ApplicationDocument_active_application_slot_key"
+  ON "ApplicationDocument"("applicationId", "documentType", "documentScope")
+  WHERE "isActive" = true AND "memberUserId" IS NULL;
+CREATE UNIQUE INDEX "ApplicationDocument_active_team_member_slot_key"
+  ON "ApplicationDocument"("applicationId", "documentType", "documentScope", "memberUserId")
+  WHERE "isActive" = true AND "memberUserId" IS NOT NULL;
 
 ALTER TABLE "RequiredDocumentType"
   ADD CONSTRAINT "RequiredDocumentType_callId_fkey"

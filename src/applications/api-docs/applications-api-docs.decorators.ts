@@ -103,7 +103,7 @@ export const AttachApplicationDocumentApi = () =>
       }),
       ApiConflictResponse({
         description:
-          'Application document pack is not supported for this application.',
+          'Application document pack is not supported for this application, the application is not draft, or another document update won the slot concurrently.',
       }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],
@@ -143,7 +143,10 @@ export const SubmitApplicationApi = () =>
     extraDecorators: [ApiBearerAuth('access-token')],
     errors: [
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
-      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id format, or the call is outside its application window.',
+      }),
       ApiForbiddenResponse({
         description: 'Only the team lead may submit the application.',
       }),

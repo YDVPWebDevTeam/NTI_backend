@@ -11,6 +11,6 @@ export class DocumentCompletenessItemDto {
   @ApiProperty({ enum: ApplicationDocumentScope })
   documentScope!: ApplicationDocumentScope;
 
-  @ApiPropertyOptional({ example: 'user-2' })
+  @ApiPropertyOptional({ example: 'user-2', nullable: true })
   memberUserId!: string | null;
 }

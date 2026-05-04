@@ -66,6 +66,24 @@ enum ApplicationStatus {
   ARCHIVED
 }
 
+enum DocumentType {
+  EXECUTIVE_SUMMARY
+  TECHNICAL_ARCHITECTURE
+  ROADMAP
+  BUDGET
+  RISK_ANALYSIS
+  MONETIZATION_MODEL
+  CV
+  MOTIVATION_LETTER
+  SOLUTION_PROPOSAL
+  OTHER
+}
+
+enum ApplicationDocumentScope {
+  APPLICATION
+  TEAM_MEMBER
+}
+
 enum DegreeLevel {
   BACHELOR
   MASTER
@@ -156,7 +174,9 @@ model User {
 
   uploads UploadedFile[]
 
-  applicationsCreated Application[] @relation("ApplicationCreatedBy")
+  applicationsCreated           Application[]         @relation("ApplicationCreatedBy")
+  applicationDocumentsCreated   ApplicationDocument[] @relation("ApplicationDocumentCreatedBy")
+  applicationDocumentsForMember ApplicationDocument[] @relation("ApplicationDocumentMember")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -188,10 +208,11 @@ model UploadedFile {
   uploadedAt         DateTime?
   failedAt           DateTime?
 
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-  academicEvidenceFor StudentProfile[] @relation("StudentAcademicEvidence")
-  cvFor               StudentProfile[] @relation("StudentCvFile")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  academicEvidenceFor  StudentProfile[]      @relation("StudentAcademicEvidence")
+  cvFor                StudentProfile[]      @relation("StudentCvFile")
+  applicationDocuments ApplicationDocument[]
 
   @@index([ownerId, status])
   @@index([status, uploadUrlExpiresAt])
@@ -241,8 +262,9 @@ model Call {
 
   applications Application[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  requiredDocumentTypes RequiredDocumentType[]
 
   @@index([type, status])
   @@index([status, opensAt, closesAt])
@@ -258,7 +280,8 @@ model Application {
   team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   createdById String
-  createdBy   User   @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
+  createdBy   User                  @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
+  documents   ApplicationDocument[]
 
   status      ApplicationStatus @default(DRAFT)
   submittedAt DateTime?
@@ -270,6 +293,51 @@ model Application {
   @@index([callId, status])
   @@index([teamId, status])
   @@index([createdById, status])
+}
+
+model RequiredDocumentType {
+  id String @id @default(uuid())
+
+  callId String
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  documentType DocumentType
+  isRequired   Boolean      @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([callId, documentType])
+  @@index([callId, isRequired])
+}
+
+model ApplicationDocument {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  uploadedFileId String
+  uploadedFile   UploadedFile @relation(fields: [uploadedFileId], references: [id], onDelete: Cascade)
+
+  documentType  DocumentType
+  documentScope ApplicationDocumentScope
+
+  memberUserId String?
+  memberUser   User?   @relation("ApplicationDocumentMember", fields: [memberUserId], references: [id], onDelete: Cascade)
+
+  version  Int     @default(1)
+  isActive Boolean @default(true)
+
+  createdById String
+  createdBy   User   @relation("ApplicationDocumentCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId, documentType, isActive])
+  @@index([applicationId, documentScope, isActive])
+  @@index([applicationId, memberUserId, documentType, isActive])
+  @@index([uploadedFileId])
 }
 
 enum InvitationStatus {

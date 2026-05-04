@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import {
   ApplicationDocumentScope,
   DocumentType,
@@ -11,6 +11,6 @@ export class DocumentCompletenessItemDto {
   @ApiProperty({ enum: ApplicationDocumentScope })
   documentScope!: ApplicationDocumentScope;
 
-  @ApiPropertyOptional({ example: 'user-2', nullable: true })
+  @ApiProperty({ example: 'user-2', nullable: true })
   memberUserId!: string | null;
 }

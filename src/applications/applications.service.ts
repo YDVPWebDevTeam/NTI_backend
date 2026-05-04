@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client';
 import {
   ApplicationDocumentScope,
   ApplicationStatus,
@@ -40,7 +41,7 @@ type RequiredDocumentSlot = {
 @Injectable()
 export class ApplicationsService {
   private readonly applicationDocumentAttachTransactionOptions = {
-    isolationLevel: 'Serializable' as const,
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
   } as const;
 
   constructor(

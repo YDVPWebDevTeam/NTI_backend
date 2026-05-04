@@ -145,14 +145,14 @@ export const SubmitApplicationApi = () =>
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
       ApiBadRequestResponse({
         description:
-          'Invalid application id format, or the call is outside its application window.',
+          'Invalid application id format, or the call is outside its opensAt/closesAt application window.',
       }),
       ApiForbiddenResponse({
         description: 'Only the team lead may submit the application.',
       }),
       ApiConflictResponse({
         description:
-          'Application is not in a submittable state or required documents are missing.',
+          'Call is not open for applications, application is not in a submittable state, or required documents are missing.',
       }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],

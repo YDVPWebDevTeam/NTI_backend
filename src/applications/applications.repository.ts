@@ -175,6 +175,9 @@ export class ApplicationsRepository extends BaseRepository<
               documentType: true,
               isRequired: true,
             },
+            orderBy: {
+              documentType: 'asc',
+            },
           },
         },
       },

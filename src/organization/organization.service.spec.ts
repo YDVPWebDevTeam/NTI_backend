@@ -115,6 +115,7 @@ describe('OrganizationService', () => {
     findOrganizationMember: jest.Mock;
     updateUserRole: jest.Mock;
     update: jest.Mock;
+    removeOrganizationMember: jest.Mock;
   };
 
   let queueService: {
@@ -192,6 +193,7 @@ describe('OrganizationService', () => {
       findOrganizationMember: jest.fn(),
       updateUserRole: jest.fn(),
       update: jest.fn(),
+      removeOrganizationMember: jest.fn(),
     };
 
     queueService = {
@@ -589,7 +591,7 @@ describe('OrganizationService', () => {
 
       userRepository.findOrganizationMember.mockResolvedValue(employee);
 
-      userRepository.update.mockResolvedValue({
+      userRepository.removeOrganizationMember.mockResolvedValue({
         ...employee,
         organizationId: null,
         role: UserRole.STUDENT,
@@ -597,12 +599,8 @@ describe('OrganizationService', () => {
 
       const result = await service.removeMember('org-1', 'employee-1', owner);
 
-      expect(userRepository.update).toHaveBeenCalledWith(
-        { id: 'employee-1' },
-        {
-          organizationId: null,
-          role: UserRole.STUDENT,
-        },
+      expect(userRepository.removeOrganizationMember).toHaveBeenCalledWith(
+        'employee-1',
       );
 
       expect(result.organizationId).toBeNull();

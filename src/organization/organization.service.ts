@@ -416,13 +416,7 @@ export class OrganizationService {
       throw new BadRequestException('Current owner cannot be removed');
     }
 
-    return this.userRepo.update(
-      { id: memberUserId },
-      {
-        organizationId: null,
-        role: UserRole.STUDENT,
-      },
-    );
+    return this.userRepo.removeOrganizationMember(memberUserId);
   }
 
   async transferOwner(

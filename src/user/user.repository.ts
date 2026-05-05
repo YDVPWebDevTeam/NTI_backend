@@ -11,6 +11,22 @@ import {
 } from '../infrastructure/database/base.repository';
 import { PrismaService } from '../infrastructure/database/prisma.service';
 
+const organizationMemberSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  role: true,
+  status: true,
+  organizationId: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.UserSelect;
+
+export type OrganizationMemberRecord = Prisma.UserGetPayload<{
+  select: typeof organizationMemberSelect;
+}>;
+
 @Injectable()
 export class UserRepository extends BaseRepository<
   User,
@@ -96,7 +112,7 @@ export class UserRepository extends BaseRepository<
   findOrganizationMembers(
     organizationId: string,
     db?: PrismaDbClient,
-  ): Promise<User[]> {
+  ): Promise<OrganizationMemberRecord[]> {
     return this.getDelegate(db).findMany({
       where: {
         organizationId,
@@ -107,6 +123,7 @@ export class UserRepository extends BaseRepository<
       orderBy: {
         createdAt: 'asc',
       },
+      select: organizationMemberSelect,
     });
   }
 
@@ -114,7 +131,7 @@ export class UserRepository extends BaseRepository<
     organizationId: string,
     userId: string,
     db?: PrismaDbClient,
-  ): Promise<User | null> {
+  ): Promise<OrganizationMemberRecord | null> {
     return this.getDelegate(db).findFirst({
       where: {
         id: userId,
@@ -123,6 +140,7 @@ export class UserRepository extends BaseRepository<
           in: [UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE],
         },
       },
+      select: organizationMemberSelect,
     });
   }
 
@@ -130,7 +148,25 @@ export class UserRepository extends BaseRepository<
     userId: string,
     role: UserRole,
     db?: PrismaDbClient,
-  ): Promise<User> {
-    return this.update({ id: userId }, { role }, db);
+  ): Promise<OrganizationMemberRecord> {
+    return this.getDelegate(db).update({
+      where: { id: userId },
+      data: { role },
+      select: organizationMemberSelect,
+    });
+  }
+
+  removeOrganizationMember(
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<OrganizationMemberRecord> {
+    return this.getDelegate(db).update({
+      where: { id: userId },
+      data: {
+        organizationId: null,
+        role: UserRole.STUDENT,
+      },
+      select: organizationMemberSelect,
+    });
   }
 }

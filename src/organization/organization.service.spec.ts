@@ -92,6 +92,7 @@ import { HashingService } from 'src/infrastructure/hashing';
 import { QueueService } from 'src/infrastructure/queue';
 import { UserRepository } from 'src/user/user.repository';
 import type { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
+import type { UpdateOrganizationMemberRoleDto } from './dto/update-organization-member-role.dto';
 import { OrganizationInviteRepository } from './organization-invitation.repository';
 import { OrganizationRepository } from './organization.repository';
 import { OrganizationService } from './organization.service';
@@ -541,13 +542,12 @@ describe('OrganizationService', () => {
 
       userRepository.findOrganizationMember.mockResolvedValue(employee);
 
+      const invalidDto = {
+        role: UserRole.COMPANY_OWNER,
+      } as unknown as UpdateOrganizationMemberRoleDto;
+
       await expect(
-        service.updateMemberRole(
-          'org-1',
-          'employee-1',
-          { role: UserRole.COMPANY_OWNER },
-          owner,
-        ),
+        service.updateMemberRole('org-1', 'employee-1', invalidDto, owner),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 

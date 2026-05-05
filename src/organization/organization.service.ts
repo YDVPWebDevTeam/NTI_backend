@@ -399,7 +399,9 @@ export class OrganizationService {
       throw new NotFoundException('Member not found');
     }
 
-    if (dto.role === UserRole.COMPANY_OWNER) {
+    const requestedRole = dto.role as UserRole;
+
+    if (requestedRole === UserRole.COMPANY_OWNER) {
       throw new BadRequestException(
         'Use ownership transfer endpoint to set company owner',
       );
@@ -411,7 +413,7 @@ export class OrganizationService {
       );
     }
 
-    return this.userRepo.updateUserRole(memberUserId, dto.role);
+    return this.userRepo.updateUserRole(memberUserId, requestedRole);
   }
 
   async removeMember(

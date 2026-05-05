@@ -1,10 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum } from 'class-validator';
-import { UserRole } from '../../../generated/prisma/enums';
+import { UserRole } from 'generated/prisma/enums';
 
 export const ORGANIZATION_MEMBER_ROLES = {
   COMPANY_EMPLOYEE: UserRole.COMPANY_EMPLOYEE,
-  COMPANY_OWNER: UserRole.COMPANY_OWNER,
 } as const;
 
 export type OrganizationMemberRole =

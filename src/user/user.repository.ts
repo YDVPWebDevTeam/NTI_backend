@@ -92,4 +92,45 @@ export class UserRepository extends BaseRepository<
       },
     });
   }
+
+  findOrganizationMembers(
+    organizationId: string,
+    db?: PrismaDbClient,
+  ): Promise<User[]> {
+    return this.getDelegate(db).findMany({
+      where: {
+        organizationId,
+        role: {
+          in: [UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE],
+        },
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+  }
+
+  findOrganizationMember(
+    organizationId: string,
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<User | null> {
+    return this.getDelegate(db).findFirst({
+      where: {
+        id: userId,
+        organizationId,
+        role: {
+          in: [UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE],
+        },
+      },
+    });
+  }
+
+  updateUserRole(
+    userId: string,
+    role: UserRole,
+    db?: PrismaDbClient,
+  ): Promise<User> {
+    return this.update({ id: userId }, { role }, db);
+  }
 }

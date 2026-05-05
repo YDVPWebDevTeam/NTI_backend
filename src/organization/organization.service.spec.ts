@@ -1,6 +1,7 @@
 jest.mock('../../generated/prisma/client', () => ({}), { virtual: true });
 jest.mock('@prisma/client', () => ({}), { virtual: true });
 jest.mock('generated/prisma/client', () => ({}), { virtual: true });
+
 jest.mock(
   'generated/prisma/enums',
   () => ({
@@ -17,11 +18,14 @@ jest.mock(
       SUSPENDED: 'SUSPENDED',
     },
     UserRole: {
+      STUDENT: 'STUDENT',
       COMPANY_OWNER: 'COMPANY_OWNER',
       COMPANY_EMPLOYEE: 'COMPANY_EMPLOYEE',
     },
     UserStatus: {
       ACTIVE: 'ACTIVE',
+      PENDING: 'PENDING',
+      SUSPENDED: 'SUSPENDED',
     },
   }),
   { virtual: true },
@@ -30,6 +34,7 @@ jest.mock(
 jest.mock('./organization.repository', () => ({
   OrganizationRepository: class OrganizationRepository {},
 }));
+
 jest.mock(
   'src/user/user.repository',
   () => ({
@@ -37,6 +42,7 @@ jest.mock(
   }),
   { virtual: true },
 );
+
 jest.mock(
   'src/infrastructure/queue',
   () => ({
@@ -48,9 +54,11 @@ jest.mock(
   }),
   { virtual: true },
 );
+
 jest.mock('./organization-invitation.repository', () => ({
   OrganizationInviteRepository: class OrganizationInviteRepository {},
 }));
+
 jest.mock(
   'src/infrastructure/hashing',
   () => ({
@@ -58,6 +66,7 @@ jest.mock(
   }),
   { virtual: true },
 );
+
 jest.mock(
   'src/infrastructure/config',
   () => ({
@@ -82,26 +91,35 @@ import { ConfigService } from 'src/infrastructure/config';
 import { HashingService } from 'src/infrastructure/hashing';
 import { QueueService } from 'src/infrastructure/queue';
 import { UserRepository } from 'src/user/user.repository';
+import type { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
 import { OrganizationInviteRepository } from './organization-invitation.repository';
 import { OrganizationRepository } from './organization.repository';
 import { OrganizationService } from './organization.service';
 
 describe('OrganizationService', () => {
   let service: OrganizationService;
+
   let organizationRepository: {
     findUnique: jest.Mock;
     transaction: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
   };
+
   let userRepository: {
     findByEmail: jest.Mock;
     findAdmins: jest.Mock;
     updateOrganizationIfNotExists: jest.Mock;
+    findOrganizationMembers: jest.Mock;
+    findOrganizationMember: jest.Mock;
+    updateUserRole: jest.Mock;
+    update: jest.Mock;
   };
+
   let queueService: {
     addEmail: jest.Mock;
   };
+
   let organizationInviteRepository: {
     findActivePendingByEmailAndOrganization: jest.Mock;
     findByIdAndOrganization: jest.Mock;
@@ -111,9 +129,11 @@ describe('OrganizationService', () => {
     update: jest.Mock;
     delete: jest.Mock;
   };
+
   let hashingService: {
     generateHexToken: jest.Mock;
   };
+
   let configService: {
     tokenByteLength: number;
     organizationInvitationExpirationDays: number;
@@ -123,6 +143,14 @@ describe('OrganizationService', () => {
     id: 'owner-1',
     email: 'owner@example.com',
     role: UserRole.COMPANY_OWNER,
+    status: UserStatus.ACTIVE,
+    organizationId: 'org-1',
+  };
+
+  const employee: AuthenticatedUserContext = {
+    id: 'employee-1',
+    email: 'employee@example.com',
+    role: UserRole.COMPANY_EMPLOYEE,
     status: UserStatus.ACTIVE,
     organizationId: 'org-1',
   };
@@ -140,6 +168,13 @@ describe('OrganizationService', () => {
     updatedAt: new Date('2026-01-02T00:00:00.000Z'),
   };
 
+  const updateDto = (
+    data: Partial<UpdateOrganizationProfileDto>,
+  ): UpdateOrganizationProfileDto => data as UpdateOrganizationProfileDto;
+
+  const runTransaction = (callback: (tx: object) => Promise<unknown>) =>
+    callback({});
+
   beforeEach(() => {
     organizationRepository = {
       findUnique: jest.fn(),
@@ -152,6 +187,10 @@ describe('OrganizationService', () => {
       findByEmail: jest.fn(),
       findAdmins: jest.fn(),
       updateOrganizationIfNotExists: jest.fn(),
+      findOrganizationMembers: jest.fn(),
+      findOrganizationMember: jest.fn(),
+      updateUserRole: jest.fn(),
+      update: jest.fn(),
     };
 
     queueService = {
@@ -210,6 +249,7 @@ describe('OrganizationService', () => {
       organizationRepository.findUnique.mockResolvedValue(existingOrganization);
 
       const result = await service.getMyOrganization(owner);
+
       expect(result.id).toBe(existingOrganization.id);
     });
   });
@@ -217,7 +257,7 @@ describe('OrganizationService', () => {
   describe('updateMyOrganization', () => {
     it('throws 404 when user has no organizationId', async () => {
       await expect(
-        service.updateMyOrganization({ name: 'X' } as any, {
+        service.updateMyOrganization(updateDto({ name: 'X' }), {
           ...owner,
           organizationId: null,
         }),
@@ -228,7 +268,7 @@ describe('OrganizationService', () => {
       organizationRepository.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.updateMyOrganization({ name: 'New Name' } as any, owner),
+        service.updateMyOrganization(updateDto({ name: 'New Name' }), owner),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
@@ -236,7 +276,7 @@ describe('OrganizationService', () => {
       organizationRepository.findUnique.mockResolvedValue(existingOrganization);
 
       await expect(
-        service.updateMyOrganization({} as any, owner),
+        service.updateMyOrganization(updateDto({}), owner),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
@@ -247,7 +287,7 @@ describe('OrganizationService', () => {
       });
 
       await expect(
-        service.updateMyOrganization({ ico: '87654321' } as any, owner),
+        service.updateMyOrganization(updateDto({ ico: '87654321' }), owner),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
@@ -260,7 +300,7 @@ describe('OrganizationService', () => {
       });
 
       const result = await service.updateMyOrganization(
-        { sector: null, website: null } as any,
+        updateDto({ sector: null, website: null }),
         owner,
       );
 
@@ -272,19 +312,131 @@ describe('OrganizationService', () => {
     });
   });
 
-  it('lists invitations with computed EXPIRED status and pagination meta', async () => {
-    const now = new Date('2026-04-29T10:00:00.000Z');
-    jest.useFakeTimers().setSystemTime(now);
+  describe('organization invites', () => {
+    it('lists invitations with computed EXPIRED status and pagination meta', async () => {
+      const now = new Date('2026-04-29T10:00:00.000Z');
+      jest.useFakeTimers().setSystemTime(now);
 
-    organizationRepository.findUnique.mockResolvedValue({
-      id: 'org-1',
-      name: 'NTI',
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      organizationInviteRepository.findMany.mockResolvedValue([
+        {
+          id: 'invite-1',
+          email: 'expired@example.com',
+          token: 'token-1',
+          status: InvitationStatus.PENDING,
+          organizationId: 'org-1',
+          roleToAssign: UserRole.COMPANY_EMPLOYEE,
+          revokedById: null,
+          createdAt: new Date('2026-04-20T10:00:00.000Z'),
+          updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+          expiresAt: new Date('2026-04-25T10:00:00.000Z'),
+          acceptedAt: null,
+          revokedAt: null,
+        },
+      ]);
+
+      organizationInviteRepository.count.mockResolvedValue(1);
+
+      const result = await service.listInvites(
+        'org-1',
+        { page: 1, limit: 20, sort: 'createdAt:desc' },
+        owner,
+      );
+
+      expect(organizationInviteRepository.findMany).toHaveBeenCalledWith({
+        where: { organizationId: 'org-1' },
+        orderBy: [{ createdAt: 'desc' }],
+        skip: 0,
+        take: 20,
+      });
+
+      expect(result).toEqual({
+        data: [
+          expect.objectContaining({
+            id: 'invite-1',
+            email: 'expired@example.com',
+            status: InvitationStatus.EXPIRED,
+          }),
+        ],
+        meta: {
+          page: 1,
+          limit: 20,
+          total: 1,
+          totalPages: 1,
+        },
+      });
     });
-    organizationInviteRepository.findMany.mockResolvedValue([
-      {
+
+    it('blocks access to invitations from another organization', async () => {
+      organizationRepository.findUnique.mockResolvedValue({
+        ...existingOrganization,
+        id: 'org-2',
+      });
+
+      await expect(
+        service.listInvites(
+          'org-2',
+          { page: 1, limit: 20, sort: 'createdAt:desc' },
+          owner,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('revokes a pending unexpired invite', async () => {
+      const now = new Date('2026-04-29T10:00:00.000Z');
+      jest.useFakeTimers().setSystemTime(now);
+
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      organizationInviteRepository.findByIdAndOrganization.mockResolvedValue({
         id: 'invite-1',
-        email: 'expired@example.com',
+        email: 'employee@example.com',
         token: 'token-1',
+        status: InvitationStatus.PENDING,
+        organizationId: 'org-1',
+        roleToAssign: UserRole.COMPANY_EMPLOYEE,
+        revokedById: null,
+        createdAt: new Date('2026-04-28T10:00:00.000Z'),
+        updatedAt: new Date('2026-04-28T10:00:00.000Z'),
+        expiresAt: new Date('2026-05-02T10:00:00.000Z'),
+        acceptedAt: null,
+        revokedAt: null,
+      });
+
+      organizationInviteRepository.update.mockResolvedValue({
+        id: 'invite-1',
+        revokedAt: now,
+      });
+
+      const result = await service.revokeInvite('org-1', 'invite-1', owner);
+
+      expect(organizationInviteRepository.update).toHaveBeenCalledWith(
+        { id: 'invite-1' },
+        {
+          status: InvitationStatus.REVOKED,
+          revokedAt: now,
+          revokedById: owner.id,
+        },
+      );
+
+      expect(result).toEqual({
+        id: 'invite-1',
+        status: 'REVOKED',
+        revokedAt: now,
+      });
+    });
+
+    it('rejects resend for an expired invite', async () => {
+      const now = new Date('2026-04-29T10:00:00.000Z');
+      jest.useFakeTimers().setSystemTime(now);
+
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      organizationInviteRepository.findByIdAndOrganization.mockResolvedValue({
+        id: 'invite-1',
+        email: 'employee@example.com',
+        token: 'old-token',
         status: InvitationStatus.PENDING,
         organizationId: 'org-1',
         roleToAssign: UserRole.COMPANY_EMPLOYEE,
@@ -294,177 +446,310 @@ describe('OrganizationService', () => {
         expiresAt: new Date('2026-04-25T10:00:00.000Z'),
         acceptedAt: null,
         revokedAt: null,
-      },
-    ]);
-    organizationInviteRepository.count.mockResolvedValue(1);
+      });
 
-    const result = await service.listInvites(
-      'org-1',
-      { page: 1, limit: 20, sort: 'createdAt:desc' },
-      owner,
-    );
-
-    expect(organizationInviteRepository.findMany).toHaveBeenCalledWith({
-      where: { organizationId: 'org-1' },
-      orderBy: [{ createdAt: 'desc' }],
-      skip: 0,
-      take: 20,
-    });
-    expect(result).toEqual({
-      data: [
-        expect.objectContaining({
-          id: 'invite-1',
-          email: 'expired@example.com',
-          status: InvitationStatus.EXPIRED,
-        }),
-      ],
-      meta: {
-        page: 1,
-        limit: 20,
-        total: 1,
-        totalPages: 1,
-      },
+      await expect(
+        service.resendInvite('org-1', 'invite-1', owner),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 
-  it('blocks access to invitations from another organization', async () => {
-    organizationRepository.findUnique.mockResolvedValue({
-      id: 'org-2',
-      name: 'Other Org',
-    });
+  describe('organization members', () => {
+    it('allows owner to list organization members', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
 
-    await expect(
-      service.listInvites(
-        'org-2',
-        { page: 1, limit: 20, sort: 'createdAt:desc' },
+      userRepository.findOrganizationMembers.mockResolvedValue([
         owner,
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
+        employee,
+      ]);
 
-  it('revokes a pending unexpired invite', async () => {
-    const now = new Date('2026-04-29T10:00:00.000Z');
-    jest.useFakeTimers().setSystemTime(now);
+      const result = await service.listMembers('org-1', owner);
 
-    organizationRepository.findUnique.mockResolvedValue({
-      id: 'org-1',
-      name: 'NTI',
-    });
-    organizationInviteRepository.findByIdAndOrganization.mockResolvedValue({
-      id: 'invite-1',
-      email: 'employee@example.com',
-      token: 'token-1',
-      status: InvitationStatus.PENDING,
-      organizationId: 'org-1',
-      roleToAssign: UserRole.COMPANY_EMPLOYEE,
-      revokedById: null,
-      createdAt: new Date('2026-04-28T10:00:00.000Z'),
-      updatedAt: new Date('2026-04-28T10:00:00.000Z'),
-      expiresAt: new Date('2026-05-02T10:00:00.000Z'),
-      acceptedAt: null,
-      revokedAt: null,
-    });
-    organizationInviteRepository.update.mockResolvedValue({
-      id: 'invite-1',
-      revokedAt: now,
+      expect(userRepository.findOrganizationMembers).toHaveBeenCalledWith(
+        'org-1',
+      );
+      expect(result).toHaveLength(2);
     });
 
-    const result = await service.revokeInvite('org-1', 'invite-1', owner);
+    it('allows employee to list organization members from same organization', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
 
-    expect(organizationInviteRepository.update).toHaveBeenCalledWith(
-      { id: 'invite-1' },
-      {
-        status: InvitationStatus.REVOKED,
-        revokedAt: now,
-        revokedById: owner.id,
-      },
-    );
-    expect(result).toEqual({
-      id: 'invite-1',
-      status: 'REVOKED',
-      revokedAt: now,
-    });
-  });
+      userRepository.findOrganizationMembers.mockResolvedValue([
+        owner,
+        employee,
+      ]);
 
-  it('rejects resend for an expired invite', async () => {
-    const now = new Date('2026-04-29T10:00:00.000Z');
-    jest.useFakeTimers().setSystemTime(now);
+      const result = await service.listMembers('org-1', employee);
 
-    organizationRepository.findUnique.mockResolvedValue({
-      id: 'org-1',
-      name: 'NTI',
-    });
-    organizationInviteRepository.findByIdAndOrganization.mockResolvedValue({
-      id: 'invite-1',
-      email: 'employee@example.com',
-      token: 'old-token',
-      status: InvitationStatus.PENDING,
-      organizationId: 'org-1',
-      roleToAssign: UserRole.COMPANY_EMPLOYEE,
-      revokedById: null,
-      createdAt: new Date('2026-04-20T10:00:00.000Z'),
-      updatedAt: new Date('2026-04-20T10:00:00.000Z'),
-      expiresAt: new Date('2026-04-25T10:00:00.000Z'),
-      acceptedAt: null,
-      revokedAt: null,
+      expect(userRepository.findOrganizationMembers).toHaveBeenCalledWith(
+        'org-1',
+      );
+      expect(result).toHaveLength(2);
     });
 
-    await expect(
-      service.resendInvite('org-1', 'invite-1', owner),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
+    it('blocks cross-org member listing', async () => {
+      organizationRepository.findUnique.mockResolvedValue({
+        ...existingOrganization,
+        id: 'org-2',
+      });
 
-  it('resends a pending unexpired invite with a new token and expiry', async () => {
-    const now = new Date('2026-04-29T10:00:00.000Z');
-    const newExpiresAt = new Date('2026-05-06T10:00:00.000Z');
-    jest.useFakeTimers().setSystemTime(now);
-
-    organizationRepository.findUnique.mockResolvedValue({
-      id: 'org-1',
-      name: 'NTI',
-    });
-    organizationInviteRepository.findByIdAndOrganization.mockResolvedValue({
-      id: 'invite-1',
-      email: 'employee@example.com',
-      token: 'old-token',
-      status: InvitationStatus.PENDING,
-      organizationId: 'org-1',
-      roleToAssign: UserRole.COMPANY_EMPLOYEE,
-      revokedById: null,
-      createdAt: new Date('2026-04-28T10:00:00.000Z'),
-      updatedAt: new Date('2026-04-28T10:00:00.000Z'),
-      expiresAt: new Date('2026-05-01T10:00:00.000Z'),
-      acceptedAt: null,
-      revokedAt: null,
-    });
-    hashingService.generateHexToken.mockReturnValue('new-token');
-    organizationInviteRepository.update.mockResolvedValue({
-      id: 'invite-1',
-      email: 'employee@example.com',
-      expiresAt: newExpiresAt,
+      await expect(service.listMembers('org-2', owner)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
     });
 
-    const result = await service.resendInvite('org-1', 'invite-1', owner);
+    it('allows owner to update employee role to employee', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
 
-    expect(hashingService.generateHexToken).toHaveBeenCalledWith(32);
-    expect(organizationInviteRepository.update).toHaveBeenCalledWith(
-      { id: 'invite-1' },
-      {
-        token: 'new-token',
-        status: InvitationStatus.PENDING,
-        expiresAt: newExpiresAt,
-      },
-    );
-    expect(queueService.addEmail).toHaveBeenCalledWith('org-invite', {
-      email: 'employee@example.com',
-      token: 'new-token',
-      organizationName: 'NTI',
+      userRepository.findOrganizationMember.mockResolvedValue(employee);
+
+      userRepository.updateUserRole.mockResolvedValue({
+        ...employee,
+        role: UserRole.COMPANY_EMPLOYEE,
+      });
+
+      const result = await service.updateMemberRole(
+        'org-1',
+        'employee-1',
+        { role: UserRole.COMPANY_EMPLOYEE },
+        owner,
+      );
+
+      expect(userRepository.updateUserRole).toHaveBeenCalledWith(
+        'employee-1',
+        UserRole.COMPANY_EMPLOYEE,
+      );
+
+      expect(result.role).toBe(UserRole.COMPANY_EMPLOYEE);
     });
-    expect(result).toEqual({
-      id: 'invite-1',
-      email: 'employee@example.com',
-      status: 'PENDING',
-      expiresAt: newExpiresAt,
+
+    it('blocks employee from updating member role', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      await expect(
+        service.updateMemberRole(
+          'org-1',
+          'owner-1',
+          { role: UserRole.COMPANY_EMPLOYEE },
+          employee,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('blocks setting COMPANY_OWNER through role update endpoint', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      userRepository.findOrganizationMember.mockResolvedValue(employee);
+
+      await expect(
+        service.updateMemberRole(
+          'org-1',
+          'employee-1',
+          { role: UserRole.COMPANY_OWNER },
+          owner,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('blocks direct role change of current owner', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      userRepository.findOrganizationMember.mockResolvedValue({
+        ...owner,
+        role: UserRole.COMPANY_OWNER,
+      });
+
+      await expect(
+        service.updateMemberRole(
+          'org-1',
+          'owner-1',
+          { role: UserRole.COMPANY_EMPLOYEE },
+          owner,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('throws 404 when member for role update is not found', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      userRepository.findOrganizationMember.mockResolvedValue(null);
+
+      await expect(
+        service.updateMemberRole(
+          'org-1',
+          'missing-user',
+          { role: UserRole.COMPANY_EMPLOYEE },
+          owner,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('removes non-owner member from organization', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      userRepository.findOrganizationMember.mockResolvedValue(employee);
+
+      userRepository.update.mockResolvedValue({
+        ...employee,
+        organizationId: null,
+        role: UserRole.STUDENT,
+      });
+
+      const result = await service.removeMember('org-1', 'employee-1', owner);
+
+      expect(userRepository.update).toHaveBeenCalledWith(
+        { id: 'employee-1' },
+        {
+          organizationId: null,
+          role: UserRole.STUDENT,
+        },
+      );
+
+      expect(result.organizationId).toBeNull();
+      expect(result.role).toBe(UserRole.STUDENT);
+    });
+
+    it('blocks employee from removing member', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      await expect(
+        service.removeMember('org-1', 'owner-1', employee),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('blocks removing current owner', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      userRepository.findOrganizationMember.mockResolvedValue({
+        ...owner,
+        role: UserRole.COMPANY_OWNER,
+      });
+
+      await expect(
+        service.removeMember('org-1', 'owner-1', owner),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('throws 404 when removed member is not found', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      userRepository.findOrganizationMember.mockResolvedValue(null);
+
+      await expect(
+        service.removeMember('org-1', 'missing-user', owner),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('transfers ownership transactionally', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+      organizationRepository.transaction.mockImplementation(runTransaction);
+
+      userRepository.findOrganizationMember
+        .mockResolvedValueOnce({
+          ...owner,
+          role: UserRole.COMPANY_OWNER,
+          status: UserStatus.ACTIVE,
+        })
+        .mockResolvedValueOnce({
+          ...employee,
+          role: UserRole.COMPANY_EMPLOYEE,
+          status: UserStatus.ACTIVE,
+        });
+
+      userRepository.updateUserRole
+        .mockResolvedValueOnce({
+          ...owner,
+          role: UserRole.COMPANY_EMPLOYEE,
+        })
+        .mockResolvedValueOnce({
+          ...employee,
+          role: UserRole.COMPANY_OWNER,
+        });
+
+      const result = await service.transferOwner(
+        'org-1',
+        { newOwnerUserId: 'employee-1' },
+        owner,
+      );
+
+      expect(organizationRepository.transaction).toHaveBeenCalled();
+
+      expect(userRepository.updateUserRole).toHaveBeenNthCalledWith(
+        1,
+        'owner-1',
+        UserRole.COMPANY_EMPLOYEE,
+        expect.anything(),
+      );
+
+      expect(userRepository.updateUserRole).toHaveBeenNthCalledWith(
+        2,
+        'employee-1',
+        UserRole.COMPANY_OWNER,
+        expect.anything(),
+      );
+
+      expect(result.role).toBe(UserRole.COMPANY_OWNER);
+    });
+
+    it('blocks ownership transfer to current owner', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      await expect(
+        service.transferOwner('org-1', { newOwnerUserId: 'owner-1' }, owner),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('blocks employee from transferring ownership', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      await expect(
+        service.transferOwner(
+          'org-1',
+          { newOwnerUserId: 'employee-1' },
+          employee,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('throws 404 when new owner is not organization member', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+      organizationRepository.transaction.mockImplementation(runTransaction);
+
+      userRepository.findOrganizationMember
+        .mockResolvedValueOnce({
+          ...owner,
+          role: UserRole.COMPANY_OWNER,
+          status: UserStatus.ACTIVE,
+        })
+        .mockResolvedValueOnce(null);
+
+      await expect(
+        service.transferOwner(
+          'org-1',
+          { newOwnerUserId: 'missing-user' },
+          owner,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('blocks ownership transfer to suspended user', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+      organizationRepository.transaction.mockImplementation(runTransaction);
+
+      userRepository.findOrganizationMember
+        .mockResolvedValueOnce({
+          ...owner,
+          role: UserRole.COMPANY_OWNER,
+          status: UserStatus.ACTIVE,
+        })
+        .mockResolvedValueOnce({
+          ...employee,
+          status: UserStatus.SUSPENDED,
+        });
+
+      await expect(
+        service.transferOwner('org-1', { newOwnerUserId: 'employee-1' }, owner),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 });

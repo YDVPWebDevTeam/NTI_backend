@@ -6,6 +6,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { OrgInvitation, Organization, Prisma } from 'generated/prisma/client';
+import { createAndSendInviteWithRollback } from '../common/invitations/invitation-creation.utils';
+import { assertPendingAndUnexpired } from '../common/invitations/invitation-state.utils';
+import { isPrismaUniqueConstraintError } from '../common/prisma/prisma-error.utils';
+import { addDays } from '../common/time/time.utils';
+import { assertUserEmailAvailable } from '../common/users/user-guards.utils';
 import {
   InvitationStatus,
   OrganizationStatus,
@@ -19,13 +24,15 @@ import { EMAIL_JOBS, QueueService } from 'src/infrastructure/queue';
 import { UserRepository } from 'src/user/user.repository';
 import { CreateOrganizationInviteDto } from './dto/create-organization-invite.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
-import { UpdateOrganizationMemberRoleDto } from './dto/update-organization-member-role.dto';
-import { TransferOrganizationOwnerDto } from './dto/transfer-organization-owner.dto';
 import { GetOrganizationInvitesQueryDto } from './dto/get-organization-invites-query.dto';
 import { GetOrganizationInvitesResponseDto } from './dto/get-organization-invites-response.dto';
 import { OrganizationInviteItemDto } from './dto/organization-invite-item.dto';
+import { OrganizationInviteResponseDto } from './dto/organization-invite-response.dto';
+import { OrganizationMemberResponseDto } from './dto/organization-member-response.dto';
 import { ResendOrganizationInviteResponseDto } from './dto/resend-organization-invite-response.dto';
 import { RevokeOrganizationInviteResponseDto } from './dto/revoke-organization-invite-response.dto';
+import { TransferOrganizationOwnerDto } from './dto/transfer-organization-owner.dto';
+import { UpdateOrganizationMemberRoleDto } from './dto/update-organization-member-role.dto';
 import { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
 import { OrganizationInviteRepository } from './organization-invitation.repository';
 import { OrganizationRepository } from './organization.repository';
@@ -62,36 +69,14 @@ export class OrganizationService {
   async getMyOrganization(
     user: AuthenticatedUserContext,
   ): Promise<Organization> {
-    if (!user.organizationId) {
-      throw new NotFoundException('Organization not found');
-    }
-
-    const organization = await this.organizationRepository.findUnique({
-      id: user.organizationId,
-    });
-
-    if (!organization) {
-      throw new NotFoundException('Organization not found');
-    }
-
-    return organization;
+    return this.findUserOrganizationOrThrow(user);
   }
 
   async updateMyOrganization(
     dto: UpdateOrganizationProfileDto,
     user: AuthenticatedUserContext,
   ): Promise<Organization> {
-    if (!user.organizationId) {
-      throw new NotFoundException('Organization not found');
-    }
-
-    const organization = await this.organizationRepository.findUnique({
-      id: user.organizationId,
-    });
-
-    if (!organization) {
-      throw new NotFoundException('Organization not found');
-    }
+    const organization = await this.findUserOrganizationOrThrow(user);
 
     const updateData: Prisma.OrganizationUpdateInput = {};
 
@@ -136,14 +121,11 @@ export class OrganizationService {
 
     try {
       return await this.organizationRepository.update(
-        { id: user.organizationId },
+        { id: organization.id },
         updateData,
       );
     } catch (e: unknown) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
+      if (isPrismaUniqueConstraintError(e)) {
         throw new ConflictException('ICO already exists');
       }
 
@@ -188,10 +170,7 @@ export class OrganizationService {
 
       return organization;
     } catch (e: unknown) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
+      if (isPrismaUniqueConstraintError(e)) {
         throw new ConflictException('ICO already exists');
       }
 
@@ -203,17 +182,13 @@ export class OrganizationService {
     organizationId: string,
     dto: CreateOrganizationInviteDto,
     user: AuthenticatedUserContext,
-  ) {
+  ): Promise<OrganizationInviteResponseDto> {
     const organization = await this.ensureOrganizationOwnerAccess(
       organizationId,
       user,
     );
 
-    const existingUser = await this.userRepo.findByEmail(dto.email);
-
-    if (existingUser) {
-      throw new ConflictException('User with this email already exists');
-    }
+    await assertUserEmailAvailable(this.userRepo, dto.email);
 
     const now = new Date();
     const activeInvite =
@@ -227,29 +202,31 @@ export class OrganizationService {
       throw new ConflictException('Active organization invite already exists');
     }
 
-    const invitation = await this.organizationInviteRepository.create({
-      email: dto.email,
-      token: this.generateToken(),
-      status: InvitationStatus.PENDING,
-      organizationId,
-      roleToAssign: UserRole.COMPANY_EMPLOYEE,
-      expiresAt: this.resolveExpirationDate(),
-    });
-
-    const { token, ...response } = invitation;
-
-    try {
-      await this.queueService.addEmail(EMAIL_JOBS.ORG_INVITE, {
-        email: invitation.email,
-        token,
-        organizationName: organization.name,
-      });
-    } catch (error) {
-      await this.organizationInviteRepository.delete({ id: invitation.id });
-      throw error;
-    }
-
-    return response;
+    return createAndSendInviteWithRollback(
+      () =>
+        this.organizationInviteRepository.create({
+          email: dto.email,
+          token: this.generateToken(),
+          status: InvitationStatus.PENDING,
+          organizationId,
+          roleToAssign: UserRole.COMPANY_EMPLOYEE,
+          expiresAt: this.resolveExpirationDate(),
+        }),
+      async (invitation) => {
+        await this.queueService.addEmail(EMAIL_JOBS.ORG_INVITE, {
+          email: invitation.email,
+          token: invitation.token,
+          organizationName: organization.name,
+        });
+      },
+      async (invitation) => {
+        await this.organizationInviteRepository.delete({ id: invitation.id });
+      },
+      (invitation) => {
+        const { token: _token, ...response } = invitation;
+        return response;
+      },
+    );
   }
 
   async listInvites(
@@ -376,7 +353,10 @@ export class OrganizationService {
     };
   }
 
-  async listMembers(organizationId: string, user: AuthenticatedUserContext) {
+  async listMembers(
+    organizationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto[]> {
     await this.ensureOrganizationMemberAccess(organizationId, user);
 
     return this.userRepo.findOrganizationMembers(organizationId);
@@ -387,7 +367,7 @@ export class OrganizationService {
     memberUserId: string,
     dto: UpdateOrganizationMemberRoleDto,
     user: AuthenticatedUserContext,
-  ) {
+  ): Promise<OrganizationMemberResponseDto> {
     await this.ensureOrganizationOwnerAccess(organizationId, user);
 
     const member = await this.userRepo.findOrganizationMember(
@@ -420,7 +400,7 @@ export class OrganizationService {
     organizationId: string,
     memberUserId: string,
     user: AuthenticatedUserContext,
-  ) {
+  ): Promise<OrganizationMemberResponseDto> {
     await this.ensureOrganizationOwnerAccess(organizationId, user);
 
     const member = await this.userRepo.findOrganizationMember(
@@ -449,50 +429,56 @@ export class OrganizationService {
     organizationId: string,
     dto: TransferOrganizationOwnerDto,
     user: AuthenticatedUserContext,
-  ) {
+  ): Promise<OrganizationMemberResponseDto> {
     await this.ensureOrganizationOwnerAccess(organizationId, user);
 
     if (dto.newOwnerUserId === user.id) {
       throw new BadRequestException('User is already organization owner');
     }
 
-    return this.organizationRepository.transaction(async (tx) => {
-      const currentOwner = await this.userRepo.findOrganizationMember(
-        organizationId,
-        user.id,
-        tx,
-      );
+    return this.organizationRepository.transaction<OrganizationMemberResponseDto>(
+      async (tx) => {
+        const currentOwner = await this.userRepo.findOrganizationMember(
+          organizationId,
+          user.id,
+          tx,
+        );
 
-      if (!currentOwner || currentOwner.role !== UserRole.COMPANY_OWNER) {
-        throw new ForbiddenException();
-      }
+        if (!currentOwner) {
+          throw new NotFoundException('Current owner not found');
+        }
 
-      const newOwner = await this.userRepo.findOrganizationMember(
-        organizationId,
-        dto.newOwnerUserId,
-        tx,
-      );
+        if (currentOwner.role !== UserRole.COMPANY_OWNER) {
+          throw new ForbiddenException();
+        }
 
-      if (!newOwner) {
-        throw new NotFoundException('New owner member not found');
-      }
+        const newOwner = await this.userRepo.findOrganizationMember(
+          organizationId,
+          dto.newOwnerUserId,
+          tx,
+        );
 
-      if (newOwner.status !== UserStatus.ACTIVE) {
-        throw new BadRequestException('New owner must be active');
-      }
+        if (!newOwner) {
+          throw new NotFoundException('Member not found');
+        }
 
-      await this.userRepo.updateUserRole(
-        currentOwner.id,
-        UserRole.COMPANY_EMPLOYEE,
-        tx,
-      );
+        if (newOwner.status !== UserStatus.ACTIVE) {
+          throw new BadRequestException('New owner must be active');
+        }
 
-      return this.userRepo.updateUserRole(
-        newOwner.id,
-        UserRole.COMPANY_OWNER,
-        tx,
-      );
-    });
+        await this.userRepo.updateUserRole(
+          currentOwner.id,
+          UserRole.COMPANY_EMPLOYEE,
+          tx,
+        );
+
+        return this.userRepo.updateUserRole(
+          newOwner.id,
+          UserRole.COMPANY_OWNER,
+          tx,
+        );
+      },
+    );
   }
 
   private generateToken(): string {
@@ -502,17 +488,31 @@ export class OrganizationService {
   }
 
   private resolveExpirationDate(baseDate = new Date()): Date {
-    return new Date(
-      baseDate.getTime() +
-        this.configService.organizationInvitationExpirationDays *
-          24 *
-          60 *
-          60 *
-          1000,
+    return addDays(
+      baseDate,
+      this.configService.organizationInvitationExpirationDays,
     );
   }
 
-  private async ensureOrganizationMemberAccess(
+  private async findUserOrganizationOrThrow(
+    user: AuthenticatedUserContext,
+  ): Promise<Organization> {
+    if (!user.organizationId) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const organization = await this.organizationRepository.findUnique({
+      id: user.organizationId,
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    return organization;
+  }
+
+  private async ensureOrganizationOwnerAccess(
     organizationId: string,
     user: AuthenticatedUserContext,
   ): Promise<Organization> {
@@ -528,19 +528,26 @@ export class OrganizationService {
       throw new ForbiddenException();
     }
 
+    if (user.role !== UserRole.COMPANY_OWNER) {
+      throw new ForbiddenException();
+    }
+
     return organization;
   }
 
-  private async ensureOrganizationOwnerAccess(
+  private async ensureOrganizationMemberAccess(
     organizationId: string,
     user: AuthenticatedUserContext,
   ): Promise<Organization> {
-    const organization = await this.ensureOrganizationMemberAccess(
-      organizationId,
-      user,
-    );
+    const organization = await this.organizationRepository.findUnique({
+      id: organizationId,
+    });
 
-    if (user.role !== UserRole.COMPANY_OWNER) {
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    if (user.organizationId !== organizationId) {
       throw new ForbiddenException();
     }
 
@@ -565,27 +572,18 @@ export class OrganizationService {
   }
 
   private ensureInviteCanBeRevoked(invitation: OrgInvitation, at: Date): void {
-    if (!this.isPendingAndUnexpired(invitation, at)) {
-      throw new BadRequestException(
-        OrganizationService.REVOKE_INVALID_STATE_MESSAGE,
-      );
-    }
+    assertPendingAndUnexpired(
+      invitation,
+      at,
+      OrganizationService.REVOKE_INVALID_STATE_MESSAGE,
+    );
   }
 
   private ensureInviteCanBeResent(invitation: OrgInvitation, at: Date): void {
-    if (!this.isPendingAndUnexpired(invitation, at)) {
-      throw new BadRequestException(
-        OrganizationService.RESEND_INVALID_STATE_MESSAGE,
-      );
-    }
-  }
-
-  private isPendingAndUnexpired(invitation: OrgInvitation, at: Date): boolean {
-    return (
-      invitation.status === InvitationStatus.PENDING &&
-      invitation.acceptedAt === null &&
-      invitation.revokedAt === null &&
-      invitation.expiresAt > at
+    assertPendingAndUnexpired(
+      invitation,
+      at,
+      OrganizationService.RESEND_INVALID_STATE_MESSAGE,
     );
   }
 

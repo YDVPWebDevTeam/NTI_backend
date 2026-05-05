@@ -92,4 +92,18 @@ export class UserRepository extends BaseRepository<
       },
     });
   }
+
+  findOrganizationMember(
+    organizationId: string,
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<User | null> {
+    return this.getDelegate(db).findFirst({
+      where: {
+        id: userId,
+        organizationId,
+        status: UserStatus.ACTIVE,
+      },
+    });
+  }
 }

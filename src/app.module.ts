@@ -15,6 +15,7 @@ import { TeamModule } from './team/team.module';
 import { UserModule } from './user/user.module';
 import { FilesModule } from './files';
 import { OrganizationModule } from './organization/organization.module';
+import { ProgramBBacklogModule } from './programs/program-b/backlog/program-b-backlog.module';
 import { StudentProfileModule } from './student-profile';
 import { ApplicationsModule } from './applications';
 
@@ -31,6 +32,7 @@ import { ApplicationsModule } from './applications';
     PdfModule,
     StorageModule,
     OrganizationModule,
+    ProgramBBacklogModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

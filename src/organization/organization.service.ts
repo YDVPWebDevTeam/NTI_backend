@@ -15,6 +15,7 @@ import {
   InvitationStatus,
   OrganizationStatus,
   UserRole,
+  UserStatus,
 } from 'generated/prisma/enums';
 import { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
 import { ConfigService } from 'src/infrastructure/config';
@@ -27,8 +28,11 @@ import { GetOrganizationInvitesQueryDto } from './dto/get-organization-invites-q
 import { GetOrganizationInvitesResponseDto } from './dto/get-organization-invites-response.dto';
 import { OrganizationInviteItemDto } from './dto/organization-invite-item.dto';
 import { OrganizationInviteResponseDto } from './dto/organization-invite-response.dto';
+import { OrganizationMemberResponseDto } from './dto/organization-member-response.dto';
 import { ResendOrganizationInviteResponseDto } from './dto/resend-organization-invite-response.dto';
 import { RevokeOrganizationInviteResponseDto } from './dto/revoke-organization-invite-response.dto';
+import { TransferOrganizationOwnerDto } from './dto/transfer-organization-owner.dto';
+import { UpdateOrganizationMemberRoleDto } from './dto/update-organization-member-role.dto';
 import { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
 import { OrganizationInviteRepository } from './organization-invitation.repository';
 import { OrganizationRepository } from './organization.repository';
@@ -349,6 +353,128 @@ export class OrganizationService {
     };
   }
 
+  async listMembers(
+    organizationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto[]> {
+    await this.ensureOrganizationMemberAccess(organizationId, user);
+
+    return this.userRepo.findOrganizationMembers(organizationId);
+  }
+
+  async updateMemberRole(
+    organizationId: string,
+    memberUserId: string,
+    dto: UpdateOrganizationMemberRoleDto,
+    user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto> {
+    await this.ensureOrganizationOwnerAccess(organizationId, user);
+
+    const member = await this.userRepo.findOrganizationMember(
+      organizationId,
+      memberUserId,
+    );
+
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+
+    const requestedRole = dto.role as UserRole;
+
+    if (requestedRole === UserRole.COMPANY_OWNER) {
+      throw new BadRequestException(
+        'Use ownership transfer endpoint to set company owner',
+      );
+    }
+
+    if (member.role === UserRole.COMPANY_OWNER) {
+      throw new BadRequestException(
+        'Current owner role cannot be changed directly',
+      );
+    }
+
+    return this.userRepo.updateUserRole(memberUserId, requestedRole);
+  }
+
+  async removeMember(
+    organizationId: string,
+    memberUserId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto> {
+    await this.ensureOrganizationOwnerAccess(organizationId, user);
+
+    const member = await this.userRepo.findOrganizationMember(
+      organizationId,
+      memberUserId,
+    );
+
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+
+    if (member.role === UserRole.COMPANY_OWNER) {
+      throw new BadRequestException('Current owner cannot be removed');
+    }
+
+    return this.userRepo.removeOrganizationMember(memberUserId);
+  }
+
+  async transferOwner(
+    organizationId: string,
+    dto: TransferOrganizationOwnerDto,
+    user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto> {
+    await this.ensureOrganizationOwnerAccess(organizationId, user);
+
+    if (dto.newOwnerUserId === user.id) {
+      throw new BadRequestException('User is already organization owner');
+    }
+
+    return this.organizationRepository.transaction<OrganizationMemberResponseDto>(
+      async (tx) => {
+        const currentOwner = await this.userRepo.findOrganizationMember(
+          organizationId,
+          user.id,
+          tx,
+        );
+
+        if (!currentOwner) {
+          throw new NotFoundException('Current owner not found');
+        }
+
+        if (currentOwner.role !== UserRole.COMPANY_OWNER) {
+          throw new ForbiddenException();
+        }
+
+        const newOwner = await this.userRepo.findOrganizationMember(
+          organizationId,
+          dto.newOwnerUserId,
+          tx,
+        );
+
+        if (!newOwner) {
+          throw new NotFoundException('Member not found');
+        }
+
+        if (newOwner.status !== UserStatus.ACTIVE) {
+          throw new BadRequestException('New owner must be active');
+        }
+
+        await this.userRepo.updateUserRole(
+          currentOwner.id,
+          UserRole.COMPANY_EMPLOYEE,
+          tx,
+        );
+
+        return this.userRepo.updateUserRole(
+          newOwner.id,
+          UserRole.COMPANY_OWNER,
+          tx,
+        );
+      },
+    );
+  }
+
   private generateToken(): string {
     return this.hashingService.generateHexToken(
       this.configService.tokenByteLength,
@@ -381,6 +507,29 @@ export class OrganizationService {
   }
 
   private async ensureOrganizationOwnerAccess(
+    organizationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<Organization> {
+    const organization = await this.organizationRepository.findUnique({
+      id: organizationId,
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    if (user.organizationId !== organizationId) {
+      throw new ForbiddenException();
+    }
+
+    if (user.role !== UserRole.COMPANY_OWNER) {
+      throw new ForbiddenException();
+    }
+
+    return organization;
+  }
+
+  private async ensureOrganizationMemberAccess(
     organizationId: string,
     user: AuthenticatedUserContext,
   ): Promise<Organization> {

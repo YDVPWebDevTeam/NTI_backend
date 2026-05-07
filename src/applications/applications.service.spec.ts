@@ -175,6 +175,17 @@ describe('ApplicationsService', () => {
       callsRepository as never,
       teamRepository as never,
       filesRepository as never,
+      {
+        createItem: jest.fn(),
+        findItemForApplication: jest.fn(),
+        createReply: jest.fn(),
+        markItemAnswered: jest.fn(),
+        findUnresolvedItems: jest.fn(),
+        resolveAnsweredItems: jest.fn(),
+        getThread: jest.fn(),
+        getStatusEvents: jest.fn(),
+        createStatusEvent: jest.fn(),
+      } as never,
     );
   });
 

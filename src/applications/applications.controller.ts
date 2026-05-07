@@ -24,7 +24,10 @@ import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationDocumentDto } from './dto/application-document.dto';
 import { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
+import { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from './dto/document-completeness.dto';
+import { ResubmitApplicationDto } from './dto/resubmit-application.dto';
 import { ApplicationsService } from './applications.service';
 
 @ApiTags('Applications')
@@ -78,5 +81,42 @@ export class ApplicationsController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ApplicationDetailDto> {
     return this.applicationsService.submit(id, user);
+  }
+
+  @Post(':id/needs-info-items')
+  createNeedsInfoItem(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: CreateNeedsInfoItemDto,
+  ) {
+    return this.applicationsService.createNeedsInfoItem(id, user, dto);
+  }
+
+  @Post(':id/needs-info-items/:itemId/replies')
+  replyToNeedsInfoItem(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: CreateNeedsInfoReplyDto,
+  ) {
+    return this.applicationsService.replyToNeedsInfoItem(id, itemId, user, dto);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/resubmit')
+  resubmit(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: ResubmitApplicationDto,
+  ): Promise<ApplicationDetailDto> {
+    return this.applicationsService.resubmit(id, user, dto);
+  }
+
+  @Get(':id/needs-info-thread')
+  getNeedsInfoThread(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ) {
+    return this.applicationsService.getNeedsInfoThread(id, user);
   }
 }

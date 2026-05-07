@@ -22,3 +22,7 @@ export { DocumentCompletenessDto } from './dto/document-completeness.dto';
 export { DocumentCompletenessItemDto } from './dto/document-completeness-item.dto';
 export { RequiredDocumentTypeDto } from './dto/required-document-type.dto';
 export { RequiredDocumentsResponseDto } from './dto/required-documents-response.dto';
+export { NeedsInfoRepository } from './needs-info.repository';
+export { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
+export { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
+export { ResubmitApplicationDto } from './dto/resubmit-application.dto';

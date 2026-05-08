@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { BacklogItem, Prisma, PrismaClient } from 'generated/prisma/client';
+import { BacklogItemStatus } from 'generated/prisma/enums';
 import {
   BaseRepository,
   PrismaDbClient,
@@ -32,7 +33,7 @@ export class ProgramBBacklogRepository extends BaseRepository<
     return this.getDelegate(db).deleteMany({
       where: {
         id,
-        status: 'DRAFT',
+        status: BacklogItemStatus.DRAFT,
       },
     });
   }

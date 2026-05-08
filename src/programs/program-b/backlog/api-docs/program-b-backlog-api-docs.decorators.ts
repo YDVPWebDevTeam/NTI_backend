@@ -9,7 +9,9 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { BacklogItemStatus } from 'generated/prisma/enums';
+import { createPaginationQueryDecorators } from '../../../../common/pagination';
 import { createApiDecorator } from '../../../../infrastructure/api-docs/api-docs-factory';
+import { BACKLOG_SORT_VALUES } from '../dto/get-program-b-backlog-query.dto';
 import { CreateProgramBBacklogItemDto } from '../dto/create-program-b-backlog-item.dto';
 import { GetProgramBBacklogResponseDto } from '../dto/get-program-b-backlog-response.dto';
 import { ProgramBBacklogItemDto } from '../dto/program-b-backlog-item.dto';
@@ -63,7 +65,7 @@ export const UpdateProgramBBacklogItemApi = () =>
       }),
       ApiForbiddenResponse({
         description:
-          'Only organization members from an active organization may update their own draft backlog items.',
+          'Only organization members from an active organization may update draft backlog items in their organization.',
       }),
       ApiNotFoundResponse({ description: 'Backlog item was not found.' }),
       ApiConflictResponse({
@@ -123,27 +125,11 @@ export const ListMyProgramBBacklogItemsApi = () =>
         description:
           'Case-insensitive substring filter for title or description.',
       }),
-      ApiQuery({
-        name: 'page',
-        required: false,
-        description: 'Page number, defaults to 1.',
-        example: 1,
-      }),
-      ApiQuery({
-        name: 'limit',
-        required: false,
-        description: 'Page size, defaults to 20 and cannot exceed 100.',
-        example: 20,
-      }),
-      ApiQuery({
-        name: 'sort',
-        required: false,
-        enum: ['updatedAt', 'createdAt', 'budget', 'title'],
-      }),
-      ApiQuery({
-        name: 'order',
-        required: false,
-        enum: ['asc', 'desc'],
+      ...createPaginationQueryDecorators({
+        sortValues: BACKLOG_SORT_VALUES,
+        sortDescription: 'Sortable backlog fields.',
+        defaultSort: 'updatedAt',
+        defaultOrder: 'desc',
       }),
     ],
     errors: [

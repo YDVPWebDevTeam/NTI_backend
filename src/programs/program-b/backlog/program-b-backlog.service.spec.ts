@@ -28,6 +28,11 @@ jest.mock(
       REJECTED: 'REJECTED',
       SUSPENDED: 'SUSPENDED',
     },
+    UserStatus: {
+      PENDING: 'PENDING',
+      ACTIVE: 'ACTIVE',
+      SUSPENDED: 'SUSPENDED',
+    },
     UserRole: {
       COMPANY_OWNER: 'COMPANY_OWNER',
       COMPANY_EMPLOYEE: 'COMPANY_EMPLOYEE',
@@ -62,6 +67,7 @@ import {
   BacklogItemStatus,
   OrganizationStatus,
   UserRole,
+  UserStatus,
 } from 'generated/prisma/enums';
 import { ProgramBBacklogService } from './program-b-backlog.service';
 
@@ -191,6 +197,20 @@ describe('ProgramBBacklogService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('forbids backlog access for non-active users', async () => {
+    await expect(
+      service.listMy(
+        {
+          page: 1,
+          limit: 20,
+          sort: 'updatedAt',
+          order: 'desc',
+        },
+        { ...owner, status: UserStatus.PENDING } as never,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
   it('rejects create when product owner is not in the same organization', async () => {
     organizationRepository.findUnique.mockResolvedValue(activeOrganization);
     userRepository.findOrganizationMember.mockResolvedValue(null);
@@ -285,18 +305,29 @@ describe('ProgramBBacklogService', () => {
 
   it('publishes a valid draft item', async () => {
     organizationRepository.findUnique.mockResolvedValue(activeOrganization);
-    backlogRepository.findUnique.mockResolvedValue(draftItem);
+    backlogRepository.findUnique
+      .mockResolvedValueOnce(draftItem)
+      .mockResolvedValueOnce({
+        ...draftItem,
+        status: BacklogItemStatus.PUBLISHED,
+      });
     userRepository.findOrganizationMember.mockResolvedValue({
       id: 'employee-1',
     });
     backlogRepository.updateMany.mockResolvedValue({ count: 1 });
-    backlogRepository.update.mockResolvedValue({
-      ...draftItem,
-      status: BacklogItemStatus.PUBLISHED,
-    });
 
     const result = await service.publish('item-1', owner as never);
 
+    expect(backlogRepository.findUnique).toHaveBeenNthCalledWith(
+      1,
+      { id: 'item-1' },
+      expect.anything(),
+    );
+    expect(userRepository.findOrganizationMember).toHaveBeenCalledWith(
+      'org-1',
+      'employee-1',
+      expect.anything(),
+    );
     expect(backlogRepository.updateMany).toHaveBeenCalledWith(
       { id: 'item-1', status: BacklogItemStatus.DRAFT },
       { status: BacklogItemStatus.PUBLISHED },
@@ -315,5 +346,31 @@ describe('ProgramBBacklogService', () => {
     await expect(
       service.archive('item-1', owner as never),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('archives without issuing a duplicate update', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findUnique
+      .mockResolvedValueOnce(draftItem)
+      .mockResolvedValueOnce({
+        ...draftItem,
+        status: BacklogItemStatus.ARCHIVED,
+      });
+    backlogRepository.updateMany.mockResolvedValue({ count: 1 });
+
+    const result = await service.archive('item-1', owner as never);
+
+    expect(backlogRepository.updateMany).toHaveBeenCalledWith(
+      {
+        id: 'item-1',
+        status: {
+          in: [BacklogItemStatus.DRAFT, BacklogItemStatus.PUBLISHED],
+        },
+      },
+      { status: BacklogItemStatus.ARCHIVED },
+      expect.anything(),
+    );
+    expect(backlogRepository.update).not.toHaveBeenCalled();
+    expect(result.status).toBe(BacklogItemStatus.ARCHIVED);
   });
 });

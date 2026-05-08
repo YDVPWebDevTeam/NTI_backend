@@ -6,10 +6,20 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { BacklogItem, Prisma } from 'generated/prisma/client';
-import { BacklogItemStatus, OrganizationStatus } from 'generated/prisma/enums';
+import {
+  BacklogItemStatus,
+  OrganizationStatus,
+  UserStatus,
+} from 'generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../../common/types/auth-user-context.type';
+import {
+  buildOrderBy,
+  buildPaginationMeta,
+  resolvePagination,
+} from '../../../common/pagination';
 import { OrganizationRepository } from '../../../organization/organization.repository';
 import { UserRepository } from '../../../user/user.repository';
+import type { PrismaDbClient } from '../../../infrastructure/database';
 import { CreateProgramBBacklogItemDto } from './dto/create-program-b-backlog-item.dto';
 import { GetProgramBBacklogQueryDto } from './dto/get-program-b-backlog-query.dto';
 import { GetProgramBBacklogResponseDto } from './dto/get-program-b-backlog-response.dto';
@@ -122,28 +132,21 @@ export class ProgramBBacklogService {
   ): Promise<GetProgramBBacklogResponseDto> {
     const organization = await this.ensureActiveOrganizationMember(user);
     const where = this.buildListWhere(organization.id, query);
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const skip = (page - 1) * limit;
+    const pagination = resolvePagination(query);
 
     const [items, total] = await Promise.all([
       this.backlogRepository.findMany({
         where,
         orderBy: this.buildListOrderBy(query),
-        skip,
-        take: limit,
+        skip: pagination.skip,
+        take: pagination.take,
       }),
       this.backlogRepository.count(where),
     ]);
 
     return {
       data: items,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
-      },
+      meta: buildPaginationMeta(total, pagination.page, pagination.limit),
     };
   }
 
@@ -152,20 +155,28 @@ export class ProgramBBacklogService {
     user: AuthenticatedUserContext,
   ): Promise<BacklogItem> {
     const organization = await this.ensureActiveOrganizationMember(user);
-    const item = await this.getItemForOrganizationOrThrow(id, organization.id);
-
-    if (item.status !== BacklogItemStatus.DRAFT) {
-      throw new ConflictException('Only draft backlog items may be published');
-    }
-
-    this.ensurePublishReadiness(item);
-    await this.ensureProductOwnerFromSameOrganization(
-      organization.id,
-      item.productOwnerUserId,
-      true,
-    );
 
     return this.backlogRepository.transaction(async (db) => {
+      const item = await this.getItemForOrganizationOrThrow(
+        id,
+        organization.id,
+        db,
+      );
+
+      if (item.status !== BacklogItemStatus.DRAFT) {
+        throw new ConflictException(
+          'Only draft backlog items may be published',
+        );
+      }
+
+      this.ensurePublishReadiness(item);
+      await this.ensureProductOwnerFromSameOrganization(
+        organization.id,
+        item.productOwnerUserId,
+        true,
+        db,
+      );
+
       const result = await this.backlogRepository.updateMany(
         {
           id: item.id,
@@ -181,11 +192,16 @@ export class ProgramBBacklogService {
         );
       }
 
-      return this.backlogRepository.update(
+      const publishedItem = await this.backlogRepository.findUnique(
         { id: item.id },
-        { status: BacklogItemStatus.PUBLISHED },
         db,
       );
+
+      if (!publishedItem) {
+        throw new NotFoundException('Backlog item not found');
+      }
+
+      return publishedItem;
     }, this.backlogLifecycleTransactionOptions);
   }
 
@@ -223,16 +239,21 @@ export class ProgramBBacklogService {
         );
       }
 
-      return this.backlogRepository.update(
+      const archivedItem = await this.backlogRepository.findUnique(
         { id: item.id },
-        { status: BacklogItemStatus.ARCHIVED },
         db,
       );
+
+      if (!archivedItem) {
+        throw new NotFoundException('Backlog item not found');
+      }
+
+      return archivedItem;
     }, this.backlogLifecycleTransactionOptions);
   }
 
   private async ensureActiveOrganizationMember(user: AuthenticatedUserContext) {
-    if (!user.organizationId) {
+    if (!user.organizationId || user.status !== UserStatus.ACTIVE) {
       throw new ForbiddenException(
         'Only active organization members may manage backlog items',
       );
@@ -254,8 +275,9 @@ export class ProgramBBacklogService {
   private async getItemForOrganizationOrThrow(
     itemId: string,
     organizationId: string,
+    db?: PrismaDbClient,
   ): Promise<BacklogItem> {
-    const item = await this.backlogRepository.findUnique({ id: itemId });
+    const item = await this.backlogRepository.findUnique({ id: itemId }, db);
 
     if (!item) {
       throw new NotFoundException('Backlog item not found');
@@ -272,6 +294,7 @@ export class ProgramBBacklogService {
     organizationId: string,
     productOwnerUserId?: string | null,
     required = false,
+    db?: PrismaDbClient,
   ): Promise<void> {
     if (!productOwnerUserId) {
       if (required) {
@@ -286,6 +309,7 @@ export class ProgramBBacklogService {
     const productOwner = await this.userRepository.findOrganizationMember(
       organizationId,
       productOwnerUserId,
+      db,
     );
 
     if (!productOwner) {
@@ -353,8 +377,6 @@ export class ProgramBBacklogService {
   private buildListOrderBy(
     query: GetProgramBBacklogQueryDto,
   ): Prisma.BacklogItemOrderByWithRelationInput[] {
-    const order = query.order === 'asc' ? 'asc' : 'desc';
-
-    return [{ [query.sort]: order }, { id: 'asc' }];
+    return buildOrderBy(query.sort, query.order, [{ id: 'asc' }]);
   }
 }

@@ -9,9 +9,11 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { InvitationStatus } from '../../../generated/prisma/enums';
+import { createPaginationQueryDecorators } from '../../common/pagination';
 import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
 import { CreateOrganizationInviteDto } from '../dto/create-organization-invite.dto';
 import { CreateOrganizationDto } from '../dto/create-organization.dto';
+import { ORGANIZATION_INVITE_SORT_VALUES } from '../dto/get-organization-invites-query.dto';
 import { GetOrganizationInvitesResponseDto } from '../dto/get-organization-invites-response.dto';
 import { OrganizationInviteResponseDto } from '../dto/organization-invite-response.dto';
 import { OrganizationResponseDto } from '../dto/organization-response.dto';
@@ -173,22 +175,11 @@ export const GetOrganizationInvitesApi = () =>
         required: false,
         description: 'Case-insensitive email substring filter.',
       }),
-      ApiQuery({
-        name: 'page',
-        required: false,
-        description: 'Page number, defaults to 1.',
-        example: 1,
-      }),
-      ApiQuery({
-        name: 'limit',
-        required: false,
-        description: 'Page size, defaults to 20 and cannot exceed 100.',
-        example: 20,
-      }),
-      ApiQuery({
-        name: 'sort',
-        required: false,
-        enum: ['createdAt:desc', 'createdAt:asc'],
+      ...createPaginationQueryDecorators({
+        sortValues: ORGANIZATION_INVITE_SORT_VALUES,
+        sortDescription: 'Sortable invite fields.',
+        defaultSort: 'createdAt',
+        defaultOrder: 'desc',
       }),
     ],
     errors: [

@@ -1,19 +1,14 @@
-import { Transform } from 'class-transformer';
-import {
-  IsEnum,
-  IsIn,
-  IsInt,
-  IsOptional,
-  IsString,
-  Max,
-  MaxLength,
-  Min,
-} from 'class-validator';
+import { IsEnum, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { InvitationStatus } from 'generated/prisma/enums';
+import {
+  PaginationQueryDto,
+  SORT_ORDER_VALUES,
+  type SortOrder,
+} from '../../common/pagination';
 
-const INVITE_SORT_VALUES = ['createdAt:desc', 'createdAt:asc'] as const;
+export const ORGANIZATION_INVITE_SORT_VALUES = ['createdAt'] as const;
 
-export class GetOrganizationInvitesQueryDto {
+export class GetOrganizationInvitesQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(InvitationStatus)
   status?: InvitationStatus;
@@ -24,23 +19,10 @@ export class GetOrganizationInvitesQueryDto {
   q?: string;
 
   @IsOptional()
-  @Transform(({ value }) =>
-    value === undefined || value === '' ? undefined : Number(value),
-  )
-  @IsInt()
-  @Min(1)
-  page: number = 1;
+  @IsIn(ORGANIZATION_INVITE_SORT_VALUES)
+  sort: (typeof ORGANIZATION_INVITE_SORT_VALUES)[number] = 'createdAt';
 
   @IsOptional()
-  @Transform(({ value }) =>
-    value === undefined || value === '' ? undefined : Number(value),
-  )
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit: number = 20;
-
-  @IsOptional()
-  @IsIn(INVITE_SORT_VALUES)
-  sort: (typeof INVITE_SORT_VALUES)[number] = 'createdAt:desc';
+  @IsIn(SORT_ORDER_VALUES)
+  order: SortOrder = 'desc';
 }

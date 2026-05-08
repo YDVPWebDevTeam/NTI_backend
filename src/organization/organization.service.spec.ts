@@ -300,13 +300,13 @@ describe('OrganizationService', () => {
 
     const result = await service.listInvites(
       'org-1',
-      { page: 1, limit: 20, sort: 'createdAt:desc' },
+      { page: 1, limit: 20, sort: 'createdAt', order: 'desc' },
       owner,
     );
 
     expect(organizationInviteRepository.findMany).toHaveBeenCalledWith({
       where: { organizationId: 'org-1' },
-      orderBy: [{ createdAt: 'desc' }],
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       skip: 0,
       take: 20,
     });
@@ -336,7 +336,7 @@ describe('OrganizationService', () => {
     await expect(
       service.listInvites(
         'org-2',
-        { page: 1, limit: 20, sort: 'createdAt:desc' },
+        { page: 1, limit: 20, sort: 'createdAt', order: 'desc' },
         owner,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);

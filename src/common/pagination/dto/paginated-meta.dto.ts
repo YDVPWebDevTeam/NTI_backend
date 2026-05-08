@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class GetOrganizationInvitesMetaDto {
+export class PaginatedMetaDto {
   @ApiProperty({ example: 1 })
   page!: number;
 

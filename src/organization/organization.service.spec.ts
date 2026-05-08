@@ -113,6 +113,7 @@ describe('OrganizationService', () => {
     updateOrganizationIfNotExists: jest.Mock;
     findOrganizationMembers: jest.Mock;
     findOrganizationMember: jest.Mock;
+    findActiveOrganizationMember: jest.Mock;
     updateUserRole: jest.Mock;
     update: jest.Mock;
     removeOrganizationMember: jest.Mock;
@@ -191,6 +192,7 @@ describe('OrganizationService', () => {
       updateOrganizationIfNotExists: jest.fn(),
       findOrganizationMembers: jest.fn(),
       findOrganizationMember: jest.fn(),
+      findActiveOrganizationMember: jest.fn(),
       updateUserRole: jest.fn(),
       update: jest.fn(),
       removeOrganizationMember: jest.fn(),
@@ -343,13 +345,13 @@ describe('OrganizationService', () => {
 
       const result = await service.listInvites(
         'org-1',
-        { page: 1, limit: 20, sort: 'createdAt:desc' },
+        { page: 1, limit: 20, sort: 'createdAt', order: 'desc' },
         owner,
       );
 
       expect(organizationInviteRepository.findMany).toHaveBeenCalledWith({
         where: { organizationId: 'org-1' },
-        orderBy: [{ createdAt: 'desc' }],
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         skip: 0,
         take: 20,
       });
@@ -380,7 +382,7 @@ describe('OrganizationService', () => {
       await expect(
         service.listInvites(
           'org-2',
-          { page: 1, limit: 20, sort: 'createdAt:desc' },
+          { page: 1, limit: 20, sort: 'createdAt', order: 'desc' },
           owner,
         ),
       ).rejects.toBeInstanceOf(ForbiddenException);

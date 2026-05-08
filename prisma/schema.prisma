@@ -44,6 +44,12 @@ enum ProgramType {
   PROGRAM_B
 }
 
+enum BacklogItemStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 enum CallStatus {
   DRAFT
   OPEN
@@ -183,6 +189,7 @@ model User {
   applicationsCreated           Application[]         @relation("ApplicationCreatedBy")
   applicationDocumentsCreated   ApplicationDocument[] @relation("ApplicationDocumentCreatedBy")
   applicationDocumentsForMember ApplicationDocument[] @relation("ApplicationDocumentMember")
+  productOwnerForBacklogItems   BacklogItem[]         @relation("BacklogItemProductOwner")
 
   needsInfoItemsCreated          NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
   needsInfoItemsResolved         NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
@@ -307,6 +314,31 @@ model Application {
   @@index([callId, status])
   @@index([teamId, status])
   @@index([createdById, status])
+}
+
+model BacklogItem {
+  id String @id @default(uuid())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  title            String?
+  description      String?
+  budget           Int?
+  expectedOutcomes String?
+
+  productOwnerUserId String?
+  productOwner       User?   @relation("BacklogItemProductOwner", fields: [productOwnerUserId], references: [id], onDelete: SetNull)
+
+  status BacklogItemStatus @default(DRAFT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([updatedAt])
+  @@index([organizationId, updatedAt])
 }
 
 model RequiredDocumentType {
@@ -498,16 +530,17 @@ enum OrganizationStatus {
 }
 
 model Organization {
-  id          String             @id @default(uuid())
-  name        String
-  ico         String             @unique
-  sector      String?
-  description String?
-  website     String?
-  logoUrl     String?
-  status      OrganizationStatus @default(PENDING)
-  users       User[]
-  invitations OrgInvitation[]
+  id           String             @id @default(uuid())
+  name         String
+  ico          String             @unique
+  sector       String?
+  description  String?
+  website      String?
+  logoUrl      String?
+  status       OrganizationStatus @default(PENDING)
+  users        User[]
+  invitations  OrgInvitation[]
+  backlogItems BacklogItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

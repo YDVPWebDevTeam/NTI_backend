@@ -109,6 +109,39 @@ export class UserRepository extends BaseRepository<
     });
   }
 
+  findOrganizationMember(
+    organizationId: string,
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<User | null> {
+    return this.getDelegate(db).findFirst({
+      where: {
+        id: userId,
+        organizationId,
+        role: {
+          in: [UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE],
+        },
+      },
+    });
+  }
+
+  findActiveOrganizationMember(
+    organizationId: string,
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<User | null> {
+    return this.getDelegate(db).findFirst({
+      where: {
+        id: userId,
+        organizationId,
+        role: {
+          in: [UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE],
+        },
+        status: UserStatus.ACTIVE,
+      },
+    });
+  }
+
   findOrganizationMembers(
     organizationId: string,
     db?: PrismaDbClient,
@@ -122,23 +155,6 @@ export class UserRepository extends BaseRepository<
       },
       orderBy: {
         createdAt: 'asc',
-      },
-      select: organizationMemberSelect,
-    });
-  }
-
-  findOrganizationMember(
-    organizationId: string,
-    userId: string,
-    db?: PrismaDbClient,
-  ): Promise<OrganizationMemberRecord | null> {
-    return this.getDelegate(db).findFirst({
-      where: {
-        id: userId,
-        organizationId,
-        role: {
-          in: [UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE],
-        },
       },
       select: organizationMemberSelect,
     });

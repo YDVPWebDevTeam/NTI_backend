@@ -17,7 +17,6 @@
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "lint:staged": "lint-staged",
     "typescript": "tsc --noEmit",
-    "commit": "cz",
     "commitlint": "commitlint --edit",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -79,8 +78,6 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.18.0",
     "@types/supertest": "^6.0.2",
-    "commitizen": "^4.3.1",
-    "cz-conventional-changelog": "^3.3.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
@@ -106,11 +103,6 @@
     "**/*.prisma": [
       "prisma format --schema prisma/schema.prisma"
     ]
-  },
-  "config": {
-    "commitizen": {
-      "path": "./node_modules/cz-conventional-changelog"
-    }
   },
   "prisma": {
     "seed": "node --experimental-strip-types --experimental-specifier-resolution=node prisma/seed/main.ts"

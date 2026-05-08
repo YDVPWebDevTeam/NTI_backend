@@ -17,11 +17,16 @@ import {
   UserRole,
   UserStatus,
 } from 'generated/prisma/enums';
-import { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
-import { ConfigService } from 'src/infrastructure/config';
-import { HashingService } from 'src/infrastructure/hashing';
-import { EMAIL_JOBS, QueueService } from 'src/infrastructure/queue';
-import { UserRepository } from 'src/user/user.repository';
+import { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import {
+  buildOrderBy,
+  buildPaginationMeta,
+  resolvePagination,
+} from '../common/pagination';
+import { ConfigService } from '../infrastructure/config';
+import { HashingService } from '../infrastructure/hashing';
+import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
+import { UserRepository } from '../user/user.repository';
 import { CreateOrganizationInviteDto } from './dto/create-organization-invite.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { GetOrganizationInvitesQueryDto } from './dto/get-organization-invites-query.dto';
@@ -238,16 +243,14 @@ export class OrganizationService {
 
     const now = new Date();
     const where = this.buildInvitationListWhere(organizationId, query, now);
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const skip = (page - 1) * limit;
+    const pagination = resolvePagination(query);
 
     const [invitations, total] = await Promise.all([
       this.organizationInviteRepository.findMany({
         where,
-        orderBy: [{ createdAt: this.resolveSortOrder(query.sort) }],
-        skip,
-        take: limit,
+        orderBy: buildOrderBy(query.sort, query.order, [{ id: 'asc' }]),
+        skip: pagination.skip,
+        take: pagination.take,
       }),
       this.organizationInviteRepository.count(where),
     ]);
@@ -256,12 +259,7 @@ export class OrganizationService {
       data: invitations.map((invitation) =>
         this.toInviteItemDto(invitation, now),
       ),
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
-      },
+      meta: buildPaginationMeta(total, pagination.page, pagination.limit),
     };
   }
 
@@ -644,12 +642,6 @@ export class OrganizationService {
           ],
         };
     }
-  }
-
-  private resolveSortOrder(
-    sort: GetOrganizationInvitesQueryDto['sort'],
-  ): Prisma.SortOrder {
-    return sort === 'createdAt:asc' ? 'asc' : 'desc';
   }
 
   private toInviteItemDto(

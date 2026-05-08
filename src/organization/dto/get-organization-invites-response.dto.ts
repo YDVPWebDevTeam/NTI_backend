@@ -1,11 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { GetOrganizationInvitesMetaDto } from './get-organization-invites-meta.dto';
+import { PaginatedMetaDto } from '../../common/pagination';
 import { OrganizationInviteItemDto } from './organization-invite-item.dto';
 
 export class GetOrganizationInvitesResponseDto {
   @ApiProperty({ type: [OrganizationInviteItemDto] })
   data!: OrganizationInviteItemDto[];
 
-  @ApiProperty({ type: GetOrganizationInvitesMetaDto })
-  meta!: GetOrganizationInvitesMetaDto;
+  @ApiProperty({ type: PaginatedMetaDto })
+  meta!: PaginatedMetaDto;
 }

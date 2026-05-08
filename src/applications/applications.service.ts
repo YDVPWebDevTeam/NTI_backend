@@ -22,11 +22,15 @@ import { ApplicationDocumentsRepository } from './application-documents.reposito
 import { ApplicationRulesService } from './application-rules.service';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationDocumentDto } from './dto/application-document.dto';
+import { ApplicationStatusEventDto } from './dto/application-status-event.dto';
 import { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
 import { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from './dto/document-completeness.dto';
+import { NeedsInfoItemDto } from './dto/needs-info-item.dto';
+import { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
+import { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';
 import { RequiredDocumentsResponseDto } from './dto/required-documents-response.dto';
 import { ResubmitApplicationDto } from './dto/resubmit-application.dto';
 import {
@@ -302,7 +306,7 @@ export class ApplicationsService {
     applicationId: string,
     user: AuthenticatedUserContext,
     dto: CreateNeedsInfoItemDto,
-  ) {
+  ): Promise<NeedsInfoItemDto> {
     if (!this.isReviewerSideUser(user)) {
       throw new ForbiddenException(
         'Only reviewer-side users can request additional information',
@@ -362,7 +366,10 @@ export class ApplicationsService {
         db,
       );
 
-      return item;
+      return this.toNeedsInfoItemDto({
+        ...item,
+        replies: [],
+      });
     }, this.needsInfoTransactionOptions);
   }
 
@@ -371,14 +378,20 @@ export class ApplicationsService {
     itemId: string,
     user: AuthenticatedUserContext,
     dto: CreateNeedsInfoReplyDto,
-  ) {
+  ): Promise<NeedsInfoReplyDto> {
     return this.applicationsRepository.transaction(async (db) => {
       const application = await this.loadWorkflowApplicationOrThrow(
         applicationId,
         db,
       );
 
-      this.ensureApplicationManagedByTeamLead(application, user.id);
+      this.ensureApplicationManagedByTeamLeadForNeedsInfo(application, user.id);
+
+      if (application.status !== ApplicationStatus.NEEDS_INFO) {
+        throw new BadRequestException(
+          'Needs-info replies are allowed only while application is in NEEDS_INFO status',
+        );
+      }
 
       const item = await this.needsInfoRepository.findItemForApplication(
         application.id,
@@ -407,7 +420,7 @@ export class ApplicationsService {
         await this.needsInfoRepository.markItemAnswered(item.id, db);
       }
 
-      return reply;
+      return this.toNeedsInfoReplyDto(reply);
     }, this.needsInfoTransactionOptions);
   }
 
@@ -423,7 +436,10 @@ export class ApplicationsService {
           db,
         );
 
-        this.ensureApplicationManagedByTeamLead(application, user.id);
+        this.ensureApplicationManagedByTeamLeadForNeedsInfo(
+          application,
+          user.id,
+        );
 
         if (application.status !== ApplicationStatus.NEEDS_INFO) {
           throw new BadRequestException(
@@ -508,7 +524,7 @@ export class ApplicationsService {
   async getNeedsInfoThread(
     applicationId: string,
     user: AuthenticatedUserContext,
-  ) {
+  ): Promise<NeedsInfoThreadDto> {
     const application =
       await this.loadWorkflowApplicationOrThrow(applicationId);
 
@@ -526,8 +542,10 @@ export class ApplicationsService {
         teamId: application.teamId,
         callId: application.callId,
       },
-      items,
-      statusEvents,
+      items: items.map((item) => this.toNeedsInfoItemDto(item)),
+      statusEvents: statusEvents.map((event) =>
+        this.toApplicationStatusEventDto(event),
+      ),
     };
   }
 
@@ -591,6 +609,17 @@ export class ApplicationsService {
     if (application.team.leaderId !== userId) {
       throw new ForbiddenException(
         'Only team lead can manage application documents and submission',
+      );
+    }
+  }
+
+  private ensureApplicationManagedByTeamLeadForNeedsInfo(
+    application: ApplicationWorkflowView,
+    userId: string,
+  ): void {
+    if (application.team.leaderId !== userId) {
+      throw new ForbiddenException(
+        'Only team lead can reply to needs-info requests and resubmit the application',
       );
     }
   }
@@ -806,6 +835,78 @@ export class ApplicationsService {
       uploadStatus: document.uploadedFile.status,
       uploadedFileOwnerId: document.uploadedFile.ownerId,
       createdAt: document.createdAt,
+    };
+  }
+
+  private toNeedsInfoReplyDto(reply: {
+    id: string;
+    needsInfoItemId: string;
+    message: string;
+    createdById: string;
+    createdAt: Date;
+  }): NeedsInfoReplyDto {
+    return {
+      id: reply.id,
+      needsInfoItemId: reply.needsInfoItemId,
+      message: reply.message,
+      createdById: reply.createdById,
+      createdAt: reply.createdAt,
+    };
+  }
+
+  private toNeedsInfoItemDto(item: {
+    id: string;
+    applicationId: string;
+    message: string;
+    dueAt: Date | null;
+    status: NeedsInfoItemStatus;
+    createdById: string;
+    resolvedAt: Date | null;
+    resolvedById: string | null;
+    createdAt: Date;
+    replies?: {
+      id: string;
+      needsInfoItemId: string;
+      message: string;
+      createdById: string;
+      createdAt: Date;
+    }[];
+  }): NeedsInfoItemDto {
+    return {
+      id: item.id,
+      applicationId: item.applicationId,
+      message: item.message,
+      dueAt: item.dueAt,
+      status: item.status,
+      createdById: item.createdById,
+      resolvedAt: item.resolvedAt,
+      resolvedById: item.resolvedById,
+      createdAt: item.createdAt,
+      replies: (item.replies ?? []).map((reply) =>
+        this.toNeedsInfoReplyDto(reply),
+      ),
+    };
+  }
+
+  private toApplicationStatusEventDto(event: {
+    id: string;
+    applicationId: string;
+    fromStatus: ApplicationStatus;
+    toStatus: ApplicationStatus;
+    changedById: string;
+    reason: string | null;
+    needsInfoItemId: string | null;
+    createdAt: Date;
+  }): ApplicationStatusEventDto {
+    return {
+      id: event.id,
+      applicationId: event.applicationId,
+      fromStatus: event.fromStatus,
+      toStatus: event.toStatus,
+      changedById: event.changedById,
+      reason: event.reason,
+      needsInfoItemId: event.needsInfoItemId,
+      createdAt: event.createdAt,
     };
   }
 

@@ -11,8 +11,14 @@ import { ApplicationDetailDto } from '../dto/application-detail.dto';
 import { ApplicationDocumentDto } from '../dto/application-document.dto';
 import { AttachApplicationDocumentDto } from '../dto/attach-application-document.dto';
 import { CreateApplicationDto } from '../dto/create-application.dto';
+import { CreateNeedsInfoItemDto } from '../dto/create-needs-info-item.dto';
+import { CreateNeedsInfoReplyDto } from '../dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from '../dto/document-completeness.dto';
+import { NeedsInfoItemDto } from '../dto/needs-info-item.dto';
+import { NeedsInfoReplyDto } from '../dto/needs-info-reply.dto';
+import { NeedsInfoThreadDto } from '../dto/needs-info-thread.dto';
 import { RequiredDocumentsResponseDto } from '../dto/required-documents-response.dto';
+import { ResubmitApplicationDto } from '../dto/resubmit-application.dto';
 
 export const CreateApplicationApi = () =>
   createApiDecorator({
@@ -153,6 +159,112 @@ export const SubmitApplicationApi = () =>
       ApiConflictResponse({
         description:
           'Call is not open for applications, application is not in a submittable state, or required documents are missing.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const CreateNeedsInfoItemApi = () =>
+  createApiDecorator({
+    summary: 'Request additional information for application',
+    description:
+      'Reviewer-side users can request additional information for submitted applications. The application moves to NEEDS_INFO.',
+    body: CreateNeedsInfoItemDto,
+    successResponse: {
+      status: 201,
+      type: NeedsInfoItemDto,
+      description: 'Needs-info item was created.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description: 'Invalid application id or invalid application status.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only reviewer-side users can request additional information.',
+      }),
+      ApiConflictResponse({
+        description: 'Application status was changed concurrently.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const ReplyToNeedsInfoItemApi = () =>
+  createApiDecorator({
+    summary: 'Reply to needs-info item',
+    description:
+      'Team lead can reply to an open needs-info item while the application is in NEEDS_INFO status.',
+    body: CreateNeedsInfoReplyDto,
+    successResponse: {
+      status: 201,
+      type: NeedsInfoReplyDto,
+      description: 'Needs-info reply was created.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description: 'Invalid id format or application is not in NEEDS_INFO.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only team lead can reply to needs-info requests.',
+      }),
+      ApiConflictResponse({
+        description: 'Needs-info item is already resolved.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Application or needs-info item was not found.',
+      }),
+    ],
+  });
+
+export const ResubmitApplicationApi = () =>
+  createApiDecorator({
+    summary: 'Resubmit application after needs-info replies',
+    description:
+      'Team lead can resubmit an application from NEEDS_INFO to EVALUATING after all needs-info items have been answered.',
+    body: ResubmitApplicationDto,
+    successResponse: {
+      status: 200,
+      type: ApplicationDetailDto,
+      description: 'Application was resubmitted.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Application is not in NEEDS_INFO, has no unresolved needs-info items, or still has open items.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only team lead can resubmit the application.',
+      }),
+      ApiConflictResponse({
+        description: 'Application status was changed concurrently.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const GetNeedsInfoThreadApi = () =>
+  createApiDecorator({
+    summary: 'Get needs-info thread',
+    description:
+      'Returns needs-info items, replies, and application status events for the application.',
+    successResponse: {
+      status: 200,
+      type: NeedsInfoThreadDto,
+      description: 'Needs-info thread.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
+      ApiForbiddenResponse({
+        description: 'User has no access to this application.',
       }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],

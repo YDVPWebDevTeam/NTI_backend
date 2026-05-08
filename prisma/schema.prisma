@@ -373,7 +373,8 @@ model NeedsInfoItem {
 
   createdAt DateTime @default(now())
 
-  replies NeedsInfoReply[]
+  replies      NeedsInfoReply[]
+  statusEvents ApplicationStatusEvent[]
 
   @@index([applicationId, createdAt])
   @@index([applicationId, status])
@@ -407,9 +408,12 @@ model ApplicationStatusEvent {
 
   reason          String?
   needsInfoItemId String?
-  createdAt       DateTime @default(now())
+  needsInfoItem   NeedsInfoItem? @relation(fields: [needsInfoItemId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
 
   @@index([applicationId, createdAt])
+  @@index([needsInfoItemId])
 }
 
 enum InvitationStatus {

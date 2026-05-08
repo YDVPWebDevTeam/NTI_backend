@@ -26,3 +26,7 @@ export { NeedsInfoRepository } from './needs-info.repository';
 export { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
 export { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
 export { ResubmitApplicationDto } from './dto/resubmit-application.dto';
+export { ApplicationStatusEventDto } from './dto/application-status-event.dto';
+export { NeedsInfoItemDto } from './dto/needs-info-item.dto';
+export { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
+export { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';

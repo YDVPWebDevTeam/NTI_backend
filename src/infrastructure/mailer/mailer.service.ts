@@ -2,11 +2,9 @@ import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '../config';
 import { UserRole } from '../../../generated/prisma/enums';
 
-import nodemailer, { Transporter } from 'nodemailer';
-
 @Injectable()
 export class MailerService {
-  private transporter: Transporter;
+  private readonly brevoSendEmailUrl = 'https://api.brevo.com/v3/smtp/email';
 
   private escapeHtml(value: string): string {
     return value
@@ -17,28 +15,32 @@ export class MailerService {
       .replaceAll("'", '&#39;');
   }
 
-  constructor(private readonly configService: ConfigService) {
-    this.transporter = nodemailer.createTransport({
-      host: this.configService.smtpHost,
-      port: this.configService.smtpPort,
-      secure: this.configService.smtpPort === 465,
-      auth: {
-        user: this.configService.smtpUser,
-        pass: this.configService.smtpPassword,
-      },
-    });
-  }
+  constructor(private readonly configService: ConfigService) {}
 
   async sendEmail(to: string, subject: string, html: string): Promise<void> {
     try {
-      await this.transporter.sendMail({
-        from: this.configService.smtpFrom,
-        to,
-        subject,
-        html,
+      const response = await fetch(this.brevoSendEmailUrl, {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'api-key': this.configService.brevoApiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { email: this.configService.emailFrom },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+        }),
       });
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`Brevo API error ${response.status}: ${body}`);
+      }
     } catch (error: unknown) {
       console.error('Email sending error', {
+        provider: 'brevo',
         to,
         subject,
         error,

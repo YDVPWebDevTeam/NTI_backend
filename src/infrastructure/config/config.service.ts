@@ -27,22 +27,14 @@ export class ConfigService {
     return this.env.PORT;
   }
 
-  get smtpHost(): string {
-    return this.env.SMTP_HOST;
+  get brevoApiKey(): string {
+    return this.env.BREVO_API_KEY;
   }
 
-  get smtpPort(): number {
-    return this.env.SMTP_PORT;
+  get emailFrom(): string {
+    return this.env.EMAIL_FROM;
   }
-  get smtpUser(): string {
-    return this.env.SMTP_USER;
-  }
-  get smtpPassword(): string {
-    return this.env.SMTP_PASSWORD;
-  }
-  get smtpFrom(): string {
-    return this.env.SMTP_FROM;
-  }
+
   get frontUrl(): string {
     return this.env.FRONTEND_URL;
   }

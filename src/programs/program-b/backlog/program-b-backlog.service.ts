@@ -101,7 +101,31 @@ export class ProgramBBacklogService {
       throw new BadRequestException('Request body is empty');
     }
 
-    return this.backlogRepository.update({ id: item.id }, updateData);
+    return this.backlogRepository.transaction(async (db) => {
+      const result = await this.backlogRepository.updateMany(
+        {
+          id: item.id,
+          status: BacklogItemStatus.DRAFT,
+        },
+        updateData,
+        db,
+      );
+
+      if (result.count === 0) {
+        throw new ConflictException('Only draft backlog items may be updated');
+      }
+
+      const updatedItem = await this.backlogRepository.findUnique(
+        { id: item.id },
+        db,
+      );
+
+      if (!updatedItem) {
+        throw new NotFoundException('Backlog item not found');
+      }
+
+      return updatedItem;
+    }, this.backlogLifecycleTransactionOptions);
   }
 
   async remove(
@@ -306,7 +330,7 @@ export class ProgramBBacklogService {
       return;
     }
 
-    const productOwner = await this.userRepository.findOrganizationMember(
+    const productOwner = await this.userRepository.findActiveOrganizationMember(
       organizationId,
       productOwnerUserId,
       db,

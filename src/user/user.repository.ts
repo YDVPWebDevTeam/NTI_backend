@@ -121,6 +121,22 @@ export class UserRepository extends BaseRepository<
         role: {
           in: [UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE],
         },
+      },
+    });
+  }
+
+  findActiveOrganizationMember(
+    organizationId: string,
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<User | null> {
+    return this.getDelegate(db).findFirst({
+      where: {
+        id: userId,
+        organizationId,
+        role: {
+          in: [UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE],
+        },
         status: UserStatus.ACTIVE,
       },
     });
@@ -136,7 +152,6 @@ export class UserRepository extends BaseRepository<
         role: {
           in: [UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE],
         },
-        status: UserStatus.ACTIVE,
       },
       orderBy: {
         createdAt: 'asc',

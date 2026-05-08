@@ -113,6 +113,7 @@ describe('OrganizationService', () => {
     updateOrganizationIfNotExists: jest.Mock;
     findOrganizationMembers: jest.Mock;
     findOrganizationMember: jest.Mock;
+    findActiveOrganizationMember: jest.Mock;
     updateUserRole: jest.Mock;
     update: jest.Mock;
     removeOrganizationMember: jest.Mock;
@@ -191,6 +192,7 @@ describe('OrganizationService', () => {
       updateOrganizationIfNotExists: jest.fn(),
       findOrganizationMembers: jest.fn(),
       findOrganizationMember: jest.fn(),
+      findActiveOrganizationMember: jest.fn(),
       updateUserRole: jest.fn(),
       update: jest.fn(),
       removeOrganizationMember: jest.fn(),

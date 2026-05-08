@@ -91,6 +91,7 @@ describe('ProgramBBacklogService', () => {
 
   let userRepository: {
     findOrganizationMember: jest.Mock;
+    findActiveOrganizationMember: jest.Mock;
   };
 
   const owner = {
@@ -145,6 +146,7 @@ describe('ProgramBBacklogService', () => {
 
     userRepository = {
       findOrganizationMember: jest.fn(),
+      findActiveOrganizationMember: jest.fn(),
     };
 
     service = new ProgramBBacklogService(
@@ -156,7 +158,7 @@ describe('ProgramBBacklogService', () => {
 
   it('creates a draft backlog item for an active organization member', async () => {
     organizationRepository.findUnique.mockResolvedValue(activeOrganization);
-    userRepository.findOrganizationMember.mockResolvedValue({
+    userRepository.findActiveOrganizationMember.mockResolvedValue({
       id: 'employee-1',
     });
     backlogRepository.create.mockResolvedValue(draftItem);
@@ -213,7 +215,7 @@ describe('ProgramBBacklogService', () => {
 
   it('rejects create when product owner is not in the same organization', async () => {
     organizationRepository.findUnique.mockResolvedValue(activeOrganization);
-    userRepository.findOrganizationMember.mockResolvedValue(null);
+    userRepository.findActiveOrganizationMember.mockResolvedValue(null);
 
     await expect(
       service.create({ productOwnerUserId: 'other-org-user' }, owner as never),
@@ -250,6 +252,41 @@ describe('ProgramBBacklogService', () => {
       ...draftItem,
       status: BacklogItemStatus.PUBLISHED,
     });
+
+    await expect(
+      service.update('item-1', { title: 'Updated' }, employee as never),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('updates draft items via conditional write', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findUnique
+      .mockResolvedValueOnce(draftItem)
+      .mockResolvedValueOnce({
+        ...draftItem,
+        title: 'Updated',
+      });
+    backlogRepository.updateMany.mockResolvedValue({ count: 1 });
+
+    const result = await service.update(
+      'item-1',
+      { title: 'Updated' },
+      employee as never,
+    );
+
+    expect(backlogRepository.updateMany).toHaveBeenCalledWith(
+      { id: 'item-1', status: BacklogItemStatus.DRAFT },
+      { title: 'Updated' },
+      expect.anything(),
+    );
+    expect(backlogRepository.update).not.toHaveBeenCalled();
+    expect(result.title).toBe('Updated');
+  });
+
+  it('rejects update when item stops being draft before write', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findUnique.mockResolvedValue(draftItem);
+    backlogRepository.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(
       service.update('item-1', { title: 'Updated' }, employee as never),
@@ -311,7 +348,7 @@ describe('ProgramBBacklogService', () => {
         ...draftItem,
         status: BacklogItemStatus.PUBLISHED,
       });
-    userRepository.findOrganizationMember.mockResolvedValue({
+    userRepository.findActiveOrganizationMember.mockResolvedValue({
       id: 'employee-1',
     });
     backlogRepository.updateMany.mockResolvedValue({ count: 1 });
@@ -323,7 +360,7 @@ describe('ProgramBBacklogService', () => {
       { id: 'item-1' },
       expect.anything(),
     );
-    expect(userRepository.findOrganizationMember).toHaveBeenCalledWith(
+    expect(userRepository.findActiveOrganizationMember).toHaveBeenCalledWith(
       'org-1',
       'employee-1',
       expect.anything(),

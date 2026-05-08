@@ -158,6 +158,13 @@ export class ConfigService {
       return true;
     }
 
+    if (
+      (this.appEnv === 'local' || this.appEnv === 'test') &&
+      this.getLocalAppOrigins().includes(origin)
+    ) {
+      return true;
+    }
+
     return this.parsedCorsOrigins.some((allowedOrigin) =>
       this.matchesCorsOrigin(origin, allowedOrigin),
     );
@@ -246,5 +253,9 @@ export class ConfigService {
   private wildcardToRegExp(pattern: string): RegExp {
     const escapedPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp(`^${escapedPattern.replaceAll('*', '.*')}$`);
+  }
+
+  private getLocalAppOrigins(): string[] {
+    return [`http://localhost:${this.port}`, `http://127.0.0.1:${this.port}`];
   }
 }

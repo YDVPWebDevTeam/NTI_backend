@@ -54,4 +54,19 @@ describe('ConfigService', () => {
 
     expect(configService.isCorsOriginAllowed(undefined)).toBe(true);
   });
+
+  it('allows the local backend origin for same-origin Swagger requests', () => {
+    process.env.CORS_ORIGINS = 'http://localhost:3000';
+    process.env.PORT = '3001';
+    process.env.APP_ENV = 'local';
+
+    const configService = new ConfigService();
+
+    expect(configService.isCorsOriginAllowed('http://localhost:3001')).toBe(
+      true,
+    );
+    expect(configService.isCorsOriginAllowed('http://127.0.0.1:3001')).toBe(
+      true,
+    );
+  });
 });

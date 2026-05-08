@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NeedsInfoRepository } from './needs-info.repository';
 import { AuthModule } from '../auth/auth.module';
 import { FilesModule } from '../files/files.module';
 import { CallsDocumentsController } from './calls-documents.controller';
@@ -14,6 +15,7 @@ import { TeamModule } from '../team/team.module';
   imports: [AuthModule, TeamModule, FilesModule],
   controllers: [ApplicationsController, CallsDocumentsController],
   providers: [
+    NeedsInfoRepository,
     ApplicationsRepository,
     ApplicationDocumentsRepository,
     CallsRepository,

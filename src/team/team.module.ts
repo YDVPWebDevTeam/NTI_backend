@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EligibilitySignalsModule } from '../applications/eligibility-signals.module';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { TeamLeadGuard } from '../auth/guards/team-lead.guard';
 import { InvitationTokenService } from '../common/invitations/invitation-token.service';
@@ -13,7 +14,7 @@ import { TeamRepository } from './team.repository';
 import { TeamService } from './team.service';
 
 @Module({
-  imports: [ConfigModule, HashingModule, QueueModule],
+  imports: [ConfigModule, HashingModule, QueueModule, EligibilitySignalsModule],
   controllers: [TeamController, InvitationController],
   providers: [
     TeamService,

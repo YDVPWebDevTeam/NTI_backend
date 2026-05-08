@@ -8,6 +8,7 @@ import {
 import type { Invitation, TeamMember } from '../../../generated/prisma/client';
 import { Prisma } from '../../../generated/prisma/client';
 import { InvitationStatus } from '../../../generated/prisma/enums';
+import { EligibilitySignalsService } from '../../applications/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { InvitationTokenService } from '../../common/invitations/invitation-token.service';
 import { isUniqueConstraintOnFields } from '../../common/prisma/prisma-error.utils';
@@ -27,6 +28,7 @@ export class InvitationService {
     private readonly invitationRepository: InvitationRepository,
     private readonly teamRepository: TeamRepository,
     private readonly invitationTokenService: InvitationTokenService,
+    private readonly eligibilitySignalsService: EligibilitySignalsService,
   ) {}
 
   async createInvites(
@@ -228,6 +230,11 @@ export class InvitationService {
 
         throw error;
       }
+
+      await this.eligibilitySignalsService.recomputeForTeamApplications(
+        invitation.teamId,
+        tx,
+      );
 
       return membership;
     };

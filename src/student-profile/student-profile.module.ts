@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EligibilitySignalsModule } from '../applications/eligibility-signals.module';
 import { AuthModule } from '../auth/auth.module';
 import { AcademicStructureController } from './academic-structure/academic-structure.controller';
 import { AcademicStructureRepository } from './academic-structure/academic-structure.repository';
@@ -8,7 +9,7 @@ import { StudentProfileRepository } from './student-profile.repository';
 import { StudentProfileService } from './student-profile.service';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, EligibilitySignalsModule],
   controllers: [StudentProfileController, AcademicStructureController],
   providers: [
     StudentProfileService,

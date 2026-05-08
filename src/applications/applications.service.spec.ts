@@ -22,6 +22,10 @@ jest.mock('../files/files.repository', () => ({
   FilesRepository: class FilesRepository {},
 }));
 
+jest.mock('./eligibility-signals.service', () => ({
+  EligibilitySignalsService: class EligibilitySignalsService {},
+}));
+
 import {
   BadRequestException,
   ConflictException,
@@ -65,6 +69,10 @@ describe('ApplicationsService', () => {
   };
   let filesRepository: {
     findByIdForOwners: jest.Mock;
+  };
+  let eligibilitySignalsService: {
+    recomputeForApplication: jest.Mock;
+    getSignalsForApplication: jest.Mock;
   };
 
   const mockCall = {
@@ -168,6 +176,11 @@ describe('ApplicationsService', () => {
       findByIdForOwners: jest.fn(),
     };
 
+    eligibilitySignalsService = {
+      recomputeForApplication: jest.fn().mockResolvedValue(undefined),
+      getSignalsForApplication: jest.fn().mockResolvedValue([]),
+    };
+
     service = new ApplicationsService(
       applicationsRepository as never,
       applicationDocumentsRepository as never,
@@ -186,6 +199,7 @@ describe('ApplicationsService', () => {
         getStatusEvents: jest.fn(),
         createStatusEvent: jest.fn(),
       } as never,
+      eligibilitySignalsService as never,
     );
   });
 
@@ -413,6 +427,50 @@ describe('ApplicationsService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('returns eligibility signals for evaluator', async () => {
+    const signals = [
+      {
+        code: 'TEAM_SIZE_MIN',
+        passed: true,
+        reason: null,
+        createdAt: new Date('2026-05-02T11:00:00.000Z'),
+      },
+    ];
+
+    applicationsRepository.findByIdWithRelations.mockResolvedValue(
+      detailApplication,
+    );
+    eligibilitySignalsService.getSignalsForApplication.mockResolvedValue(
+      signals,
+    );
+
+    const result = await service.getEligibilitySignals('application-1', {
+      id: 'evaluator-1',
+      email: 'evaluator@example.com',
+      role: UserRole.EVALUATOR,
+    } as never);
+
+    expect(
+      eligibilitySignalsService.recomputeForApplication,
+    ).toHaveBeenCalledWith('application-1');
+    expect(result.applicationId).toBe('application-1');
+    expect(result.signals).toBe(signals);
+  });
+
+  it('forbids outsider from viewing eligibility signals', async () => {
+    applicationsRepository.findByIdWithRelations.mockResolvedValue(
+      detailApplication,
+    );
+
+    await expect(
+      service.getEligibilitySignals('application-1', {
+        id: 'outsider-1',
+        email: 'outsider@example.com',
+        role: UserRole.STUDENT,
+      } as never),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
   it('submits a complete draft application and locks the team', async () => {
     applicationsRepository.findByIdForWorkflow.mockResolvedValue({
       ...workflowApplication,
@@ -475,6 +533,9 @@ describe('ApplicationsService', () => {
       applicationRulesService.ensureCallOpenForApplications,
     ).toHaveBeenCalledWith(mockCall);
     expect(applicationsRepository.submitDraft).toHaveBeenCalled();
+    expect(
+      eligibilitySignalsService.recomputeForApplication,
+    ).toHaveBeenCalledWith('application-1', { tx: 'db-client' });
     expect(teamRepository.update).toHaveBeenCalled();
     expect(result.status).toBe(ApplicationStatus.SUBMITTED);
   });

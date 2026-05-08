@@ -31,6 +31,7 @@ import { CreateApplicationDto } from './dto/create-application.dto';
 import { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
 import { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from './dto/document-completeness.dto';
+import { EligibilitySignalsResponseDto } from './dto/eligibility-signal.dto';
 import { NeedsInfoItemDto } from './dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';
@@ -78,6 +79,14 @@ export class ApplicationsController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<DocumentCompletenessDto> {
     return this.applicationsService.getDocumentCompleteness(id, user);
+  }
+
+  @Get(':id/eligibility-signals')
+  getEligibilitySignals(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<EligibilitySignalsResponseDto> {
+    return this.applicationsService.getEligibilitySignals(id, user);
   }
 
   @SubmitApplicationApi()

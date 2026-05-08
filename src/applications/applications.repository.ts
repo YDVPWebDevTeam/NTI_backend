@@ -12,6 +12,10 @@ export type ApplicationWorkflowView = Prisma.ApplicationGetPayload<{
   select: ReturnType<ApplicationsRepository['applicationWorkflowSelect']>;
 }>;
 
+export type ApplicationEligibilityView = Prisma.ApplicationGetPayload<{
+  select: ReturnType<ApplicationsRepository['applicationEligibilitySelect']>;
+}>;
+
 @Injectable()
 export class ApplicationsRepository extends BaseRepository<
   Application,
@@ -46,6 +50,16 @@ export class ApplicationsRepository extends BaseRepository<
     return (db ?? this.prisma.client).application.findUnique({
       where: { id },
       select: this.applicationWorkflowSelect(),
+    });
+  }
+
+  findByIdForEligibility(
+    id: string,
+    db?: PrismaDbClient,
+  ): Promise<ApplicationEligibilityView | null> {
+    return (db ?? this.prisma.client).application.findUnique({
+      where: { id },
+      select: this.applicationEligibilitySelect(),
     });
   }
 
@@ -225,6 +239,40 @@ export class ApplicationsRepository extends BaseRepository<
           isActive: true,
           uploadedFileId: true,
           createdAt: true,
+        },
+      },
+    } as const;
+  }
+
+  private applicationEligibilitySelect() {
+    return {
+      id: true,
+      callId: true,
+      teamId: true,
+      team: {
+        select: {
+          id: true,
+          leaderId: true,
+          members: {
+            select: {
+              userId: true,
+              user: {
+                select: {
+                  id: true,
+                  email: true,
+                  studentProfile: {
+                    select: {
+                      academicDeclarationAcceptedAt: true,
+                      academicEvidenceFileId: true,
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: {
+              userId: 'asc',
+            },
+          },
         },
       },
     } as const;

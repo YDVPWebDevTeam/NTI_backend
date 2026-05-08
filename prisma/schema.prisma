@@ -280,9 +280,10 @@ model Call {
 
   applications Application[]
 
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  requiredDocumentTypes RequiredDocumentType[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  requiredDocumentTypes  RequiredDocumentType[]
+  eligibilityRuleConfigs EligibilityRuleConfig[]
 
   @@index([type, status])
   @@index([status, opensAt, closesAt])
@@ -301,8 +302,9 @@ model Application {
   createdBy   User                  @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
   documents   ApplicationDocument[]
 
-  needsInfoItems NeedsInfoItem[]
-  statusEvents   ApplicationStatusEvent[]
+  needsInfoItems     NeedsInfoItem[]
+  statusEvents       ApplicationStatusEvent[]
+  eligibilitySignals EligibilitySignal[]
 
   status      ApplicationStatus @default(DRAFT)
   submittedAt DateTime?
@@ -314,6 +316,35 @@ model Application {
   @@index([callId, status])
   @@index([teamId, status])
   @@index([createdById, status])
+}
+
+model EligibilitySignal {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  code      String
+  passed    Boolean
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([applicationId, code])
+  @@index([applicationId])
+}
+
+model EligibilityRuleConfig {
+  id String @id @default(uuid())
+
+  callId String
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  code      String
+  enabled   Boolean  @default(true)
+  threshold String?
+  createdAt DateTime @default(now())
+
+  @@unique([callId, code])
 }
 
 model BacklogItem {

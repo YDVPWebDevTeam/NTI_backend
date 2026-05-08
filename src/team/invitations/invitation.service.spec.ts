@@ -15,6 +15,11 @@ jest.mock('../../common/invitations/invitation-token.service', () => ({
   InvitationTokenService: class InvitationTokenService {},
 }));
 
+jest.mock('../../applications/eligibility-signals.service', () => ({
+  EligibilitySignalsService: class EligibilitySignalsService {},
+}));
+
+import { EligibilitySignalsService } from '../../applications/eligibility-signals.service';
 import type { PrismaDbClient } from '../../infrastructure/database';
 import { InvitationTokenService } from '../../common/invitations/invitation-token.service';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
@@ -45,6 +50,9 @@ describe('InvitationService', () => {
   let invitationTokenService: {
     generateToken: jest.Mock;
     resolveTeamInvitationExpirationDate: jest.Mock;
+  };
+  let eligibilitySignalsService: {
+    recomputeForTeamApplications: jest.Mock;
   };
   let tokenCounter: number;
 
@@ -115,10 +123,15 @@ describe('InvitationService', () => {
         .mockReturnValue(new Date(Date.now() + 24 * 60 * 60 * 1000)),
     };
 
+    eligibilitySignalsService = {
+      recomputeForTeamApplications: jest.fn().mockResolvedValue(undefined),
+    };
+
     service = new InvitationService(
       invitationRepository as unknown as InvitationRepository,
       teamRepository as unknown as TeamRepository,
       invitationTokenService as unknown as InvitationTokenService,
+      eligibilitySignalsService as unknown as EligibilitySignalsService,
     );
   });
 
@@ -219,6 +232,7 @@ describe('InvitationService', () => {
       role: 'STUDENT',
       status: 'ACTIVE',
     } as AuthenticatedUserContext;
+
     const result = await service.accept('token-1', authUser);
 
     expect(invitationRepository.findByToken).toHaveBeenCalledWith(
@@ -240,6 +254,9 @@ describe('InvitationService', () => {
       expect.any(Date),
       transactionClient,
     );
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).toHaveBeenCalledWith('team-1', transactionClient);
     expect(result).toEqual({ userId: 'user-1', teamId: 'team-1' });
   });
 
@@ -256,6 +273,9 @@ describe('InvitationService', () => {
     );
 
     expect(teamRepository.addMember).not.toHaveBeenCalled();
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('accepts invitation when authenticated email differs only by case', async () => {
@@ -274,6 +294,9 @@ describe('InvitationService', () => {
       expect.any(Date),
       transactionClient,
     );
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).toHaveBeenCalledWith('team-1', transactionClient);
     expect(result).toEqual({ userId: 'user-1', teamId: 'team-1' });
   });
 
@@ -295,6 +318,9 @@ describe('InvitationService', () => {
 
     expect(teamRepository.addMember).not.toHaveBeenCalled();
     expect(invitationRepository.markAcceptedIfPending).not.toHaveBeenCalled();
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('maps team member unique violations to conflict on accept', async () => {
@@ -315,5 +341,8 @@ describe('InvitationService', () => {
     );
 
     expect(invitationRepository.markAcceptedIfPending).toHaveBeenCalledTimes(1);
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 });

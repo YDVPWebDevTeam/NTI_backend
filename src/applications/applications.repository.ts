@@ -100,6 +100,23 @@ export class ApplicationsRepository extends BaseRepository<
     );
   }
 
+  updateStatusIfCurrent(
+    id: string,
+    currentStatus: ApplicationStatus,
+    nextStatus: ApplicationStatus,
+    db?: PrismaDbClient,
+  ) {
+    return (db ?? this.prisma.client).application.updateMany({
+      where: {
+        id,
+        status: currentStatus,
+      },
+      data: {
+        status: nextStatus,
+      },
+    });
+  }
+
   private applicationDetailSelect() {
     return {
       id: true,

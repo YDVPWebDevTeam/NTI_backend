@@ -23,9 +23,13 @@ import {
   CreateOrganizationInviteApi,
   GetMyOrganizationApi,
   GetOrganizationInvitesApi,
+  ListOrganizationMembersApi,
+  RemoveOrganizationMemberApi,
   ResendOrganizationInviteApi,
   RevokeOrganizationInviteApi,
+  TransferOrganizationOwnerApi,
   UpdateMyOrganizationApi,
+  UpdateOrganizationMemberRoleApi,
 } from './api-docs';
 import { CreateOrganizationInviteDto } from './dto/create-organization-invite.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
@@ -36,6 +40,9 @@ import { OrganizationResponseDto } from './dto/organization-response.dto';
 import { ResendOrganizationInviteResponseDto } from './dto/resend-organization-invite-response.dto';
 import { RevokeOrganizationInviteResponseDto } from './dto/revoke-organization-invite-response.dto';
 import { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
+import { OrganizationMemberResponseDto } from './dto/organization-member-response.dto';
+import { TransferOrganizationOwnerDto } from './dto/transfer-organization-owner.dto';
+import { UpdateOrganizationMemberRoleDto } from './dto/update-organization-member-role.dto';
 
 @ApiTags('Organizations')
 @Controller('/organizations')
@@ -120,5 +127,53 @@ export class OrganizationController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ResendOrganizationInviteResponseDto> {
     return this.service.resendInvite(id, inviteId, user);
+  }
+
+  @Get(':id/members')
+  @ListOrganizationMembersApi()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE)
+  async listMembers(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto[]> {
+    return this.service.listMembers(id, user);
+  }
+
+  @Patch(':id/members/:userId/role')
+  @UpdateOrganizationMemberRoleApi()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.COMPANY_OWNER)
+  async updateMemberRole(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: UpdateOrganizationMemberRoleDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto> {
+    return this.service.updateMemberRole(id, userId, dto, user);
+  }
+
+  @Delete(':id/members/:userId')
+  @RemoveOrganizationMemberApi()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.COMPANY_OWNER)
+  async removeMember(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto> {
+    return this.service.removeMember(id, userId, user);
+  }
+
+  @Patch(':id/owner')
+  @TransferOrganizationOwnerApi()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.COMPANY_OWNER)
+  async transferOwner(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: TransferOrganizationOwnerDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto> {
+    return this.service.transferOwner(id, dto, user);
   }
 }

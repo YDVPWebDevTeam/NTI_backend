@@ -4,6 +4,7 @@ import type {
   Prisma,
 } from '../../../generated/prisma/client';
 import type { PrismaDbClient } from '../../infrastructure/database';
+import { addHours } from '../../common/time/time.utils';
 import { EmailVerificationRepository } from './email-verification.repository';
 import { ConfigService } from '../../infrastructure/config';
 import { HashingService } from '../../infrastructure/hashing';
@@ -149,6 +150,6 @@ export class EmailVerificationService {
   resolveExpirationDate(
     hours = this.configService.emailVerificationExpirationHours,
   ): Date {
-    return new Date(Date.now() + hours * 60 * 60 * 1000);
+    return addHours(new Date(), hours);
   }
 }

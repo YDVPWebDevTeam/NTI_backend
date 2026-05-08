@@ -28,7 +28,17 @@ async function bootstrap() {
   await app.register((await import('@fastify/cookie')).default);
 
   app.enableCors({
-    origin: configService.corsOrigins,
+    origin: (origin, callback) => {
+      if (configService.isCorsOriginAllowed(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(
+        new Error(`Origin ${origin ?? 'unknown'} is not allowed by CORS`),
+        false,
+      );
+    },
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   });

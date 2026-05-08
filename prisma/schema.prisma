@@ -147,6 +147,12 @@ enum StudentSoftSkill {
   PROJECT_COORDINATION
 }
 
+enum NeedsInfoItemStatus {
+  OPEN
+  ANSWERED
+  RESOLVED
+}
+
 model User {
   id                 String  @id @default(uuid())
   firstName          String
@@ -184,6 +190,11 @@ model User {
   applicationDocumentsCreated   ApplicationDocument[] @relation("ApplicationDocumentCreatedBy")
   applicationDocumentsForMember ApplicationDocument[] @relation("ApplicationDocumentMember")
   productOwnerForBacklogItems   BacklogItem[]         @relation("BacklogItemProductOwner")
+
+  needsInfoItemsCreated          NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
+  needsInfoItemsResolved         NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
+  needsInfoRepliesCreated        NeedsInfoReply[]         @relation("NeedsInfoReplyCreatedBy")
+  applicationStatusEventsChanged ApplicationStatusEvent[] @relation("ApplicationStatusChangedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -290,6 +301,9 @@ model Application {
   createdBy   User                  @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
   documents   ApplicationDocument[]
 
+  needsInfoItems NeedsInfoItem[]
+  statusEvents   ApplicationStatusEvent[]
+
   status      ApplicationStatus @default(DRAFT)
   submittedAt DateTime?
   decidedAt   DateTime?
@@ -370,6 +384,68 @@ model ApplicationDocument {
   @@index([applicationId, documentScope, isActive])
   @@index([applicationId, memberUserId, documentType, isActive])
   @@index([uploadedFileId])
+}
+
+model NeedsInfoItem {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  message String
+  dueAt   DateTime?
+
+  status NeedsInfoItemStatus @default(OPEN)
+
+  createdById String
+  createdBy   User   @relation("NeedsInfoCreatedBy", fields: [createdById], references: [id])
+
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolvedBy   User?     @relation("NeedsInfoResolvedBy", fields: [resolvedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  replies      NeedsInfoReply[]
+  statusEvents ApplicationStatusEvent[]
+
+  @@index([applicationId, createdAt])
+  @@index([applicationId, status])
+}
+
+model NeedsInfoReply {
+  id              String        @id @default(uuid())
+  needsInfoItemId String
+  needsInfoItem   NeedsInfoItem @relation(fields: [needsInfoItemId], references: [id], onDelete: Cascade)
+
+  message String
+
+  createdById String
+  createdBy   User   @relation("NeedsInfoReplyCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([needsInfoItemId, createdAt])
+}
+
+model ApplicationStatusEvent {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  fromStatus ApplicationStatus
+  toStatus   ApplicationStatus
+
+  changedById String
+  changedBy   User   @relation("ApplicationStatusChangedBy", fields: [changedById], references: [id])
+
+  reason          String?
+  needsInfoItemId String?
+  needsInfoItem   NeedsInfoItem? @relation(fields: [needsInfoItemId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId, createdAt])
+  @@index([needsInfoItemId])
 }
 
 enum InvitationStatus {

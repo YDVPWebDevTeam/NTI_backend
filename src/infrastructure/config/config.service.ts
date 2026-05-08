@@ -5,6 +5,7 @@ import type { StringValue } from 'ms';
 @Injectable()
 export class ConfigService {
   private readonly env: Env;
+  private readonly parsedCorsOrigins: string[];
 
   constructor() {
     const result = envSchema.safeParse(process.env);
@@ -17,6 +18,9 @@ export class ConfigService {
     }
 
     this.env = result.data;
+    this.parsedCorsOrigins = this.env.CORS_ORIGINS.split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean);
   }
 
   get port(): number {
@@ -146,7 +150,17 @@ export class ConfigService {
   }
 
   get corsOrigins(): string[] {
-    return this.env.CORS_ORIGINS.split(',').map((o) => o.trim());
+    return [...this.parsedCorsOrigins];
+  }
+
+  isCorsOriginAllowed(origin: string | undefined): boolean {
+    if (!origin) {
+      return true;
+    }
+
+    return this.parsedCorsOrigins.some((allowedOrigin) =>
+      this.matchesCorsOrigin(origin, allowedOrigin),
+    );
   }
 
   get logLevel(): string {
@@ -215,5 +229,22 @@ export class ConfigService {
 
   get passwordResetExpirationMinutes(): number {
     return this.env.PASSWORD_RESET_EXPIRATION_MINUTES;
+  }
+
+  private matchesCorsOrigin(origin: string, allowedOrigin: string): boolean {
+    if (allowedOrigin === origin) {
+      return true;
+    }
+
+    if (!allowedOrigin.includes('*')) {
+      return false;
+    }
+
+    return this.wildcardToRegExp(allowedOrigin).test(origin);
+  }
+
+  private wildcardToRegExp(pattern: string): RegExp {
+    const escapedPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`^${escapedPattern.replaceAll('*', '.*')}$`);
   }
 }

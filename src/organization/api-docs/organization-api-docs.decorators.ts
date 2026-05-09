@@ -9,14 +9,20 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { InvitationStatus } from '../../../generated/prisma/enums';
+import { createPaginationQueryDecorators } from '../../common/pagination';
 import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
 import { CreateOrganizationInviteDto } from '../dto/create-organization-invite.dto';
 import { CreateOrganizationDto } from '../dto/create-organization.dto';
+import { ORGANIZATION_INVITE_SORT_VALUES } from '../dto/get-organization-invites-query.dto';
 import { GetOrganizationInvitesResponseDto } from '../dto/get-organization-invites-response.dto';
 import { OrganizationInviteResponseDto } from '../dto/organization-invite-response.dto';
 import { OrganizationResponseDto } from '../dto/organization-response.dto';
 import { ResendOrganizationInviteResponseDto } from '../dto/resend-organization-invite-response.dto';
 import { RevokeOrganizationInviteResponseDto } from '../dto/revoke-organization-invite-response.dto';
+import { UpdateOrganizationProfileDto } from '../dto/update-organization-profile.dto';
+import { OrganizationMemberResponseDto } from '../dto/organization-member-response.dto';
+import { TransferOrganizationOwnerDto } from '../dto/transfer-organization-owner.dto';
+import { UpdateOrganizationMemberRoleDto } from '../dto/update-organization-member-role.dto';
 
 export const CreateOrganizationApi = () =>
   createApiDecorator({
@@ -88,6 +94,63 @@ export const CreateOrganizationInviteApi = () =>
     ],
   });
 
+export const GetMyOrganizationApi = () =>
+  createApiDecorator({
+    summary: 'Get my organization',
+    description:
+      'Returns the organization linked to the authenticated user via user.organizationId.',
+    successResponse: {
+      status: 200,
+      type: OrganizationResponseDto,
+      description: 'Organization payload.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'The authenticated user is not allowed to access this resource.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Organization not found.',
+      }),
+    ],
+  });
+
+export const UpdateMyOrganizationApi = () =>
+  createApiDecorator({
+    summary: 'Update my organization profile',
+    description:
+      'Partially updates the organization profile for the authenticated company owner.',
+    body: UpdateOrganizationProfileDto,
+    successResponse: {
+      status: 200,
+      type: OrganizationResponseDto,
+      description: 'Updated organization payload.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiBadRequestResponse({
+        description:
+          'Request body is invalid, empty, or contains no updatable fields.',
+      }),
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only company owners may update organization profiles.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Organization not found.',
+      }),
+      ApiConflictResponse({
+        description: 'ICO already exists.',
+      }),
+    ],
+  });
+
 export const GetOrganizationInvitesApi = () =>
   createApiDecorator({
     summary: 'List organization invitations',
@@ -115,22 +178,11 @@ export const GetOrganizationInvitesApi = () =>
         required: false,
         description: 'Case-insensitive email substring filter.',
       }),
-      ApiQuery({
-        name: 'page',
-        required: false,
-        description: 'Page number, defaults to 1.',
-        example: 1,
-      }),
-      ApiQuery({
-        name: 'limit',
-        required: false,
-        description: 'Page size, defaults to 20 and cannot exceed 100.',
-        example: 20,
-      }),
-      ApiQuery({
-        name: 'sort',
-        required: false,
-        enum: ['createdAt:desc', 'createdAt:asc'],
+      ...createPaginationQueryDecorators({
+        sortValues: ORGANIZATION_INVITE_SORT_VALUES,
+        sortDescription: 'Sortable invite fields.',
+        defaultSort: 'createdAt',
+        defaultOrder: 'desc',
       }),
     ],
     errors: [
@@ -229,6 +281,162 @@ export const ResendOrganizationInviteApi = () =>
       }),
       ApiNotFoundResponse({
         description: 'Organization or invitation not found.',
+      }),
+    ],
+  });
+
+export const ListOrganizationMembersApi = () =>
+  createApiDecorator({
+    summary: 'List organization members',
+    description:
+      'Returns users linked to the organization. Company owners and company employees can list members only inside their own organization.',
+    successResponse: {
+      status: 200,
+      type: OrganizationMemberResponseDto,
+      description: 'Organization members were retrieved successfully.',
+      isArray: true,
+    },
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ApiParam({
+        name: 'id',
+        description: 'Organization identifier.',
+        format: 'uuid',
+      }),
+    ],
+    errors: [
+      ApiBadRequestResponse({
+        description: 'Organization identifier is malformed.',
+      }),
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'The authenticated user is not allowed to list members of this organization.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Organization not found.',
+      }),
+    ],
+  });
+
+export const UpdateOrganizationMemberRoleApi = () =>
+  createApiDecorator({
+    summary: 'Update organization member role',
+    description:
+      'Updates the role of a non-owner organization member. Ownership transfer must be done through the dedicated owner transfer endpoint.',
+    body: UpdateOrganizationMemberRoleDto,
+    successResponse: {
+      status: 200,
+      type: OrganizationMemberResponseDto,
+      description: 'Organization member role was updated successfully.',
+    },
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ApiParam({
+        name: 'id',
+        description: 'Organization identifier.',
+        format: 'uuid',
+      }),
+      ApiParam({
+        name: 'userId',
+        description: 'Organization member user identifier.',
+        format: 'uuid',
+      }),
+    ],
+    errors: [
+      ApiBadRequestResponse({
+        description:
+          'Organization or user identifier is malformed, request body is invalid, or role change is not allowed.',
+      }),
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only the current company owner of this organization may update member roles.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Organization or member not found.',
+      }),
+    ],
+  });
+
+export const RemoveOrganizationMemberApi = () =>
+  createApiDecorator({
+    summary: 'Remove organization member',
+    description:
+      'Removes a non-owner member from the organization. The current company owner cannot be removed directly.',
+    successResponse: {
+      status: 200,
+      type: OrganizationMemberResponseDto,
+      description: 'Organization member was removed successfully.',
+    },
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ApiParam({
+        name: 'id',
+        description: 'Organization identifier.',
+        format: 'uuid',
+      }),
+      ApiParam({
+        name: 'userId',
+        description: 'Organization member user identifier.',
+        format: 'uuid',
+      }),
+    ],
+    errors: [
+      ApiBadRequestResponse({
+        description:
+          'Organization or user identifier is malformed, or the current owner removal was attempted.',
+      }),
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only the current company owner of this organization may remove members.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Organization or member not found.',
+      }),
+    ],
+  });
+
+export const TransferOrganizationOwnerApi = () =>
+  createApiDecorator({
+    summary: 'Transfer organization ownership',
+    description:
+      'Transfers organization ownership to another active member in the same organization. The old owner is demoted to company employee and the new owner becomes company owner in one transaction.',
+    body: TransferOrganizationOwnerDto,
+    successResponse: {
+      status: 200,
+      type: OrganizationMemberResponseDto,
+      description: 'Organization ownership was transferred successfully.',
+    },
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ApiParam({
+        name: 'id',
+        description: 'Organization identifier.',
+        format: 'uuid',
+      }),
+    ],
+    errors: [
+      ApiBadRequestResponse({
+        description:
+          'Organization identifier is malformed, new owner is already the current owner, or new owner is not active.',
+      }),
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only the current company owner of this organization may transfer ownership.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Organization or new owner member not found.',
       }),
     ],
   });

@@ -34,7 +34,7 @@ export class ApplicationRulesService {
       throw new NotFoundException('Call not found');
     }
 
-    this.validateCallOpenForApplications(call);
+    this.ensureCallOpenForApplications(call);
 
     // 2. Verify team exists and is not archived
     const team = await this.teamRepository.findPublicById(teamId, db);
@@ -57,7 +57,9 @@ export class ApplicationRulesService {
     }
   }
 
-  private validateCallOpenForApplications(call: Call): void {
+  ensureCallOpenForApplications(
+    call: Pick<Call, 'status' | 'opensAt' | 'closesAt'>,
+  ): void {
     // Check call status
     if (call.status !== CallStatus.OPEN) {
       throw new ConflictException(

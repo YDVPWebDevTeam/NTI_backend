@@ -21,6 +21,15 @@ export const REFRESH_TOKEN_COOKIE = 'refreshToken';
 export class AuthCookieService {
   constructor(private readonly configService: ConfigService) {}
 
+  private get cookieOptions() {
+    return {
+      httpOnly: true,
+      sameSite: this.configService.authCookieSameSite,
+      secure: this.configService.authCookieSecure,
+      path: '/',
+    } as const;
+  }
+
   toHttpAuthResponse(authResult: AuthTokensResponse): AuthHttpResponse {
     return {
       user: authResult.user,
@@ -87,10 +96,7 @@ export class AuthCookieService {
     maxAgeSeconds?: number,
   ): void {
     reply.setCookie(name, value, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.configService.isProduction,
-      path: '/',
+      ...this.cookieOptions,
       ...(maxAgeSeconds ? { maxAge: maxAgeSeconds } : {}),
     });
   }
@@ -103,15 +109,11 @@ export class AuthCookieService {
   }
 
   private clearRefreshTokenCookie(reply: FastifyReply): void {
-    reply.clearCookie(REFRESH_TOKEN_COOKIE, {
-      path: '/',
-    });
+    reply.clearCookie(REFRESH_TOKEN_COOKIE, this.cookieOptions);
   }
 
   private clearAccessTokenCookie(reply: FastifyReply): void {
-    reply.clearCookie(ACCESS_TOKEN_COOKIE, {
-      path: '/',
-    });
+    reply.clearCookie(ACCESS_TOKEN_COOKIE, this.cookieOptions);
   }
 
   private setPasswordChangeTokenCookie(
@@ -119,18 +121,13 @@ export class AuthCookieService {
     token: string,
   ): void {
     reply.setCookie(PASSWORD_CHANGE_COOKIE, token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.configService.isProduction,
-      path: '/',
+      ...this.cookieOptions,
       maxAge: this.configService.forcePasswordChangeTokenExpirationMinutes * 60,
     });
   }
 
   private clearPasswordChangeTokenCookie(reply: FastifyReply): void {
-    reply.clearCookie(PASSWORD_CHANGE_COOKIE, {
-      path: '/',
-    });
+    reply.clearCookie(PASSWORD_CHANGE_COOKIE, this.cookieOptions);
   }
 
   private isPasswordChangeRequiredResponse(

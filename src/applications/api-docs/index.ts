@@ -1,7 +1,15 @@
 export {
+  AttachApplicationDocumentApi,
   CreateApplicationApi,
+  CreateNeedsInfoItemApi,
   GetApplicationApi,
+  GetApplicationDocumentCompletenessApi,
+  GetNeedsInfoThreadApi,
   GetPublicActiveCallsApi,
   GetPublicCallByIdApi,
   GetPublicCallsApi,
+  GetRequiredDocumentsApi,
+  ReplyToNeedsInfoItemApi,
+  ResubmitApplicationApi,
+  SubmitApplicationApi,
 } from './applications-api-docs.decorators';

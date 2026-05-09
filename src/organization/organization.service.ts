@@ -5,22 +5,42 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrganizationRepository } from './organization.repository';
-import { UserRepository } from 'src/user/user.repository';
-import { EMAIL_JOBS, QueueService } from 'src/infrastructure/queue';
-import { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
-import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { OrgInvitation, Organization, Prisma } from 'generated/prisma/client';
-import { OrganizationInviteRepository } from './organization-invitation.repository';
+import { createAndSendInviteWithRollback } from '../common/invitations/invitation-creation.utils';
+import { assertPendingAndUnexpired } from '../common/invitations/invitation-state.utils';
+import { isPrismaUniqueConstraintError } from '../common/prisma/prisma-error.utils';
+import { addDays } from '../common/time/time.utils';
+import { assertUserEmailAvailable } from '../common/users/user-guards.utils';
+import {
+  InvitationStatus,
+  OrganizationStatus,
+  UserRole,
+  UserStatus,
+} from 'generated/prisma/enums';
+import { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import {
+  buildOrderBy,
+  buildPaginationMeta,
+  resolvePagination,
+} from '../common/pagination';
+import { ConfigService } from '../infrastructure/config';
+import { HashingService } from '../infrastructure/hashing';
+import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
+import { UserRepository } from '../user/user.repository';
 import { CreateOrganizationInviteDto } from './dto/create-organization-invite.dto';
-import { InvitationStatus, UserRole } from 'generated/prisma/enums';
-import { ConfigService } from 'src/infrastructure/config';
-import { HashingService } from 'src/infrastructure/hashing';
+import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { GetOrganizationInvitesQueryDto } from './dto/get-organization-invites-query.dto';
 import { GetOrganizationInvitesResponseDto } from './dto/get-organization-invites-response.dto';
 import { OrganizationInviteItemDto } from './dto/organization-invite-item.dto';
+import { OrganizationInviteResponseDto } from './dto/organization-invite-response.dto';
+import { OrganizationMemberResponseDto } from './dto/organization-member-response.dto';
 import { ResendOrganizationInviteResponseDto } from './dto/resend-organization-invite-response.dto';
 import { RevokeOrganizationInviteResponseDto } from './dto/revoke-organization-invite-response.dto';
+import { TransferOrganizationOwnerDto } from './dto/transfer-organization-owner.dto';
+import { UpdateOrganizationMemberRoleDto } from './dto/update-organization-member-role.dto';
+import { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
+import { OrganizationInviteRepository } from './organization-invitation.repository';
+import { OrganizationRepository } from './organization.repository';
 
 @Injectable()
 export class OrganizationService {
@@ -49,6 +69,73 @@ export class OrganizationService {
       website: dto.website,
       logoUrl: dto.logoUrl,
     };
+  }
+
+  async getMyOrganization(
+    user: AuthenticatedUserContext,
+  ): Promise<Organization> {
+    return this.findUserOrganizationOrThrow(user);
+  }
+
+  async updateMyOrganization(
+    dto: UpdateOrganizationProfileDto,
+    user: AuthenticatedUserContext,
+  ): Promise<Organization> {
+    const organization = await this.findUserOrganizationOrThrow(user);
+
+    const updateData: Prisma.OrganizationUpdateInput = {};
+
+    if (dto.name !== undefined) {
+      updateData.name = dto.name;
+    }
+
+    const nullableDirectUpdateFields = [
+      'sector',
+      'description',
+      'website',
+      'logoUrl',
+    ] as const;
+
+    for (const field of nullableDirectUpdateFields) {
+      const value = dto[field];
+      if (value !== undefined) {
+        updateData[field] = value;
+      }
+    }
+
+    if (dto.ico !== undefined) {
+      if (dto.ico === null) {
+        throw new BadRequestException('ICO cannot be null');
+      }
+
+      if (
+        organization.status !== OrganizationStatus.PENDING &&
+        dto.ico !== organization.ico
+      ) {
+        throw new BadRequestException(
+          'ICO cannot be changed after organization is processed',
+        );
+      }
+
+      updateData.ico = dto.ico;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      throw new BadRequestException('Request body is empty');
+    }
+
+    try {
+      return await this.organizationRepository.update(
+        { id: organization.id },
+        updateData,
+      );
+    } catch (e: unknown) {
+      if (isPrismaUniqueConstraintError(e)) {
+        throw new ConflictException('ICO already exists');
+      }
+
+      throw e;
+    }
   }
 
   async create(dto: CreateOrganizationDto, user: AuthenticatedUserContext) {
@@ -88,10 +175,7 @@ export class OrganizationService {
 
       return organization;
     } catch (e: unknown) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
+      if (isPrismaUniqueConstraintError(e)) {
         throw new ConflictException('ICO already exists');
       }
 
@@ -103,17 +187,13 @@ export class OrganizationService {
     organizationId: string,
     dto: CreateOrganizationInviteDto,
     user: AuthenticatedUserContext,
-  ) {
+  ): Promise<OrganizationInviteResponseDto> {
     const organization = await this.ensureOrganizationOwnerAccess(
       organizationId,
       user,
     );
 
-    const existingUser = await this.userRepo.findByEmail(dto.email);
-
-    if (existingUser) {
-      throw new ConflictException('User with this email already exists');
-    }
+    await assertUserEmailAvailable(this.userRepo, dto.email);
 
     const now = new Date();
     const activeInvite =
@@ -127,29 +207,31 @@ export class OrganizationService {
       throw new ConflictException('Active organization invite already exists');
     }
 
-    const invitation = await this.organizationInviteRepository.create({
-      email: dto.email,
-      token: this.generateToken(),
-      status: InvitationStatus.PENDING,
-      organizationId,
-      roleToAssign: UserRole.COMPANY_EMPLOYEE,
-      expiresAt: this.resolveExpirationDate(),
-    });
-
-    const { token, ...response } = invitation;
-
-    try {
-      await this.queueService.addEmail(EMAIL_JOBS.ORG_INVITE, {
-        email: invitation.email,
-        token,
-        organizationName: organization.name,
-      });
-    } catch (error) {
-      await this.organizationInviteRepository.delete({ id: invitation.id });
-      throw error;
-    }
-
-    return response;
+    return createAndSendInviteWithRollback(
+      () =>
+        this.organizationInviteRepository.create({
+          email: dto.email,
+          token: this.generateToken(),
+          status: InvitationStatus.PENDING,
+          organizationId,
+          roleToAssign: UserRole.COMPANY_EMPLOYEE,
+          expiresAt: this.resolveExpirationDate(),
+        }),
+      async (invitation) => {
+        await this.queueService.addEmail(EMAIL_JOBS.ORG_INVITE, {
+          email: invitation.email,
+          token: invitation.token,
+          organizationName: organization.name,
+        });
+      },
+      async (invitation) => {
+        await this.organizationInviteRepository.delete({ id: invitation.id });
+      },
+      (invitation) => {
+        const { token: _token, ...response } = invitation;
+        return response;
+      },
+    );
   }
 
   async listInvites(
@@ -161,16 +243,14 @@ export class OrganizationService {
 
     const now = new Date();
     const where = this.buildInvitationListWhere(organizationId, query, now);
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const skip = (page - 1) * limit;
+    const pagination = resolvePagination(query);
 
     const [invitations, total] = await Promise.all([
       this.organizationInviteRepository.findMany({
         where,
-        orderBy: [{ createdAt: this.resolveSortOrder(query.sort) }],
-        skip,
-        take: limit,
+        orderBy: buildOrderBy(query.sort, query.order, [{ id: 'asc' }]),
+        skip: pagination.skip,
+        take: pagination.take,
       }),
       this.organizationInviteRepository.count(where),
     ]);
@@ -179,12 +259,7 @@ export class OrganizationService {
       data: invitations.map((invitation) =>
         this.toInviteItemDto(invitation, now),
       ),
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
-      },
+      meta: buildPaginationMeta(total, pagination.page, pagination.limit),
     };
   }
 
@@ -276,6 +351,128 @@ export class OrganizationService {
     };
   }
 
+  async listMembers(
+    organizationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto[]> {
+    await this.ensureOrganizationMemberAccess(organizationId, user);
+
+    return this.userRepo.findOrganizationMembers(organizationId);
+  }
+
+  async updateMemberRole(
+    organizationId: string,
+    memberUserId: string,
+    dto: UpdateOrganizationMemberRoleDto,
+    user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto> {
+    await this.ensureOrganizationOwnerAccess(organizationId, user);
+
+    const member = await this.userRepo.findOrganizationMember(
+      organizationId,
+      memberUserId,
+    );
+
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+
+    const requestedRole = dto.role as UserRole;
+
+    if (requestedRole === UserRole.COMPANY_OWNER) {
+      throw new BadRequestException(
+        'Use ownership transfer endpoint to set company owner',
+      );
+    }
+
+    if (member.role === UserRole.COMPANY_OWNER) {
+      throw new BadRequestException(
+        'Current owner role cannot be changed directly',
+      );
+    }
+
+    return this.userRepo.updateUserRole(memberUserId, requestedRole);
+  }
+
+  async removeMember(
+    organizationId: string,
+    memberUserId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto> {
+    await this.ensureOrganizationOwnerAccess(organizationId, user);
+
+    const member = await this.userRepo.findOrganizationMember(
+      organizationId,
+      memberUserId,
+    );
+
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+
+    if (member.role === UserRole.COMPANY_OWNER) {
+      throw new BadRequestException('Current owner cannot be removed');
+    }
+
+    return this.userRepo.removeOrganizationMember(memberUserId);
+  }
+
+  async transferOwner(
+    organizationId: string,
+    dto: TransferOrganizationOwnerDto,
+    user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto> {
+    await this.ensureOrganizationOwnerAccess(organizationId, user);
+
+    if (dto.newOwnerUserId === user.id) {
+      throw new BadRequestException('User is already organization owner');
+    }
+
+    return this.organizationRepository.transaction<OrganizationMemberResponseDto>(
+      async (tx) => {
+        const currentOwner = await this.userRepo.findOrganizationMember(
+          organizationId,
+          user.id,
+          tx,
+        );
+
+        if (!currentOwner) {
+          throw new NotFoundException('Current owner not found');
+        }
+
+        if (currentOwner.role !== UserRole.COMPANY_OWNER) {
+          throw new ForbiddenException();
+        }
+
+        const newOwner = await this.userRepo.findOrganizationMember(
+          organizationId,
+          dto.newOwnerUserId,
+          tx,
+        );
+
+        if (!newOwner) {
+          throw new NotFoundException('Member not found');
+        }
+
+        if (newOwner.status !== UserStatus.ACTIVE) {
+          throw new BadRequestException('New owner must be active');
+        }
+
+        await this.userRepo.updateUserRole(
+          currentOwner.id,
+          UserRole.COMPANY_EMPLOYEE,
+          tx,
+        );
+
+        return this.userRepo.updateUserRole(
+          newOwner.id,
+          UserRole.COMPANY_OWNER,
+          tx,
+        );
+      },
+    );
+  }
+
   private generateToken(): string {
     return this.hashingService.generateHexToken(
       this.configService.tokenByteLength,
@@ -283,17 +480,54 @@ export class OrganizationService {
   }
 
   private resolveExpirationDate(baseDate = new Date()): Date {
-    return new Date(
-      baseDate.getTime() +
-        this.configService.organizationInvitationExpirationDays *
-          24 *
-          60 *
-          60 *
-          1000,
+    return addDays(
+      baseDate,
+      this.configService.organizationInvitationExpirationDays,
     );
   }
 
+  private async findUserOrganizationOrThrow(
+    user: AuthenticatedUserContext,
+  ): Promise<Organization> {
+    if (!user.organizationId) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const organization = await this.organizationRepository.findUnique({
+      id: user.organizationId,
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    return organization;
+  }
+
   private async ensureOrganizationOwnerAccess(
+    organizationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<Organization> {
+    const organization = await this.organizationRepository.findUnique({
+      id: organizationId,
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    if (user.organizationId !== organizationId) {
+      throw new ForbiddenException();
+    }
+
+    if (user.role !== UserRole.COMPANY_OWNER) {
+      throw new ForbiddenException();
+    }
+
+    return organization;
+  }
+
+  private async ensureOrganizationMemberAccess(
     organizationId: string,
     user: AuthenticatedUserContext,
   ): Promise<Organization> {
@@ -330,27 +564,18 @@ export class OrganizationService {
   }
 
   private ensureInviteCanBeRevoked(invitation: OrgInvitation, at: Date): void {
-    if (!this.isPendingAndUnexpired(invitation, at)) {
-      throw new BadRequestException(
-        OrganizationService.REVOKE_INVALID_STATE_MESSAGE,
-      );
-    }
+    assertPendingAndUnexpired(
+      invitation,
+      at,
+      OrganizationService.REVOKE_INVALID_STATE_MESSAGE,
+    );
   }
 
   private ensureInviteCanBeResent(invitation: OrgInvitation, at: Date): void {
-    if (!this.isPendingAndUnexpired(invitation, at)) {
-      throw new BadRequestException(
-        OrganizationService.RESEND_INVALID_STATE_MESSAGE,
-      );
-    }
-  }
-
-  private isPendingAndUnexpired(invitation: OrgInvitation, at: Date): boolean {
-    return (
-      invitation.status === InvitationStatus.PENDING &&
-      invitation.acceptedAt === null &&
-      invitation.revokedAt === null &&
-      invitation.expiresAt > at
+    assertPendingAndUnexpired(
+      invitation,
+      at,
+      OrganizationService.RESEND_INVALID_STATE_MESSAGE,
     );
   }
 
@@ -417,12 +642,6 @@ export class OrganizationService {
           ],
         };
     }
-  }
-
-  private resolveSortOrder(
-    sort: GetOrganizationInvitesQueryDto['sort'],
-  ): Prisma.SortOrder {
-    return sort === 'createdAt:asc' ? 'asc' : 'desc';
   }
 
   private toInviteItemDto(

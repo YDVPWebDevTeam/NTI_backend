@@ -9,7 +9,10 @@ import {
   UserRole,
 } from '../../../generated/prisma/enums';
 import { isAdminRole } from '../../auth/admin-role.helper';
+import { createAndSendInviteWithRollback } from '../../common/invitations/invitation-creation.utils';
+import { addHours } from '../../common/time/time.utils';
 import { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import { assertUserEmailAvailable } from '../../common/users/user-guards.utils';
 import { ConfigService } from '../../infrastructure/config';
 import { HashingService } from '../../infrastructure/hashing';
 import { EMAIL_JOBS, QueueService } from '../../infrastructure/queue';
@@ -37,11 +40,7 @@ export class AdminInvitesService {
     dto: CreateSystemInviteDto,
   ): Promise<SystemInviteResponseDto> {
     this.ensureRoleCanInvite(actor.role, dto.roleToAssign);
-
-    const existingUser = await this.usersService.findByEmail(dto.email);
-    if (existingUser) {
-      throw new ConflictException('User with this email already exists');
-    }
+    await assertUserEmailAvailable(this.usersService, dto.email);
 
     const activeInvitation =
       await this.systemInvitations.findActiveByEmailAndRole(
@@ -54,27 +53,28 @@ export class AdminInvitesService {
       );
     }
 
-    const invitation = await this.systemInvitations.create({
-      email: dto.email,
-      roleToAssign: dto.roleToAssign,
-      token: this.generateToken(),
-      status: SystemInvitationStatus.PENDING,
-      invitedById: actor.id,
-      expiresAt: this.resolveExpirationDate(),
-    });
-
-    try {
-      await this.queueService.addEmail(EMAIL_JOBS.SYSTEM_INVITE_SENT, {
-        email: invitation.email,
-        token: invitation.token,
-        roleToAssign: invitation.roleToAssign,
-      });
-    } catch (error) {
-      await this.systemInvitations.delete({ id: invitation.id });
-      throw error;
-    }
-
-    return this.toResponse(invitation);
+    return createAndSendInviteWithRollback(
+      () =>
+        this.systemInvitations.create({
+          email: dto.email,
+          roleToAssign: dto.roleToAssign,
+          token: this.generateToken(),
+          status: SystemInvitationStatus.PENDING,
+          invitedById: actor.id,
+          expiresAt: this.resolveExpirationDate(),
+        }),
+      async (invitation) => {
+        await this.queueService.addEmail(EMAIL_JOBS.SYSTEM_INVITE_SENT, {
+          email: invitation.email,
+          token: invitation.token,
+          roleToAssign: invitation.roleToAssign,
+        });
+      },
+      async (invitation) => {
+        await this.systemInvitations.delete({ id: invitation.id });
+      },
+      (invitation) => this.toResponse(invitation),
+    );
   }
 
   private ensureRoleCanInvite(
@@ -104,7 +104,7 @@ export class AdminInvitesService {
   private resolveExpirationDate(
     expirationHours = this.configService.systemInvitationExpirationHours,
   ): Date {
-    return new Date(Date.now() + expirationHours * 60 * 60 * 1000);
+    return addHours(new Date(), expirationHours);
   }
 
   private toResponse(invitation: SystemInvitation): SystemInviteResponseDto {

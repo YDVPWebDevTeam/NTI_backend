@@ -4,6 +4,10 @@ import { CallStatus, ProgramType } from '../../generated/prisma/enums';
 import { BaseRepository, PrismaDbClient } from '../infrastructure/database';
 import { PrismaService } from '../infrastructure/database/prisma.service';
 
+export type CallWithRequiredDocumentTypes = Prisma.CallGetPayload<{
+  select: ReturnType<CallsRepository['requiredDocumentTypesSelect']>;
+}>;
+
 @Injectable()
 export class CallsRepository extends BaseRepository<
   Call,
@@ -24,6 +28,16 @@ export class CallsRepository extends BaseRepository<
   findById(id: string, db?: PrismaDbClient): Promise<Call | null> {
     return (db ?? this.prisma.client).call.findUnique({
       where: { id },
+    });
+  }
+
+  findByIdWithRequiredDocumentTypes(
+    id: string,
+    db?: PrismaDbClient,
+  ): Promise<CallWithRequiredDocumentTypes | null> {
+    return (db ?? this.prisma.client).call.findUnique({
+      where: { id },
+      select: this.requiredDocumentTypesSelect(),
     });
   }
 
@@ -112,6 +126,27 @@ export class CallsRepository extends BaseRepository<
         ...(args.programType ? { type: args.programType } : {}),
       },
     });
+  }
+
+  private requiredDocumentTypesSelect() {
+    return {
+      id: true,
+      type: true,
+      title: true,
+      requiredDocumentTypes: {
+        where: {
+          isRequired: true,
+        },
+        select: {
+          id: true,
+          documentType: true,
+          isRequired: true,
+        },
+        orderBy: {
+          documentType: 'asc',
+        },
+      },
+    } as const;
   }
 
   private buildPublicVisibleWhere(at: Date): Prisma.CallWhereInput {

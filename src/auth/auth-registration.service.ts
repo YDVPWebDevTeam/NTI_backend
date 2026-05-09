@@ -1,5 +1,6 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { UserRole } from '../../generated/prisma/enums';
+import { assertUserEmailAvailable } from '../common/users/user-guards.utils';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { UserService } from '../user/user.service';
@@ -54,14 +55,11 @@ export class AuthRegistrationService {
         dto.token,
         transaction,
       );
-      const existingUser = await this.usersService.findByEmail(
+      await assertUserEmailAvailable(
+        this.usersService,
         invitation.email,
         transaction,
       );
-
-      if (existingUser) {
-        throw new ConflictException('User with this email already exists');
-      }
 
       const passwordHash = await this.hashingService.hashStrong(dto.password);
       const user = await this.usersService.create(
@@ -96,11 +94,7 @@ export class AuthRegistrationService {
     role?: UserRole;
     isEmailConfirmed?: boolean;
   }): Promise<AuthenticatedUserContext> {
-    const existingUser = await this.usersService.findByEmail(input.email);
-
-    if (existingUser) {
-      throw new ConflictException('User with this email already exists');
-    }
+    await assertUserEmailAvailable(this.usersService, input.email);
 
     const passwordHash = await this.hashingService.hashStrong(input.password);
 

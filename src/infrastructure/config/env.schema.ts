@@ -5,23 +5,33 @@ export const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),
+  APP_ENV: z
+    .enum(['local', 'development', 'staging', 'production', 'test'])
+    .optional(),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
+  RUN_QUEUE_PROCESSORS: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
   REDIS_HOST: z.string().default('localhost'),
   REDIS_PORT: z.coerce.number().int().positive().default(6379),
-  SMTP_HOST: z.string().min(1, 'SMTP_HOST is required'),
-  SMTP_PORT: z.coerce.number().int().positive(),
-  SMTP_USER: z.string().min(1, 'SMTP_USER is required'),
-  SMTP_PASSWORD: z.string().min(1, 'SMTP_PASSWORD is required'),
-  SMTP_FROM: z.string().min(1, 'SMTP_FROM is required'),
+  BREVO_API_KEY: z.string().min(1, 'BREVO_API_KEY is required'),
+  EMAIL_FROM: z.email('EMAIL_FROM must be a valid email address'),
   FRONTEND_URL: z.string().min(1, 'FRONTEND_URL is required'),
-  R2_ENDPOINT: z.string().url('R2_ENDPOINT must be a valid URL'),
-  R2_BUCKET_NAME: z.string().min(1, 'R2_BUCKET_NAME is required'),
-  R2_ACCESS_KEY_ID: z.string().min(1, 'R2_ACCESS_KEY_ID is required'),
-  R2_SECRET_ACCESS_KEY: z.string().min(1, 'R2_SECRET_ACCESS_KEY is required'),
+  R2_ENDPOINT: z.string().url('R2_ENDPOINT must be a valid URL').optional(),
+  R2_BUCKET_NAME: z.string().min(1, 'R2_BUCKET_NAME is required').optional(),
+  R2_ACCESS_KEY_ID: z
+    .string()
+    .min(1, 'R2_ACCESS_KEY_ID is required')
+    .optional(),
+  R2_SECRET_ACCESS_KEY: z
+    .string()
+    .min(1, 'R2_SECRET_ACCESS_KEY is required')
+    .optional(),
   R2_REGION: z.string().default('auto'),
   R2_PUBLIC_BASE_URL: z.string().url().optional(),
   FILE_UPLOAD_PRESIGN_EXPIRES_SECONDS: z.coerce
@@ -114,4 +124,26 @@ export const envSchema = z.object({
     .default(30),
 });
 
-export type Env = z.infer<typeof envSchema>;
+export const envSchemaWithR2Checks = envSchema.superRefine((env, ctx) => {
+  const coreKeys: Array<keyof typeof env> = [
+    'R2_ENDPOINT',
+    'R2_BUCKET_NAME',
+    'R2_ACCESS_KEY_ID',
+    'R2_SECRET_ACCESS_KEY',
+  ];
+
+  const provided = coreKeys.filter((k) => {
+    const v = env[k];
+    return v !== undefined && v !== null && String(v).trim() !== '';
+  });
+
+  if (provided.length > 0 && provided.length < coreKeys.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'R2 configuration must be either fully specified (R2_ENDPOINT, R2_BUCKET_NAME, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) or entirely omitted',
+    });
+  }
+});
+
+export type Env = z.infer<typeof envSchemaWithR2Checks>;

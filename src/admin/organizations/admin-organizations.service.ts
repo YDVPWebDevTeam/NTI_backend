@@ -10,6 +10,7 @@ import type { AuthenticatedUserContext } from '../../common/types/auth-user-cont
 import { EMAIL_JOBS, QueueService } from '../../infrastructure/queue';
 import { OrganizationRepository } from '../../organization/organization.repository';
 import { UserRepository } from '../../user/user.repository';
+import { AdminOrganizationResponseDto } from './dto/admin-organization-response.dto';
 import { OrganizationStatusResponseDto } from './dto/organization-status-response.dto';
 import {
   MANAGEABLE_ORG_STATUSES,
@@ -25,6 +26,38 @@ export class AdminOrganizationsService {
     private readonly userRepository: UserRepository,
     private readonly queueService: QueueService,
   ) {}
+
+  async getOrganization(
+    actor: AuthenticatedUserContext,
+    organizationId: string,
+  ): Promise<AdminOrganizationResponseDto> {
+    ensureAdminRole(actor.role, 'Only administrators can access organizations');
+
+    const organization = await this.organizationRepository.findUnique({
+      id: organizationId,
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const owner =
+      await this.userRepository.findOrganizationOwner(organizationId);
+
+    if (!owner) {
+      throw new NotFoundException('Organization owner not found');
+    }
+
+    return {
+      ...organization,
+      owner: {
+        id: owner.id,
+        email: owner.email,
+        firstName: owner.firstName,
+        lastName: owner.lastName,
+      },
+    };
+  }
 
   async updateStatus(
     actor: AuthenticatedUserContext,

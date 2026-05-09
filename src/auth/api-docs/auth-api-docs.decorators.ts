@@ -22,6 +22,7 @@ import { ResendEmailDto } from '../dto/resend-email.dto';
 import { RegisterCompanyOwnerDto } from '../dto/register-company-owner.dto';
 import { RegisterViaInviteDto } from '../dto/register-via-invite.dto';
 import { RegisterViaInviteResponseDto } from '../dto/register-via-invite-response.dto';
+import { AcceptInviteOrgDto } from '../dto/accept-invite-org.dto';
 
 export const RegisterApi = () =>
   createApiDecorator({
@@ -82,6 +83,28 @@ export const RegisterViaInviteApi = () =>
       }),
       ApiConflictResponse({
         description: 'A user with the invited email already exists.',
+      }),
+    ],
+  });
+
+export const AcceptOrgInviteApi = () =>
+  createApiDecorator({
+    summary: 'Accept organization invitation',
+    description:
+      'Creates a new company employee account from a valid organization invitation token. The user receives access and refresh tokens via HttpOnly cookies.',
+    body: AcceptInviteOrgDto,
+    successResponse: {
+      status: 201,
+      type: AuthResponseDto,
+      description:
+        'Employee account was created successfully. Access and refresh tokens are returned via `accessToken` and `refreshToken` cookies.',
+    },
+    errors: [
+      ApiBadRequestResponse({
+        description: 'Invalid or expired invitation token.',
+      }),
+      ApiConflictResponse({
+        description: 'User with this email already exists.',
       }),
     ],
   });

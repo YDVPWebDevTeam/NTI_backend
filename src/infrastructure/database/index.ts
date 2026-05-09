@@ -6,4 +6,5 @@ export type {
   UpsertArgs,
   PrismaDelegate,
   PrismaDbClient,
+  PrismaTransactionOptions,
 } from './base.repository';

@@ -44,6 +44,12 @@ enum ProgramType {
   PROGRAM_B
 }
 
+enum BacklogItemStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 enum CallStatus {
   DRAFT
   OPEN
@@ -64,6 +70,24 @@ enum ApplicationStatus {
   PAUSED
   COMPLETED
   ARCHIVED
+}
+
+enum DocumentType {
+  EXECUTIVE_SUMMARY
+  TECHNICAL_ARCHITECTURE
+  ROADMAP
+  BUDGET
+  RISK_ANALYSIS
+  MONETIZATION_MODEL
+  CV
+  MOTIVATION_LETTER
+  SOLUTION_PROPOSAL
+  OTHER
+}
+
+enum ApplicationDocumentScope {
+  APPLICATION
+  TEAM_MEMBER
 }
 
 enum DegreeLevel {
@@ -123,6 +147,12 @@ enum StudentSoftSkill {
   PROJECT_COORDINATION
 }
 
+enum NeedsInfoItemStatus {
+  OPEN
+  ANSWERED
+  RESOLVED
+}
+
 model User {
   id                 String  @id @default(uuid())
   firstName          String
@@ -156,9 +186,17 @@ model User {
 
   uploads UploadedFile[]
 
-  applicationsCreated         Application[]               @relation("ApplicationCreatedBy")
-  updatedApplicationSections  ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
-  applicationSectionHistories ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
+  applicationsCreated           Application[]               @relation("ApplicationCreatedBy")
+  updatedApplicationSections    ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
+  applicationSectionHistories   ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
+  applicationDocumentsCreated   ApplicationDocument[]       @relation("ApplicationDocumentCreatedBy")
+  applicationDocumentsForMember ApplicationDocument[]       @relation("ApplicationDocumentMember")
+  productOwnerForBacklogItems   BacklogItem[]               @relation("BacklogItemProductOwner")
+
+  needsInfoItemsCreated          NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
+  needsInfoItemsResolved         NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
+  needsInfoRepliesCreated        NeedsInfoReply[]         @relation("NeedsInfoReplyCreatedBy")
+  applicationStatusEventsChanged ApplicationStatusEvent[] @relation("ApplicationStatusChangedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -190,10 +228,11 @@ model UploadedFile {
   uploadedAt         DateTime?
   failedAt           DateTime?
 
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-  academicEvidenceFor StudentProfile[] @relation("StudentAcademicEvidence")
-  cvFor               StudentProfile[] @relation("StudentCvFile")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  academicEvidenceFor  StudentProfile[]      @relation("StudentAcademicEvidence")
+  cvFor                StudentProfile[]      @relation("StudentCvFile")
+  applicationDocuments ApplicationDocument[]
 
   @@index([ownerId, status])
   @@index([status, uploadUrlExpiresAt])
@@ -243,8 +282,9 @@ model Call {
 
   applications Application[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  requiredDocumentTypes RequiredDocumentType[]
 
   @@index([type, status])
   @@index([status, opensAt, closesAt])
@@ -260,7 +300,11 @@ model Application {
   team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   createdById String
-  createdBy   User   @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
+  createdBy   User                  @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
+  documents   ApplicationDocument[]
+
+  needsInfoItems NeedsInfoItem[]
+  statusEvents   ApplicationStatusEvent[]
 
   status      ApplicationStatus @default(DRAFT)
   submittedAt DateTime?
@@ -274,6 +318,76 @@ model Application {
   @@index([callId, status])
   @@index([teamId, status])
   @@index([createdById, status])
+}
+
+model BacklogItem {
+  id String @id @default(uuid())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  title            String?
+  description      String?
+  budget           Int?
+  expectedOutcomes String?
+
+  productOwnerUserId String?
+  productOwner       User?   @relation("BacklogItemProductOwner", fields: [productOwnerUserId], references: [id], onDelete: SetNull)
+
+  status BacklogItemStatus @default(DRAFT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([updatedAt])
+  @@index([organizationId, updatedAt])
+}
+
+model RequiredDocumentType {
+  id String @id @default(uuid())
+
+  callId String
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  documentType DocumentType
+  isRequired   Boolean      @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([callId, documentType])
+  @@index([callId, isRequired])
+}
+
+model ApplicationDocument {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  uploadedFileId String
+  uploadedFile   UploadedFile @relation(fields: [uploadedFileId], references: [id], onDelete: Cascade)
+
+  documentType  DocumentType
+  documentScope ApplicationDocumentScope
+
+  memberUserId String?
+  memberUser   User?   @relation("ApplicationDocumentMember", fields: [memberUserId], references: [id], onDelete: Cascade)
+
+  version  Int     @default(1)
+  isActive Boolean @default(true)
+
+  createdById String
+  createdBy   User   @relation("ApplicationDocumentCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId, documentType, isActive])
+  @@index([applicationId, documentScope, isActive])
+  @@index([applicationId, memberUserId, documentType, isActive])
+  @@index([uploadedFileId])
 }
 
 model ApplicationSection {
@@ -307,6 +421,68 @@ model ApplicationSectionHistory {
   createdAt DateTime           @default(now())
 
   @@unique([sectionId, version])
+}
+
+model NeedsInfoItem {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  message String
+  dueAt   DateTime?
+
+  status NeedsInfoItemStatus @default(OPEN)
+
+  createdById String
+  createdBy   User   @relation("NeedsInfoCreatedBy", fields: [createdById], references: [id])
+
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolvedBy   User?     @relation("NeedsInfoResolvedBy", fields: [resolvedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  replies      NeedsInfoReply[]
+  statusEvents ApplicationStatusEvent[]
+
+  @@index([applicationId, createdAt])
+  @@index([applicationId, status])
+}
+
+model NeedsInfoReply {
+  id              String        @id @default(uuid())
+  needsInfoItemId String
+  needsInfoItem   NeedsInfoItem @relation(fields: [needsInfoItemId], references: [id], onDelete: Cascade)
+
+  message String
+
+  createdById String
+  createdBy   User   @relation("NeedsInfoReplyCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([needsInfoItemId, createdAt])
+}
+
+model ApplicationStatusEvent {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  fromStatus ApplicationStatus
+  toStatus   ApplicationStatus
+
+  changedById String
+  changedBy   User   @relation("ApplicationStatusChangedBy", fields: [changedById], references: [id])
+
+  reason          String?
+  needsInfoItemId String?
+  needsInfoItem   NeedsInfoItem? @relation(fields: [needsInfoItemId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId, createdAt])
+  @@index([needsInfoItemId])
 }
 
 enum InvitationStatus {
@@ -391,16 +567,17 @@ enum OrganizationStatus {
 }
 
 model Organization {
-  id          String             @id @default(uuid())
-  name        String
-  ico         String             @unique
-  sector      String?
-  description String?
-  website     String?
-  logoUrl     String?
-  status      OrganizationStatus @default(PENDING)
-  users       User[]
-  invitations OrgInvitation[]
+  id           String             @id @default(uuid())
+  name         String
+  ico          String             @unique
+  sector       String?
+  description  String?
+  website      String?
+  logoUrl      String?
+  status       OrganizationStatus @default(PENDING)
+  users        User[]
+  invitations  OrgInvitation[]
+  backlogItems BacklogItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

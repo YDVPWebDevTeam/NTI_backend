@@ -4,12 +4,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { OrganizationStatus, UserRole } from '../../../generated/prisma/enums';
+import { OrganizationStatus } from '../../../generated/prisma/enums';
 import { ensureAdminRole } from '../../auth/admin-role.helper';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { EMAIL_JOBS, QueueService } from '../../infrastructure/queue';
 import { OrganizationRepository } from '../../organization/organization.repository';
 import { UserRepository } from '../../user/user.repository';
+import { AdminOrganizationResponseDto } from './dto/admin-organization-response.dto';
 import { OrganizationStatusResponseDto } from './dto/organization-status-response.dto';
 import {
   MANAGEABLE_ORG_STATUSES,
@@ -25,6 +26,38 @@ export class AdminOrganizationsService {
     private readonly userRepository: UserRepository,
     private readonly queueService: QueueService,
   ) {}
+
+  async getOrganization(
+    actor: AuthenticatedUserContext,
+    organizationId: string,
+  ): Promise<AdminOrganizationResponseDto> {
+    ensureAdminRole(actor.role, 'Only administrators can access organizations');
+
+    const organization = await this.organizationRepository.findUnique({
+      id: organizationId,
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const owner =
+      await this.userRepository.findOrganizationOwner(organizationId);
+
+    if (!owner) {
+      throw new NotFoundException('Organization owner not found');
+    }
+
+    return {
+      ...organization,
+      owner: {
+        id: owner.id,
+        email: owner.email,
+        firstName: owner.firstName,
+        lastName: owner.lastName,
+      },
+    };
+  }
 
   async updateStatus(
     actor: AuthenticatedUserContext,
@@ -66,16 +99,10 @@ export class AdminOrganizationsService {
       throw new NotFoundException('Organization not found');
     }
 
-    const owners = await this.userRepository.findMany({
-      where: {
-        organizationId,
-        role: UserRole.COMPANY_OWNER,
-      },
-    });
+    const owner =
+      await this.userRepository.findOrganizationOwner(organizationId);
 
-    const ownerEmails = owners.map((owner) => owner.email);
-
-    if (ownerEmails.length === 0) {
+    if (!owner) {
       this.logger.warn(
         `No company owners found for organization ${organizationId}; notification skipped`,
       );
@@ -86,7 +113,7 @@ export class AdminOrganizationsService {
       await this.queueService.addEmail(EMAIL_JOBS.ORG_APPROVED, {
         organizationId,
         organizationName: updatedOrganization.name,
-        ownerEmails,
+        ownerEmails: [owner.email],
       });
 
       return updatedOrganization;
@@ -95,7 +122,7 @@ export class AdminOrganizationsService {
     await this.queueService.addEmail(EMAIL_JOBS.ORG_REJECTED, {
       organizationId,
       organizationName: updatedOrganization.name,
-      ownerEmails,
+      ownerEmails: [owner.email],
       rejectionReason: dto.rejectionReason ?? 'No reason provided',
     });
 

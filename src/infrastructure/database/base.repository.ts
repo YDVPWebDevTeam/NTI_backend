@@ -46,6 +46,12 @@ export type PrismaDelegate<
 
 export type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
 
+export type PrismaTransactionOptions = {
+  maxWait?: number;
+  timeout?: number;
+  isolationLevel?: Prisma.TransactionIsolationLevel;
+};
+
 export abstract class BaseRepository<
   TModel,
   TCreateInput,
@@ -122,7 +128,8 @@ export abstract class BaseRepository<
 
   transaction<T>(
     fn: (client: Prisma.TransactionClient) => Promise<T>,
+    options?: PrismaTransactionOptions,
   ): Promise<T> {
-    return this.prisma.client.$transaction(fn);
+    return this.prisma.client.$transaction(fn, options);
   }
 }

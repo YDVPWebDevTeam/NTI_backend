@@ -10,7 +10,17 @@ import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-facto
 import { ApplicationSectionDto } from '../dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from '../dto/application-section-history.dto';
 import { ApplicationDetailDto } from '../dto/application-detail.dto';
+import { ApplicationDocumentDto } from '../dto/application-document.dto';
+import { AttachApplicationDocumentDto } from '../dto/attach-application-document.dto';
 import { CreateApplicationDto } from '../dto/create-application.dto';
+import { CreateNeedsInfoItemDto } from '../dto/create-needs-info-item.dto';
+import { CreateNeedsInfoReplyDto } from '../dto/create-needs-info-reply.dto';
+import { DocumentCompletenessDto } from '../dto/document-completeness.dto';
+import { NeedsInfoItemDto } from '../dto/needs-info-item.dto';
+import { NeedsInfoReplyDto } from '../dto/needs-info-reply.dto';
+import { NeedsInfoThreadDto } from '../dto/needs-info-thread.dto';
+import { RequiredDocumentsResponseDto } from '../dto/required-documents-response.dto';
+import { ResubmitApplicationDto } from '../dto/resubmit-application.dto';
 import { SetActiveSectionVersionDto } from '../dto/set-active-section-version.dto';
 import { UpsertApplicationSectionDto } from '../dto/upsert-application-section.dto';
 
@@ -63,6 +73,71 @@ export const GetApplicationApi = () =>
     ],
   });
 
+export const GetRequiredDocumentsApi = () =>
+  createApiDecorator({
+    summary: 'Get required documents for call',
+    description:
+      'Returns the configured required document types for a call. Program B calls return an empty requiredDocuments list.',
+    successResponse: {
+      status: 200,
+      type: RequiredDocumentsResponseDto,
+      description: 'Required document configuration for the call.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid call id format.' }),
+      ApiNotFoundResponse({ description: 'Call was not found.' }),
+    ],
+  });
+
+export const AttachApplicationDocumentApi = () =>
+  createApiDecorator({
+    summary: 'Attach application document',
+    description:
+      'Attaches an already uploaded file to an application document slot. Team lead only. CV attachments require memberUserId and count per team member.',
+    body: AttachApplicationDocumentDto,
+    successResponse: {
+      status: 201,
+      type: ApplicationDocumentDto,
+      description: 'Document attachment was created successfully.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description: 'Invalid file ownership, upload state, or document scope.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only the team lead may manage application documents.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application document pack is not supported for this application, the application is not draft, or another document update won the slot concurrently.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const GetApplicationDocumentCompletenessApi = () =>
+  createApiDecorator({
+    summary: 'Get application document completeness',
+    description:
+      'Returns the exact required document slots that are satisfied or missing for the application.',
+    successResponse: {
+      status: 200,
+      type: DocumentCompletenessDto,
+      description: 'Document completeness result for the application.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
+      ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
 export const ListApplicationSectionsApi = () =>
   createApiDecorator({
     summary: 'List application sections',
@@ -79,6 +154,34 @@ export const ListApplicationSectionsApi = () =>
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
       ApiBadRequestResponse({ description: 'Invalid application id format.' }),
       ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const SubmitApplicationApi = () =>
+  createApiDecorator({
+    summary: 'Submit application',
+    description:
+      'Submits a draft application. Program A submissions require a complete document pack. Successful submission locks the team.',
+    successResponse: {
+      status: 200,
+      type: ApplicationDetailDto,
+      description: 'Application was submitted successfully.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id format, or the call is outside its opensAt/closesAt application window.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only the team lead may submit the application.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Call is not open for applications, application is not in a submittable state, or required documents are missing.',
+      }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],
   });
@@ -105,6 +208,63 @@ export const UpsertApplicationSectionApi = () =>
     ],
   });
 
+export const CreateNeedsInfoItemApi = () =>
+  createApiDecorator({
+    summary: 'Request additional information for application',
+    description:
+      'Reviewer-side users can request additional information for submitted applications. The application moves to NEEDS_INFO.',
+    body: CreateNeedsInfoItemDto,
+    successResponse: {
+      status: 201,
+      type: NeedsInfoItemDto,
+      description: 'Needs-info item was created.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description: 'Invalid application id or invalid application status.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only reviewer-side users can request additional information.',
+      }),
+      ApiConflictResponse({
+        description: 'Application status was changed concurrently.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const ReplyToNeedsInfoItemApi = () =>
+  createApiDecorator({
+    summary: 'Reply to needs-info item',
+    description:
+      'Team lead can reply to an open needs-info item while the application is in NEEDS_INFO status.',
+    body: CreateNeedsInfoReplyDto,
+    successResponse: {
+      status: 201,
+      type: NeedsInfoReplyDto,
+      description: 'Needs-info reply was created.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description: 'Invalid id format or application is not in NEEDS_INFO.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only team lead can reply to needs-info requests.',
+      }),
+      ApiConflictResponse({
+        description: 'Needs-info item is already resolved.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Application or needs-info item was not found.',
+      }),
+    ],
+  });
+
 export const GetSectionHistoryApi = () =>
   createApiDecorator({
     summary: 'Get section change history',
@@ -122,6 +282,55 @@ export const GetSectionHistoryApi = () =>
       ApiNotFoundResponse({
         description: 'Application or section was not found.',
       }),
+    ],
+  });
+
+export const ResubmitApplicationApi = () =>
+  createApiDecorator({
+    summary: 'Resubmit application after needs-info replies',
+    description:
+      'Team lead can resubmit an application from NEEDS_INFO to EVALUATING after all needs-info items have been answered.',
+    body: ResubmitApplicationDto,
+    successResponse: {
+      status: 200,
+      type: ApplicationDetailDto,
+      description: 'Application was resubmitted.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Application is not in NEEDS_INFO, has no unresolved needs-info items, or still has open items.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only team lead can resubmit the application.',
+      }),
+      ApiConflictResponse({
+        description: 'Application status was changed concurrently.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const GetNeedsInfoThreadApi = () =>
+  createApiDecorator({
+    summary: 'Get needs-info thread',
+    description:
+      'Returns needs-info items, replies, and application status events for the application.',
+    successResponse: {
+      status: 200,
+      type: NeedsInfoThreadDto,
+      description: 'Needs-info thread.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
+      ApiForbiddenResponse({
+        description: 'User has no access to this application.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],
   });
 

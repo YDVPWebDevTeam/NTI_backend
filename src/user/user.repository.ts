@@ -11,6 +11,22 @@ import {
 } from '../infrastructure/database/base.repository';
 import { PrismaService } from '../infrastructure/database/prisma.service';
 
+const organizationMemberSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  role: true,
+  status: true,
+  organizationId: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.UserSelect;
+
+export type OrganizationMemberRecord = Prisma.UserGetPayload<{
+  select: typeof organizationMemberSelect;
+}>;
+
 @Injectable()
 export class UserRepository extends BaseRepository<
   User,
@@ -76,5 +92,97 @@ export class UserRepository extends BaseRepository<
       },
       db,
     );
+  }
+
+  findOrganizationOwner(
+    organizationId: string,
+    db?: PrismaDbClient,
+  ): Promise<User | null> {
+    return this.getDelegate(db).findFirst({
+      where: {
+        organizationId,
+        role: UserRole.COMPANY_OWNER,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+  }
+
+  findOrganizationMember(
+    organizationId: string,
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<User | null> {
+    return this.getDelegate(db).findFirst({
+      where: {
+        id: userId,
+        organizationId,
+        role: {
+          in: [UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE],
+        },
+      },
+    });
+  }
+
+  findActiveOrganizationMember(
+    organizationId: string,
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<User | null> {
+    return this.getDelegate(db).findFirst({
+      where: {
+        id: userId,
+        organizationId,
+        role: {
+          in: [UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE],
+        },
+        status: UserStatus.ACTIVE,
+      },
+    });
+  }
+
+  findOrganizationMembers(
+    organizationId: string,
+    db?: PrismaDbClient,
+  ): Promise<OrganizationMemberRecord[]> {
+    return this.getDelegate(db).findMany({
+      where: {
+        organizationId,
+        role: {
+          in: [UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE],
+        },
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+      select: organizationMemberSelect,
+    });
+  }
+
+  updateUserRole(
+    userId: string,
+    role: UserRole,
+    db?: PrismaDbClient,
+  ): Promise<OrganizationMemberRecord> {
+    return this.getDelegate(db).update({
+      where: { id: userId },
+      data: { role },
+      select: organizationMemberSelect,
+    });
+  }
+
+  removeOrganizationMember(
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<OrganizationMemberRecord> {
+    return this.getDelegate(db).update({
+      where: { id: userId },
+      data: {
+        organizationId: null,
+        role: UserRole.STUDENT,
+      },
+      select: organizationMemberSelect,
+    });
   }
 }

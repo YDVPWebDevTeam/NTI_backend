@@ -61,34 +61,6 @@ describe('EmailProcessor', () => {
     );
   });
 
-  it('keeps the TEAM_CONFIRMATION handler unchanged', async () => {
-    const job: EmailProcessorJob = {
-      id: 'job-2',
-      name: EMAIL_JOBS.TEAM_CONFIRMATION,
-      data: {
-        email: 'invitee@example.com',
-        teamName: 'Alpha Team',
-        token: 'confirm-token',
-      },
-    } as Job<
-      {
-        email: string;
-        teamName: string;
-        token: string;
-      },
-      void,
-      typeof EMAIL_JOBS.TEAM_CONFIRMATION
-    >;
-
-    await processor.process(job);
-
-    expect(mailerService.sendTeamConfirm).toHaveBeenCalledWith(
-      'invitee@example.com',
-      'Alpha Team',
-      'confirm-token',
-    );
-  });
-
   it('sends ORG_PENDING_REVIEW to all provided admin emails', async () => {
     const job: EmailProcessorJob = {
       id: 'job-3',

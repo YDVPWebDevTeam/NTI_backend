@@ -5,6 +5,7 @@ import type { StringValue } from 'ms';
 @Injectable()
 export class ConfigService {
   private readonly env: Env;
+  private readonly parsedCorsOrigins: string[];
 
   constructor() {
     const result = envSchema.safeParse(process.env);
@@ -17,45 +18,40 @@ export class ConfigService {
     }
 
     this.env = result.data;
+    this.parsedCorsOrigins = this.env.CORS_ORIGINS.split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean);
   }
 
   get port(): number {
     return this.env.PORT;
   }
 
-  get smtpHost(): string {
-    return this.env.SMTP_HOST;
+  get brevoApiKey(): string {
+    return this.env.BREVO_API_KEY;
   }
 
-  get smtpPort(): number {
-    return this.env.SMTP_PORT;
+  get emailFrom(): string {
+    return this.env.EMAIL_FROM;
   }
-  get smtpUser(): string {
-    return this.env.SMTP_USER;
-  }
-  get smtpPassword(): string {
-    return this.env.SMTP_PASSWORD;
-  }
-  get smtpFrom(): string {
-    return this.env.SMTP_FROM;
-  }
+
   get frontUrl(): string {
     return this.env.FRONTEND_URL;
   }
 
-  get r2Endpoint(): string {
+  get r2Endpoint(): string | undefined {
     return this.env.R2_ENDPOINT;
   }
 
-  get r2BucketName(): string {
+  get r2BucketName(): string | undefined {
     return this.env.R2_BUCKET_NAME;
   }
 
-  get r2AccessKeyId(): string {
+  get r2AccessKeyId(): string | undefined {
     return this.env.R2_ACCESS_KEY_ID;
   }
 
-  get r2SecretAccessKey(): string {
+  get r2SecretAccessKey(): string | undefined {
     return this.env.R2_SECRET_ACCESS_KEY;
   }
 
@@ -113,6 +109,18 @@ export class ConfigService {
     return this.env.NODE_ENV;
   }
 
+  get appEnv(): 'local' | 'development' | 'staging' | 'production' | 'test' {
+    if (this.env.APP_ENV) {
+      return this.env.APP_ENV;
+    }
+
+    if (this.env.NODE_ENV === 'test') {
+      return 'test';
+    }
+
+    return 'local';
+  }
+
   get databaseUrl(): string {
     return this.env.DATABASE_URL;
   }
@@ -125,8 +133,33 @@ export class ConfigService {
     return this.env.NODE_ENV === 'development';
   }
 
+  get authCookieSameSite(): 'lax' | 'none' {
+    return this.appEnv === 'local' || this.appEnv === 'test' ? 'lax' : 'none';
+  }
+
+  get authCookieSecure(): boolean {
+    return this.appEnv !== 'local' && this.appEnv !== 'test';
+  }
+
   get corsOrigins(): string[] {
-    return this.env.CORS_ORIGINS.split(',').map((o) => o.trim());
+    return [...this.parsedCorsOrigins];
+  }
+
+  isCorsOriginAllowed(origin: string | undefined): boolean {
+    if (!origin) {
+      return true;
+    }
+
+    if (
+      (this.appEnv === 'local' || this.appEnv === 'test') &&
+      this.getLocalAppOrigins().includes(origin)
+    ) {
+      return true;
+    }
+
+    return this.parsedCorsOrigins.some((allowedOrigin) =>
+      this.matchesCorsOrigin(origin, allowedOrigin),
+    );
   }
 
   get logLevel(): string {
@@ -195,5 +228,26 @@ export class ConfigService {
 
   get passwordResetExpirationMinutes(): number {
     return this.env.PASSWORD_RESET_EXPIRATION_MINUTES;
+  }
+
+  private matchesCorsOrigin(origin: string, allowedOrigin: string): boolean {
+    if (allowedOrigin === origin) {
+      return true;
+    }
+
+    if (!allowedOrigin.includes('*')) {
+      return false;
+    }
+
+    return this.wildcardToRegExp(allowedOrigin).test(origin);
+  }
+
+  private wildcardToRegExp(pattern: string): RegExp {
+    const escapedPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`^${escapedPattern.replaceAll('*', '.*')}$`);
+  }
+
+  private getLocalAppOrigins(): string[] {
+    return [`http://localhost:${this.port}`, `http://127.0.0.1:${this.port}`];
   }
 }

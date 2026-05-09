@@ -36,7 +36,7 @@ describe('AdminOrganizationsService', () => {
     updateMany: jest.Mock;
   };
   let userRepository: {
-    findMany: jest.Mock;
+    findOrganizationOwner: jest.Mock;
   };
   let queueService: {
     addEmail: jest.Mock;
@@ -78,7 +78,7 @@ describe('AdminOrganizationsService', () => {
     };
 
     userRepository = {
-      findMany: jest.fn(),
+      findOrganizationOwner: jest.fn(),
     };
 
     queueService = {
@@ -131,10 +131,10 @@ describe('AdminOrganizationsService', () => {
       ...pendingOrganization,
       status: OrganizationStatus.ACTIVE,
     });
-    userRepository.findMany.mockResolvedValue([
-      { id: 'owner-1', email: 'owner1@example.com' },
-      { id: 'owner-2', email: 'owner2@example.com' },
-    ]);
+    userRepository.findOrganizationOwner.mockResolvedValue({
+      id: 'owner-1',
+      email: 'owner1@example.com',
+    });
 
     const result = await service.updateStatus(actorAdmin, 'org-1', {
       status: MANAGEABLE_ORG_STATUSES.ACTIVE,
@@ -149,7 +149,7 @@ describe('AdminOrganizationsService', () => {
       {
         organizationId: 'org-1',
         organizationName: pendingOrganization.name,
-        ownerEmails: ['owner1@example.com', 'owner2@example.com'],
+        ownerEmails: ['owner1@example.com'],
       },
     );
     expect(result.status).toBe(OrganizationStatus.ACTIVE);
@@ -161,9 +161,10 @@ describe('AdminOrganizationsService', () => {
       ...pendingOrganization,
       status: OrganizationStatus.REJECTED,
     });
-    userRepository.findMany.mockResolvedValue([
-      { id: 'owner-1', email: 'owner1@example.com' },
-    ]);
+    userRepository.findOrganizationOwner.mockResolvedValue({
+      id: 'owner-1',
+      email: 'owner1@example.com',
+    });
 
     const result = await service.updateStatus(actorAdmin, 'org-1', {
       status: MANAGEABLE_ORG_STATUSES.REJECTED,
@@ -188,12 +189,49 @@ describe('AdminOrganizationsService', () => {
       ...pendingOrganization,
       status: OrganizationStatus.ACTIVE,
     });
-    userRepository.findMany.mockResolvedValue([]);
+    userRepository.findOrganizationOwner.mockResolvedValue(null);
 
     await service.updateStatus(actorAdmin, 'org-1', {
       status: MANAGEABLE_ORG_STATUSES.ACTIVE,
     });
 
     expect(queueService.addEmail).not.toHaveBeenCalled();
+  });
+
+  describe('getOrganization', () => {
+    it('returns organization with owner summary', async () => {
+      organizationRepository.findUnique.mockResolvedValue({
+        ...pendingOrganization,
+        status: OrganizationStatus.ACTIVE,
+      });
+      userRepository.findOrganizationOwner.mockResolvedValue({
+        id: 'owner-1',
+        email: 'owner1@example.com',
+        firstName: 'Jane',
+        lastName: 'Doe',
+      });
+
+      const result = await service.getOrganization(actorAdmin, 'org-1');
+
+      expect(result.id).toBe('org-1');
+      expect(result.owner.email).toBe('owner1@example.com');
+    });
+
+    it('throws when organization is missing', async () => {
+      organizationRepository.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getOrganization(actorAdmin, 'missing-org'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws when owner is missing', async () => {
+      organizationRepository.findUnique.mockResolvedValue(pendingOrganization);
+      userRepository.findOrganizationOwner.mockResolvedValue(null);
+
+      await expect(
+        service.getOrganization(actorAdmin, 'org-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
   });
 });

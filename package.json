@@ -17,7 +17,6 @@
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "lint:staged": "lint-staged",
     "typescript": "tsc --noEmit",
-    "commit": "cz",
     "commitlint": "commitlint --edit",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -49,12 +48,11 @@
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "argon2": "^0.44.0",
-    "bullmq": "^5.71.1",
+    "bullmq": "^5.76.5",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
     "dotenv": "^17.3.1",
     "nestjs-pino": "^4.6.1",
-    "nodemailer": "^8.0.5",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.20.0",
@@ -75,12 +73,9 @@
     "@nestjs/testing": "^11.0.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
-    "@types/nodemailer": "^7.0.11",
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.18.0",
     "@types/supertest": "^6.0.2",
-    "commitizen": "^4.3.1",
-    "cz-conventional-changelog": "^3.3.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
@@ -107,11 +102,6 @@
       "prisma format --schema prisma/schema.prisma"
     ]
   },
-  "config": {
-    "commitizen": {
-      "path": "./node_modules/cz-conventional-changelog"
-    }
-  },
   "prisma": {
     "seed": "node --experimental-strip-types --experimental-specifier-resolution=node prisma/seed/main.ts"
   },
@@ -121,6 +111,9 @@
       "json",
       "ts"
     ],
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    },
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {

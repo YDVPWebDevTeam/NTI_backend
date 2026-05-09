@@ -1,5 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma, type User } from '../../generated/prisma/client';
+import { isPrismaUniqueConstraintError } from '../common/prisma/prisma-error.utils';
 import { UserRepository } from './user.repository';
 import { PrismaDbClient } from '../infrastructure/database';
 import { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
@@ -27,7 +28,7 @@ export class UserService {
     try {
       return await this.users.create(data, db);
     } catch (error) {
-      if (this.isUniqueConstraintError(error)) {
+      if (isPrismaUniqueConstraintError(error)) {
         throw new ConflictException('User with this email already exists');
       }
       throw error;
@@ -58,15 +59,5 @@ export class UserService {
       role: user.role,
       organizationId: user.organizationId,
     };
-  }
-
-  private isUniqueConstraintError(error: unknown): error is { code: string } {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      typeof error.code === 'string' &&
-      error.code === 'P2002'
-    );
   }
 }

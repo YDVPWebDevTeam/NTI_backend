@@ -10,13 +10,21 @@ import { LoggerModule } from './infrastructure/logger/logger.module';
 import { MailerModule } from './infrastructure/mailer/mailer.module';
 import { PdfModule } from './infrastructure/pdf';
 import { QueueModule } from './infrastructure/queue';
+import { EmailProcessor } from './infrastructure/queue/processors/email.processor';
+import { PdfProcessor } from './infrastructure/queue/processors/pdf.processor';
 import { StorageModule } from './infrastructure/storage';
 import { TeamModule } from './team/team.module';
 import { UserModule } from './user/user.module';
 import { FilesModule } from './files';
 import { OrganizationModule } from './organization/organization.module';
+import { ProgramBBacklogModule } from './programs/program-b/backlog/program-b-backlog.module';
 import { StudentProfileModule } from './student-profile';
 import { ApplicationsModule } from './applications';
+
+const queueProcessorProviders =
+  process.env.RUN_QUEUE_PROCESSORS === 'true'
+    ? [EmailProcessor, PdfProcessor]
+    : [];
 
 @Module({
   imports: [
@@ -31,6 +39,7 @@ import { ApplicationsModule } from './applications';
     PdfModule,
     StorageModule,
     OrganizationModule,
+    ProgramBBacklogModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -46,6 +55,6 @@ import { ApplicationsModule } from './applications';
     ApplicationsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, ...queueProcessorProviders],
 })
 export class AppModule {}

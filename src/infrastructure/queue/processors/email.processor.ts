@@ -32,7 +32,6 @@ export class EmailProcessor extends WorkerHost {
     [EMAIL_JOBS.USER_CONFIRMATION]: async (data) => {
       await this.mailerService.sendConfirmationEmail(data.email, data.token);
     },
-    [EMAIL_JOBS.TEAM_CONFIRMATION]: this.handleTeamInviteEmail,
     [EMAIL_JOBS.TEAM_INVITATION]: this.handleTeamInviteEmail,
     [EMAIL_JOBS.SYSTEM_INVITE_SENT]: async (data) => {
       await this.mailerService.sendSystemInvite(

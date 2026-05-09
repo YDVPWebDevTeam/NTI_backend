@@ -1,23 +1,14 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { InvitationStatus } from '../../generated/prisma/enums';
+import { Injectable } from '@nestjs/common';
+import type { TeamMember } from '../../generated/prisma/client';
+import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import type { PrismaDbClient } from '../infrastructure/database';
 import { InviteValidationResponseDto } from './dto/invite-validation-response.dto';
-import {
-  InvitesRepository,
-  type InvitationWithTeam,
-} from './invites.repository';
-
-const INVITATION_NOT_FOUND_MESSAGE = 'Invitation not found';
-const INVALID_INVITATION_MESSAGE =
-  'Invitation is expired, revoked, or already accepted';
+import { InvitationService } from '../team/invitations/invitation.service';
+import type { InvitationWithTeam } from '../team/invitations/invitation.repository';
 
 @Injectable()
 export class InvitesService {
-  constructor(private readonly invitesRepository: InvitesRepository) {}
+  constructor(private readonly invitationService: InvitationService) {}
 
   async validateToken(
     token: string,
@@ -31,35 +22,18 @@ export class InvitesService {
     };
   }
 
-  async validateTokenOrThrow(
+  validateTokenOrThrow(
     token: string,
     db?: PrismaDbClient,
   ): Promise<InvitationWithTeam> {
-    const invitation = await this.invitesRepository.findByTokenWithTeam(
-      token,
-      db,
-    );
-
-    if (!invitation) {
-      throw new NotFoundException(INVITATION_NOT_FOUND_MESSAGE);
-    }
-
-    if (
-      invitation.status !== InvitationStatus.PENDING ||
-      invitation.revokedAt !== null ||
-      invitation.expiresAt <= new Date()
-    ) {
-      throw new BadRequestException(INVALID_INVITATION_MESSAGE);
-    }
-
-    return invitation;
+    return this.invitationService.validateTokenOrThrow(token, db);
   }
 
-  markAccepted(id: string, db?: PrismaDbClient) {
-    return this.invitesRepository.markAccepted(id, db);
-  }
-
-  createTeamMember(userId: string, teamId: string, db?: PrismaDbClient) {
-    return this.invitesRepository.createTeamMember(userId, teamId, db);
+  acceptForUser(
+    token: string,
+    user: Pick<AuthenticatedUserContext, 'id' | 'email'>,
+    db?: PrismaDbClient,
+  ): Promise<TeamMember> {
+    return this.invitationService.accept(token, user, db);
   }
 }

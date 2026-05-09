@@ -4,7 +4,9 @@ import {
   IsStrongPassword,
   MaxLength,
   MinLength,
+  ValidationOptions,
 } from 'class-validator';
+import { MatchFields } from './match-fields.validation';
 
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
@@ -26,5 +28,15 @@ export function PasswordValidation(): PropertyDecorator {
     IsStrongPassword(PASSWORD_STRONG_OPTIONS, {
       message: PASSWORD_WEAK_MESSAGE,
     }),
+  );
+}
+
+export function ConfirmPasswordValidation(
+  matchesField: string,
+  validationOptions?: ValidationOptions,
+): PropertyDecorator {
+  return applyDecorators(
+    PasswordValidation(),
+    MatchFields(matchesField, validationOptions),
   );
 }

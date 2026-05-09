@@ -6,9 +6,13 @@ import {
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
+import helmet from '@fastify/helmet';
+import cookie from '@fastify/cookie';
+import cors from '@fastify/cors';
 import { AppModule } from './app.module';
 import { ConfigService } from './infrastructure/config';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { buildRequestOrigin, isSameOrigin } from './common/http/cors.utils';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -22,15 +26,34 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
-  await app.register((await import('@fastify/helmet')).default, {
+  await app.register(helmet, {
     global: true,
   });
-  await app.register((await import('@fastify/cookie')).default);
+  await app.register(cookie);
 
-  app.enableCors({
-    origin: configService.corsOrigins,
-    credentials: true,
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  await app.register(cors, {
+    delegator: (req, callback) => {
+      const requestOrigin = buildRequestOrigin(req.headers);
+
+      callback(null, {
+        origin: (origin, originCallback) => {
+          if (
+            isSameOrigin(origin, requestOrigin) ||
+            configService.isCorsOriginAllowed(origin)
+          ) {
+            originCallback(null, true);
+            return;
+          }
+
+          originCallback(
+            new Error(`Origin ${origin ?? 'unknown'} is not allowed by CORS`),
+            false,
+          );
+        },
+        credentials: true,
+        methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+      });
+    },
   });
 
   // Global API prefix

@@ -19,6 +19,9 @@ describe('ApplicationsController', () => {
   let applicationsService: {
     createDraft: jest.Mock;
     findById: jest.Mock;
+    attachDocument: jest.Mock;
+    getDocumentCompleteness: jest.Mock;
+    submit: jest.Mock;
   };
   let sectionsService: {
     listSections: jest.Mock;
@@ -31,6 +34,12 @@ describe('ApplicationsController', () => {
     applicationsService = {
       createDraft: jest.fn().mockResolvedValue({ id: 'application-1' }),
       findById: jest.fn().mockResolvedValue({ id: 'application-1' }),
+      attachDocument: jest.fn().mockResolvedValue({ id: 'document-1' }),
+      getDocumentCompleteness: jest.fn().mockResolvedValue({
+        applicationId: 'application-1',
+        isComplete: true,
+      }),
+      submit: jest.fn().mockResolvedValue({ id: 'application-1' }),
     };
 
     sectionsService = {
@@ -68,6 +77,50 @@ describe('ApplicationsController', () => {
 
     expect(applicationsService.findById).toHaveBeenCalledWith(
       'f6c90688-c973-40ca-8f3b-c55667cc6f77',
+      user,
+    );
+    expect(result).toEqual({ id: 'application-1' });
+  });
+
+  it('delegates document attachment', async () => {
+    const user = { id: 'user-1', email: 'lead@example.com' } as never;
+    const dto = { fileId: 'file-1', documentType: 'BUDGET' } as never;
+
+    const result = await controller.attachDocument('application-1', user, dto);
+
+    expect(applicationsService.attachDocument).toHaveBeenCalledWith(
+      'application-1',
+      user,
+      dto,
+    );
+    expect(result).toEqual({ id: 'document-1' });
+  });
+
+  it('delegates completeness lookup', async () => {
+    const user = { id: 'user-1', email: 'lead@example.com' } as never;
+
+    const result = await controller.getDocumentCompleteness(
+      'application-1',
+      user,
+    );
+
+    expect(applicationsService.getDocumentCompleteness).toHaveBeenCalledWith(
+      'application-1',
+      user,
+    );
+    expect(result).toEqual({
+      applicationId: 'application-1',
+      isComplete: true,
+    });
+  });
+
+  it('delegates submission', async () => {
+    const user = { id: 'user-1', email: 'lead@example.com' } as never;
+
+    const result = await controller.submit('application-1', user);
+
+    expect(applicationsService.submit).toHaveBeenCalledWith(
+      'application-1',
       user,
     );
     expect(result).toEqual({ id: 'application-1' });

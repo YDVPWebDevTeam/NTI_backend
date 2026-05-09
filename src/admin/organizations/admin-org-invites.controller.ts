@@ -17,7 +17,7 @@ import {
   GetOrganizationInvitesApi,
 } from './api-docs/admin-org-invites-api-docs.decorators';
 import { AdminOrgInvitesService } from './admin-org-invites.service';
-import { OrgInviteResponseDto } from './dto/org-invite-response.dto';
+import { OrganizationStatusResponseDto } from './dto/organization-status-response.dto';
 
 @ApiTags('Admin')
 @Controller('admin/organizations')
@@ -32,7 +32,7 @@ export class AdminOrgInvitesController {
   @Get('invites')
   listAll(
     @GetUserContext() actor: AuthenticatedUserContext,
-  ): Promise<OrgInviteResponseDto[]> {
+  ): Promise<OrganizationStatusResponseDto[]> {
     return this.adminOrgInvitesService.listAll(actor);
   }
 
@@ -41,7 +41,7 @@ export class AdminOrgInvitesController {
   listByOrganization(
     @GetUserContext() actor: AuthenticatedUserContext,
     @Param('id', ParseUUIDPipe) organizationId: string,
-  ): Promise<OrgInviteResponseDto[]> {
+  ): Promise<OrganizationStatusResponseDto[]> {
     return this.adminOrgInvitesService.listByOrganization(
       actor,
       organizationId,

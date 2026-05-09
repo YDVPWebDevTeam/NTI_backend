@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { InvitationTokenService } from 'src/common/invitations/invitation-token.service';
 import { HashingModule } from 'src/infrastructure/hashing';
 import { QueueModule } from 'src/infrastructure/queue';
 import { OrganizationController } from './organization.controller';
@@ -15,6 +16,7 @@ import { OrganizationInviteRepository } from './organization-invitation.reposito
     OrganizationRepository,
     OrganizationInviteRepository,
     UserRepository,
+    InvitationTokenService,
   ],
 })
 export class OrganizationModule {}

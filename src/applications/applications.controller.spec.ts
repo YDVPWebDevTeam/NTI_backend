@@ -87,7 +87,7 @@ describe('ApplicationsController', () => {
 
   it('delegates section upsert to the sections service', async () => {
     const user = { id: 'user-1', email: 'lead@example.com' } as never;
-    const dto = { key: 'profile', valueJson: { firstName: 'Jane' } } as never;
+    const dto = { valueJson: { firstName: 'Jane' } } as never;
 
     const result = await controller.upsertSection(
       'application-1',
@@ -98,6 +98,7 @@ describe('ApplicationsController', () => {
 
     expect(sectionsService.upsertSection).toHaveBeenCalledWith(
       'application-1',
+      'profile',
       dto,
       user,
     );

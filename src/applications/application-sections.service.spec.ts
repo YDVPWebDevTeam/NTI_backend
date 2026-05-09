@@ -199,8 +199,8 @@ describe('ApplicationSectionsService', () => {
 
     const result = await service.upsertSection(
       'application-1',
+      'profile',
       {
-        key: 'profile',
         valueJson: { name: 'Jane' },
       },
       {
@@ -241,8 +241,8 @@ describe('ApplicationSectionsService', () => {
     await expect(
       service.upsertSection(
         'application-1',
+        'profile',
         {
-          key: 'profile',
           valueJson: { name: 'Jane' },
         },
         {

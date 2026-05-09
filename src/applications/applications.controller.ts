@@ -7,7 +7,6 @@ import {
   Put,
   Post,
   UseGuards,
-  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { GetUserContext } from '../auth/decorators/get-user-context.decorator';
@@ -74,11 +73,7 @@ export class ApplicationsController {
     @Body() dto: UpsertApplicationSectionDto,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ApplicationSectionDto> {
-    if (dto.key !== key) {
-      throw new BadRequestException('Section key mismatch');
-    }
-
-    return this.sectionsService.upsertSection(applicationId, dto, user);
+    return this.sectionsService.upsertSection(applicationId, key, dto, user);
   }
 
   @GetSectionHistoryApi()

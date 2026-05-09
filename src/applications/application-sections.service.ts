@@ -50,6 +50,7 @@ export class ApplicationSectionsService {
 
   async upsertSection(
     applicationId: string,
+    key: string,
     dto: UpsertApplicationSectionDto,
     user: AuthenticatedUserContext,
   ): Promise<ApplicationSectionDto> {
@@ -65,11 +66,11 @@ export class ApplicationSectionsService {
       }
 
       this.assertWriteAccess(application, user);
-      this.assertSectionStructure(dto.key, dto.valueJson);
+      this.assertSectionStructure(key, dto.valueJson);
 
       const section = await this.sectionsRepository.upsertSection(
         applicationId,
-        dto.key,
+        key,
         dto.valueJson as Prisma.InputJsonValue,
         user.id,
         db,

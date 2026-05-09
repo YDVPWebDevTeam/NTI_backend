@@ -46,7 +46,7 @@ describe('ApplicationRulesService', () => {
       title: 'Test Call',
       status: CallStatus.OPEN,
       opensAt: new Date('2026-04-10T00:00:00.000Z'),
-      closesAt: new Date('2026-04-30T23:59:59.000Z'),
+      closesAt: new Date('2099-12-31T23:59:59.000Z'),
     };
 
     const team = {

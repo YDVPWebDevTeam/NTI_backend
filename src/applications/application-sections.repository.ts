@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import type { ApplicationSection, Prisma } from '../../generated/prisma/client';
+import type {
+  ApplicationSection,
+  ApplicationSectionHistory,
+  Prisma,
+} from '../../generated/prisma/client';
 import { BaseRepository, PrismaDbClient } from '../infrastructure/database';
 import { PrismaService } from '../infrastructure/database/prisma.service';
 
@@ -72,6 +76,59 @@ export class ApplicationSectionsRepository extends BaseRepository<
           increment: 1,
         },
       },
+    });
+  }
+
+  createHistoryEntry(
+    sectionId: string,
+    version: number,
+    valueJson: Prisma.InputJsonValue,
+    savedById: string,
+    db?: PrismaDbClient,
+  ): Promise<ApplicationSectionHistory> {
+    return (db ?? this.prisma.client).applicationSectionHistory.create({
+      data: {
+        sectionId,
+        version,
+        valueJson,
+        savedById,
+      },
+    });
+  }
+
+  findHistoryBySectionId(
+    sectionId: string,
+    db?: PrismaDbClient,
+  ): Promise<ApplicationSectionHistory[]> {
+    return (db ?? this.prisma.client).applicationSectionHistory.findMany({
+      where: { sectionId },
+      orderBy: { version: 'desc' },
+    });
+  }
+
+  findHistoryEntry(
+    sectionId: string,
+    version: number,
+    db?: PrismaDbClient,
+  ): Promise<ApplicationSectionHistory | null> {
+    return (db ?? this.prisma.client).applicationSectionHistory.findUnique({
+      where: {
+        sectionId_version: {
+          sectionId,
+          version,
+        },
+      },
+    });
+  }
+
+  setActiveVersion(
+    sectionId: string,
+    version: number | null,
+    db?: PrismaDbClient,
+  ): Promise<ApplicationSection> {
+    return (db ?? this.prisma.client).applicationSection.update({
+      where: { id: sectionId },
+      data: { activeVersion: version },
     });
   }
 }

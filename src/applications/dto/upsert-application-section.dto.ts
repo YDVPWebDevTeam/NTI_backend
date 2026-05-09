@@ -1,7 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsObject } from 'class-validator';
+import { IsNotEmpty, IsObject, IsString } from 'class-validator';
 
 export class UpsertApplicationSectionDto {
+  @ApiProperty({
+    example: 'general_info',
+    description: 'Application section key used to resolve the section schema',
+  })
+  @IsString()
+  @IsNotEmpty()
+  key!: string;
+
   @ApiProperty({
     type: 'object',
     additionalProperties: true,

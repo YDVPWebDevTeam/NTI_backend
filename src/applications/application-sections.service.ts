@@ -45,7 +45,34 @@ export class ApplicationSectionsService {
     const sections =
       await this.sectionsRepository.findByApplicationId(applicationId);
 
-    return Promise.all(sections.map((section) => this.toSectionDto(section)));
+    const activePairs = sections
+      .filter((s) => s.activeVersion !== null)
+      .map((s) => ({ sectionId: s.id, version: s.activeVersion as number }));
+
+    const historyEntries =
+      await this.sectionsRepository.findHistoryEntriesBulk(activePairs);
+
+    const historyMap = new Map(
+      historyEntries.map((h) => [`${h.sectionId}:${h.version}`, h]),
+    );
+
+    return sections.map((section) => {
+      const activeHistory =
+        section.activeVersion === null
+          ? null
+          : (historyMap.get(`${section.id}:${section.activeVersion}`) ?? null);
+
+      return {
+        id: section.id,
+        applicationId: section.applicationId,
+        key: section.key,
+        valueJson: activeHistory?.valueJson ?? section.valueJson,
+        version: section.version,
+        activeVersion: section.activeVersion,
+        updatedById: section.updatedById,
+        updatedAt: section.updatedAt,
+      };
+    });
   }
 
   async upsertSection(

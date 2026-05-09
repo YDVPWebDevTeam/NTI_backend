@@ -106,6 +106,18 @@ export class ApplicationSectionsRepository extends BaseRepository<
     });
   }
 
+  findHistoryEntriesBulk(
+    pairs: { sectionId: string; version: number }[],
+    db?: PrismaDbClient,
+  ): Promise<ApplicationSectionHistory[]> {
+    if (pairs.length === 0) return Promise.resolve([]);
+    return (db ?? this.prisma.client).applicationSectionHistory.findMany({
+      where: {
+        OR: pairs.map(({ sectionId, version }) => ({ sectionId, version })),
+      },
+    });
+  }
+
   findHistoryEntry(
     sectionId: string,
     version: number,

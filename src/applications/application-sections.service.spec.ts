@@ -24,6 +24,7 @@ describe('ApplicationSectionsService', () => {
     findByApplicationId: jest.Mock;
     findByApplicationIdAndKey: jest.Mock;
     findHistoryBySectionId: jest.Mock;
+    findHistoryEntriesBulk: jest.Mock;
     findHistoryEntry: jest.Mock;
     upsertSection: jest.Mock;
     createHistoryEntry: jest.Mock;
@@ -86,6 +87,7 @@ describe('ApplicationSectionsService', () => {
       findByApplicationId: jest.fn(),
       findByApplicationIdAndKey: jest.fn(),
       findHistoryBySectionId: jest.fn(),
+      findHistoryEntriesBulk: jest.fn().mockResolvedValue([]),
       findHistoryEntry: jest.fn(),
       upsertSection: jest.fn(),
       createHistoryEntry: jest.fn(),
@@ -129,14 +131,16 @@ describe('ApplicationSectionsService', () => {
         valueJson: { name: 'John' },
       },
     ]);
-    sectionsRepository.findHistoryEntry.mockResolvedValue({
-      id: 'history-1',
-      sectionId: 'section-1',
-      version: 1,
-      valueJson: { name: 'Jane' },
-      savedById: 'user-1',
-      createdAt: new Date('2026-04-19T12:00:00.000Z'),
-    });
+    sectionsRepository.findHistoryEntriesBulk.mockResolvedValue([
+      {
+        id: 'history-1',
+        sectionId: 'section-1',
+        version: 1,
+        valueJson: { name: 'Jane' },
+        savedById: 'user-1',
+        createdAt: new Date('2026-04-19T12:00:00.000Z'),
+      },
+    ]);
 
     const result = await service.listSections('application-1', {
       id: 'user-1',
@@ -145,11 +149,9 @@ describe('ApplicationSectionsService', () => {
     } as never);
 
     expect(result[0].valueJson).toEqual({ name: 'Jane' });
-    expect(sectionsRepository.findHistoryEntry).toHaveBeenCalledWith(
-      'section-1',
-      1,
-      undefined,
-    );
+    expect(sectionsRepository.findHistoryEntriesBulk).toHaveBeenCalledWith([
+      { sectionId: 'section-1', version: 1 },
+    ]);
   });
 
   it('listSections forbids non-member', async () => {

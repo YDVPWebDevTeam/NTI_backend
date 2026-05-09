@@ -14,6 +14,9 @@ describe('ApplicationsController', () => {
   let applicationsService: {
     createDraft: jest.Mock;
     findById: jest.Mock;
+    listPublicCalls: jest.Mock;
+    listActivePublicCalls: jest.Mock;
+    findPublicCallById: jest.Mock;
     attachDocument: jest.Mock;
     getDocumentCompleteness: jest.Mock;
     submit: jest.Mock;
@@ -23,6 +26,11 @@ describe('ApplicationsController', () => {
     applicationsService = {
       createDraft: jest.fn().mockResolvedValue({ id: 'application-1' }),
       findById: jest.fn().mockResolvedValue({ id: 'application-1' }),
+      listPublicCalls: jest.fn().mockResolvedValue({ data: [], meta: {} }),
+      listActivePublicCalls: jest
+        .fn()
+        .mockResolvedValue({ data: [], meta: {} }),
+      findPublicCallById: jest.fn().mockResolvedValue({ id: 'call-1' }),
       attachDocument: jest.fn().mockResolvedValue({ id: 'document-1' }),
       getDocumentCompleteness: jest.fn().mockResolvedValue({
         applicationId: 'application-1',
@@ -47,6 +55,43 @@ describe('ApplicationsController', () => {
 
     expect(applicationsService.createDraft).toHaveBeenCalledWith(user, dto);
     expect(result).toEqual({ id: 'application-1' });
+  });
+
+  it('delegates public call listing to the applications service', async () => {
+    const query = {
+      page: 1,
+      limit: 20,
+      sort: 'closesAt',
+      order: 'asc',
+    } as const;
+
+    await controller.listPublicCalls(query);
+
+    expect(applicationsService.listPublicCalls).toHaveBeenCalledWith(query);
+  });
+
+  it('delegates active public call listing to the applications service', async () => {
+    const query = {
+      page: 1,
+      limit: 20,
+      sort: 'closesAt',
+      order: 'asc',
+      type: 'PROGRAM_A',
+    } as const;
+
+    await controller.listActivePublicCalls(query);
+
+    expect(applicationsService.listActivePublicCalls).toHaveBeenCalledWith(
+      query,
+    );
+  });
+
+  it('delegates public call lookup by id to the applications service', async () => {
+    await controller.findPublicCallById('f6c90688-c973-40ca-8f3b-c55667cc6f77');
+
+    expect(applicationsService.findPublicCallById).toHaveBeenCalledWith(
+      'f6c90688-c973-40ca-8f3b-c55667cc6f77',
+    );
   });
 
   it('delegates lookup to the applications service with user context', async () => {

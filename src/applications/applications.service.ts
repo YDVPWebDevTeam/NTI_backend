@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
+import type { Call } from '../../generated/prisma/client';
 import {
   ApplicationDocumentScope,
   ApplicationStatus,
@@ -15,6 +16,11 @@ import {
   UploadStatus,
   UserRole,
 } from '../../generated/prisma/enums';
+import {
+  buildOrderBy,
+  buildPaginationMeta,
+  resolvePagination,
+} from '../common/pagination';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { FilesRepository } from '../files/files.repository';
 import { TeamRepository } from '../team/team.repository';
@@ -31,6 +37,9 @@ import { DocumentCompletenessDto } from './dto/document-completeness.dto';
 import { NeedsInfoItemDto } from './dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';
+import { PublicCallDto } from './dto/public-call.dto';
+import { PublicCallsQueryDto } from './dto/public-calls-query.dto';
+import { PublicCallsResponseDto } from './dto/public-calls-response.dto';
 import { RequiredDocumentsResponseDto } from './dto/required-documents-response.dto';
 import { ResubmitApplicationDto } from './dto/resubmit-application.dto';
 import {
@@ -128,6 +137,34 @@ export class ApplicationsService {
     this.validateApplicationAccess(application, requestingUser);
 
     return this.toDetailDto(application);
+  }
+
+  async listPublicCalls(
+    query: PublicCallsQueryDto,
+  ): Promise<PublicCallsResponseDto> {
+    return this.listCalls({
+      query,
+      activeOnly: false,
+    });
+  }
+
+  async listActivePublicCalls(
+    query: PublicCallsQueryDto,
+  ): Promise<PublicCallsResponseDto> {
+    return this.listCalls({
+      query,
+      activeOnly: true,
+    });
+  }
+
+  async findPublicCallById(id: string): Promise<PublicCallDto> {
+    const call = await this.callsRepository.findPublicById(id);
+
+    if (!call) {
+      throw new NotFoundException('Public call not found');
+    }
+
+    return this.toPublicCallDto(call);
   }
 
   async getRequiredDocumentsForCall(
@@ -798,6 +835,49 @@ export class ApplicationsService {
     }
   }
 
+  private async listCalls(input: {
+    query: PublicCallsQueryDto;
+    activeOnly: boolean;
+  }): Promise<PublicCallsResponseDto> {
+    const pagination = resolvePagination(input.query);
+    const orderBy = buildOrderBy(input.query.sort, input.query.order, [
+      { createdAt: input.query.order },
+      { id: 'asc' },
+    ]);
+    const now = new Date();
+
+    const [calls, total] = input.activeOnly
+      ? await Promise.all([
+          this.callsRepository.findPublicVisibleMany({
+            now,
+            programType: input.query.type,
+            skip: pagination.skip,
+            take: pagination.take,
+            orderBy,
+          }),
+          this.callsRepository.countPublicVisible({
+            now,
+            programType: input.query.type,
+          }),
+        ])
+      : await Promise.all([
+          this.callsRepository.findPublicMany({
+            programType: input.query.type,
+            skip: pagination.skip,
+            take: pagination.take,
+            orderBy,
+          }),
+          this.callsRepository.countPublic({
+            programType: input.query.type,
+          }),
+        ]);
+
+    return {
+      data: calls.map((call) => this.toPublicCallDto(call)),
+      meta: buildPaginationMeta(total, pagination.page, pagination.limit),
+    };
+  }
+
   private toDetailDto(
     application: ApplicationWithRelations,
   ): ApplicationDetailDto {
@@ -811,6 +891,19 @@ export class ApplicationsService {
       decidedAt: application.decidedAt,
       createdAt: application.createdAt,
       updatedAt: application.updatedAt,
+    };
+  }
+
+  private toPublicCallDto(call: Call): PublicCallDto {
+    return {
+      id: call.id,
+      title: call.title,
+      type: call.type,
+      status: call.status,
+      opensAt: call.opensAt,
+      closesAt: call.closesAt,
+      createdAt: call.createdAt,
+      updatedAt: call.updatedAt,
     };
   }
 

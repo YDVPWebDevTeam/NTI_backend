@@ -1,2 +1,7 @@
-export { CreateApplicationApi } from './applications-api-docs.decorators';
-export { GetApplicationApi } from './applications-api-docs.decorators';
+export {
+  CreateApplicationApi,
+  GetApplicationApi,
+  GetPublicActiveCallsApi,
+  GetPublicCallByIdApi,
+  GetPublicCallsApi,
+} from './applications-api-docs.decorators';

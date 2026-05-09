@@ -6,12 +6,21 @@ jest.mock('./application-rules.service', () => ({
   ApplicationRulesService: class ApplicationRulesService {},
 }));
 
+jest.mock('./calls.repository', () => ({
+  CallsRepository: class CallsRepository {},
+}));
+
 import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { ApplicationStatus, UserRole } from '../../generated/prisma/enums';
+import {
+  ApplicationStatus,
+  CallStatus,
+  ProgramType,
+  UserRole,
+} from '../../generated/prisma/enums';
 import { ApplicationsService } from './applications.service';
 
 describe('ApplicationsService', () => {
@@ -24,6 +33,13 @@ describe('ApplicationsService', () => {
   };
   let applicationRulesService: {
     validateApplicationCreationRules: jest.Mock;
+  };
+  let callsRepository: {
+    findPublicById: jest.Mock;
+    findPublicMany: jest.Mock;
+    countPublic: jest.Mock;
+    findPublicVisibleMany: jest.Mock;
+    countPublicVisible: jest.Mock;
   };
 
   const mockCall = {
@@ -58,9 +74,18 @@ describe('ApplicationsService', () => {
       }),
     };
 
+    callsRepository = {
+      findPublicById: jest.fn(),
+      findPublicMany: jest.fn(),
+      countPublic: jest.fn(),
+      findPublicVisibleMany: jest.fn(),
+      countPublicVisible: jest.fn(),
+    };
+
     service = new ApplicationsService(
       applicationsRepository as never,
       applicationRulesService as never,
+      callsRepository as never,
     );
   });
 
@@ -311,5 +336,100 @@ describe('ApplicationsService', () => {
         { callId: 'call-1', teamId: 'team-1' },
       ),
     ).rejects.toThrow('Only team lead can submit');
+  });
+
+  it('lists public calls with pagination and optional type filter', async () => {
+    callsRepository.findPublicMany.mockResolvedValue([
+      {
+        id: 'call-1',
+        title: 'Public Call',
+        type: ProgramType.PROGRAM_A,
+        status: CallStatus.OPEN,
+        opensAt: null,
+        closesAt: null,
+        createdAt: new Date('2026-05-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+      },
+    ]);
+    callsRepository.countPublic.mockResolvedValue(1);
+
+    const result = await service.listPublicCalls({
+      page: 1,
+      limit: 10,
+      type: ProgramType.PROGRAM_A,
+      sort: 'createdAt',
+      order: 'desc',
+    });
+
+    expect(callsRepository.findPublicMany).toHaveBeenCalledWith({
+      programType: ProgramType.PROGRAM_A,
+      skip: 0,
+      take: 10,
+      orderBy: [{ createdAt: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
+    });
+    expect(result.meta).toEqual({
+      page: 1,
+      limit: 10,
+      total: 1,
+      totalPages: 1,
+    });
+  });
+
+  it('lists active public calls using visibility repository rules', async () => {
+    callsRepository.findPublicVisibleMany.mockResolvedValue([]);
+    callsRepository.countPublicVisible.mockResolvedValue(0);
+
+    await service.listActivePublicCalls({
+      page: 1,
+      limit: 20,
+      sort: 'closesAt',
+      order: 'asc',
+    });
+
+    expect(callsRepository.findPublicVisibleMany).toHaveBeenCalledTimes(1);
+
+    const firstCall = callsRepository.findPublicVisibleMany.mock.calls[0] as [
+      {
+        now: Date;
+        programType: ProgramType | undefined;
+        skip: number;
+        take: number;
+        orderBy: Array<Record<string, 'asc' | 'desc'>>;
+      },
+    ];
+
+    expect(firstCall[0].now).toBeInstanceOf(Date);
+    expect(firstCall[0]).toMatchObject({
+      programType: undefined,
+      skip: 0,
+      take: 20,
+      orderBy: [{ closesAt: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+    });
+  });
+
+  it('returns a public call by id', async () => {
+    callsRepository.findPublicById.mockResolvedValue({
+      id: 'call-1',
+      title: 'Public Call',
+      type: ProgramType.PROGRAM_B,
+      status: CallStatus.OPEN,
+      opensAt: null,
+      closesAt: null,
+      createdAt: new Date('2026-05-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+    });
+
+    const result = await service.findPublicCallById('call-1');
+
+    expect(callsRepository.findPublicById).toHaveBeenCalledWith('call-1');
+    expect(result.type).toBe(ProgramType.PROGRAM_B);
+  });
+
+  it('throws not found when public call cannot be exposed', async () => {
+    callsRepository.findPublicById.mockResolvedValue(null);
+
+    await expect(service.findPublicCallById('call-404')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });

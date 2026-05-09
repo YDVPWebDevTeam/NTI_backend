@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CallStatus, ProgramType } from '../../../generated/prisma/enums';
 
-export class PublicCallItemDto {
+export class PublicCallDto {
   @ApiProperty({
     format: 'uuid',
     example: 'f6c90688-c973-40ca-8f3b-c55667cc6f77',
@@ -9,21 +9,15 @@ export class PublicCallItemDto {
   id!: string;
 
   @ApiProperty({
-    enum: ProgramType,
-    example: ProgramType.PROGRAM_A,
+    example: 'Spring 2026 Public Call',
   })
-  programId!: ProgramType;
+  title!: string;
 
   @ApiProperty({
     enum: ProgramType,
     example: ProgramType.PROGRAM_A,
   })
   type!: ProgramType;
-
-  @ApiProperty({
-    example: 'Spring 2026 Public Call',
-  })
-  title!: string;
 
   @ApiProperty({
     enum: CallStatus,
@@ -44,4 +38,16 @@ export class PublicCallItemDto {
     nullable: true,
   })
   closesAt!: Date | null;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+  })
+  createdAt!: Date;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+  })
+  updatedAt!: Date;
 }

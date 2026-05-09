@@ -40,6 +40,47 @@ export class CallsRepository extends BaseRepository<
     });
   }
 
+  findPublicById(id: string, db?: PrismaDbClient): Promise<Call | null> {
+    return (db ?? this.prisma.client).call.findFirst({
+      where: {
+        id,
+        status: CallStatus.OPEN,
+      },
+    });
+  }
+
+  findPublicMany(
+    args: {
+      programType?: ProgramType;
+      skip?: number;
+      take?: number;
+      orderBy?: Prisma.CallOrderByWithRelationInput[];
+    },
+    db?: PrismaDbClient,
+  ): Promise<Call[]> {
+    return (db ?? this.prisma.client).call.findMany({
+      where: {
+        status: CallStatus.OPEN,
+        ...(args.programType ? { type: args.programType } : {}),
+      },
+      skip: args.skip,
+      take: args.take,
+      orderBy: args.orderBy,
+    });
+  }
+
+  countPublic(
+    args: { programType?: ProgramType },
+    db?: PrismaDbClient,
+  ): Promise<number> {
+    return (db ?? this.prisma.client).call.count({
+      where: {
+        status: CallStatus.OPEN,
+        ...(args.programType ? { type: args.programType } : {}),
+      },
+    });
+  }
+
   findPublicVisibleMany(
     args: {
       now: Date;

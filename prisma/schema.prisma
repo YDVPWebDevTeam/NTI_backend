@@ -156,8 +156,9 @@ model User {
 
   uploads UploadedFile[]
 
-  applicationsCreated        Application[]        @relation("ApplicationCreatedBy")
-  updatedApplicationSections ApplicationSection[] @relation("ApplicationSectionUpdatedBy")
+  applicationsCreated         Application[]               @relation("ApplicationCreatedBy")
+  updatedApplicationSections  ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
+  applicationSectionHistories ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -281,9 +282,11 @@ model ApplicationSection {
   applicationId String
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
-  key       String
-  valueJson Json
-  version   Int    @default(1)
+  key           String
+  valueJson     Json
+  version       Int                         @default(1)
+  activeVersion Int?
+  history       ApplicationSectionHistory[]
 
   updatedById String
   updatedBy   User   @relation("ApplicationSectionUpdatedBy", fields: [updatedById], references: [id])
@@ -291,6 +294,19 @@ model ApplicationSection {
   updatedAt DateTime @updatedAt
 
   @@unique([applicationId, key])
+}
+
+model ApplicationSectionHistory {
+  id        String             @id @default(uuid())
+  sectionId String
+  section   ApplicationSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  version   Int
+  valueJson Json
+  savedById String
+  savedBy   User               @relation("SectionHistorySavedBy", fields: [savedById], references: [id])
+  createdAt DateTime           @default(now())
+
+  @@unique([sectionId, version])
 }
 
 enum InvitationStatus {

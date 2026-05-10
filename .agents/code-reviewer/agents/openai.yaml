@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Reviewer"
+  short_description: "Review code and draft inline PR comments"
+  default_prompt: "Use $code-reviewer to review the current branch or requested files, compare against the right baseline, and provide findings plus PR-ready inline comments with exact placement and suggested fixes."

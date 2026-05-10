@@ -35,6 +35,10 @@ export class ConfigService {
     return this.env.EMAIL_FROM;
   }
 
+  get emailLogoUrl(): string | undefined {
+    return this.env.EMAIL_LOGO_URL;
+  }
+
   get frontUrl(): string {
     return this.env.FRONTEND_URL;
   }

@@ -3,6 +3,8 @@ jest.mock('../../mailer/mailer.service', () => ({
 }));
 
 import { Job } from 'bullmq';
+import { UserRole } from '../../../../generated/prisma/enums';
+import type { ConfirmationPath } from '../../../auth/confirmation-paths';
 import { EMAIL_JOBS } from '../queue.types';
 import { MailerService } from '../../mailer/mailer.service';
 import { EmailProcessor } from './email.processor';
@@ -15,6 +17,8 @@ describe('EmailProcessor', () => {
     sendConfirmationEmail: jest.Mock;
     sendTeamConfirm: jest.Mock;
     sendPasswordResetEmail: jest.Mock;
+    sendSystemInvite: jest.Mock;
+    sendOrgInviteEmail: jest.Mock;
     sendOrgPendingReviewEmail: jest.Mock;
     sendOrgApprovedEmail: jest.Mock;
     sendOrgRejectedEmail: jest.Mock;
@@ -25,6 +29,8 @@ describe('EmailProcessor', () => {
       sendConfirmationEmail: jest.fn().mockResolvedValue(undefined),
       sendTeamConfirm: jest.fn().mockResolvedValue(undefined),
       sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+      sendSystemInvite: jest.fn().mockResolvedValue(undefined),
+      sendOrgInviteEmail: jest.fn().mockResolvedValue(undefined),
       sendOrgPendingReviewEmail: jest.fn().mockResolvedValue(undefined),
       sendOrgApprovedEmail: jest.fn().mockResolvedValue(undefined),
       sendOrgRejectedEmail: jest.fn().mockResolvedValue(undefined),
@@ -58,6 +64,90 @@ describe('EmailProcessor', () => {
       'invitee@example.com',
       'Alpha Team',
       'invite-token',
+    );
+  });
+
+  it('routes USER_CONFIRMATION jobs to sendConfirmationEmail', async () => {
+    const job: EmailProcessorJob = {
+      id: 'job-0',
+      name: EMAIL_JOBS.USER_CONFIRMATION,
+      data: {
+        email: 'student@example.com',
+        token: 'confirm-token',
+        confirmationPath: '/register/student',
+      },
+    } as Job<
+      {
+        email: string;
+        token: string;
+        confirmationPath: ConfirmationPath;
+      },
+      void,
+      typeof EMAIL_JOBS.USER_CONFIRMATION
+    >;
+
+    await processor.process(job);
+
+    expect(mailerService.sendConfirmationEmail).toHaveBeenCalledWith(
+      'student@example.com',
+      'confirm-token',
+      '/register/student',
+    );
+  });
+
+  it('routes SYSTEM_INVITE_SENT jobs to sendSystemInvite', async () => {
+    const job: EmailProcessorJob = {
+      id: 'job-2',
+      name: EMAIL_JOBS.SYSTEM_INVITE_SENT,
+      data: {
+        email: 'admin@example.com',
+        token: 'system-token',
+        roleToAssign: UserRole.ADMIN,
+      },
+    } as Job<
+      {
+        email: string;
+        token: string;
+        roleToAssign: UserRole;
+      },
+      void,
+      typeof EMAIL_JOBS.SYSTEM_INVITE_SENT
+    >;
+
+    await processor.process(job);
+
+    expect(mailerService.sendSystemInvite).toHaveBeenCalledWith(
+      'admin@example.com',
+      'system-token',
+      UserRole.ADMIN,
+    );
+  });
+
+  it('routes ORG_INVITE jobs to sendOrgInviteEmail', async () => {
+    const job: EmailProcessorJob = {
+      id: 'job-6',
+      name: EMAIL_JOBS.ORG_INVITE,
+      data: {
+        email: 'member@example.com',
+        token: 'org-token',
+        organizationName: 'Acme Labs',
+      },
+    } as Job<
+      {
+        email: string;
+        token: string;
+        organizationName: string;
+      },
+      void,
+      typeof EMAIL_JOBS.ORG_INVITE
+    >;
+
+    await processor.process(job);
+
+    expect(mailerService.sendOrgInviteEmail).toHaveBeenCalledWith(
+      'member@example.com',
+      'org-token',
+      'Acme Labs',
     );
   });
 

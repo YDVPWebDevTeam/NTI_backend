@@ -30,7 +30,11 @@ export class EmailProcessor extends WorkerHost {
 
   private readonly handlers: EmailJobHandlers = {
     [EMAIL_JOBS.USER_CONFIRMATION]: async (data) => {
-      await this.mailerService.sendConfirmationEmail(data.email, data.token);
+      await this.mailerService.sendConfirmationEmail(
+        data.email,
+        data.token,
+        data.confirmationPath,
+      );
     },
     [EMAIL_JOBS.TEAM_INVITATION]: this.handleTeamInviteEmail,
     [EMAIL_JOBS.SYSTEM_INVITE_SENT]: async (data) => {

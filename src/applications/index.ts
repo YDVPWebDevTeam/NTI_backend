@@ -15,6 +15,9 @@ export {
   GetApplicationApi,
   GetApplicationDocumentCompletenessApi,
   GetNeedsInfoThreadApi,
+  GetPublicActiveCallsApi,
+  GetPublicCallByIdApi,
+  GetPublicCallsApi,
   GetRequiredDocumentsApi,
   GetSectionHistoryApi,
   ListApplicationSectionsApi,
@@ -30,6 +33,9 @@ export { ApplicationSectionDto } from './dto/application-section.dto';
 export { ApplicationSectionHistoryDto } from './dto/application-section-history.dto';
 export { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
 export { CreateApplicationDto } from './dto/create-application.dto';
+export { PublicCallDto } from './dto/public-call.dto';
+export { PublicCallsQueryDto } from './dto/public-calls-query.dto';
+export { PublicCallsResponseDto } from './dto/public-calls-response.dto';
 export { DocumentCompletenessDto } from './dto/document-completeness.dto';
 export { DocumentCompletenessItemDto } from './dto/document-completeness-item.dto';
 export { RequiredDocumentTypeDto } from './dto/required-document-type.dto';

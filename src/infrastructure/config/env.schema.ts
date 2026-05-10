@@ -21,6 +21,10 @@ export const envSchema = z.object({
   REDIS_PORT: z.coerce.number().int().positive().default(6379),
   BREVO_API_KEY: z.string().min(1, 'BREVO_API_KEY is required'),
   EMAIL_FROM: z.email('EMAIL_FROM must be a valid email address'),
+  EMAIL_LOGO_URL: z
+    .string()
+    .url('EMAIL_LOGO_URL must be a valid URL')
+    .optional(),
   FRONTEND_URL: z.string().min(1, 'FRONTEND_URL is required'),
   R2_ENDPOINT: z.string().url('R2_ENDPOINT must be a valid URL').optional(),
   R2_BUCKET_NAME: z.string().min(1, 'R2_BUCKET_NAME is required').optional(),

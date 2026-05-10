@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Put,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
@@ -23,6 +24,9 @@ import {
   GetNeedsInfoThreadApi,
   GetSectionHistoryApi,
   ListApplicationSectionsApi,
+  GetPublicActiveCallsApi,
+  GetPublicCallByIdApi,
+  GetPublicCallsApi,
   ReplyToNeedsInfoItemApi,
   ResubmitApplicationApi,
   SetActiveSectionVersionApi,
@@ -41,6 +45,9 @@ import { DocumentCompletenessDto } from './dto/document-completeness.dto';
 import { NeedsInfoItemDto } from './dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';
+import { PublicCallDto } from './dto/public-call.dto';
+import { PublicCallsQueryDto } from './dto/public-calls-query.dto';
+import { PublicCallsResponseDto } from './dto/public-calls-response.dto';
 import { ResubmitApplicationDto } from './dto/resubmit-application.dto';
 import { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
 import { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
@@ -48,7 +55,6 @@ import { ApplicationsService } from './applications.service';
 import { ApplicationSectionsService } from './application-sections.service';
 
 @ApiTags('Applications')
-@UseGuards(JwtAuthGuard)
 @Controller('applications')
 export class ApplicationsController {
   constructor(
@@ -56,8 +62,33 @@ export class ApplicationsController {
     private readonly sectionsService: ApplicationSectionsService,
   ) {}
 
+  @GetPublicCallsApi()
+  @Get('calls')
+  listPublicCalls(
+    @Query() query: PublicCallsQueryDto,
+  ): Promise<PublicCallsResponseDto> {
+    return this.applicationsService.listPublicCalls(query);
+  }
+
+  @GetPublicActiveCallsApi()
+  @Get('calls/active')
+  listActivePublicCalls(
+    @Query() query: PublicCallsQueryDto,
+  ): Promise<PublicCallsResponseDto> {
+    return this.applicationsService.listActivePublicCalls(query);
+  }
+
+  @GetPublicCallByIdApi()
+  @Get('calls/:id')
+  findPublicCallById(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PublicCallDto> {
+    return this.applicationsService.findPublicCallById(id);
+  }
+
   @CreateApplicationApi()
   @Post()
+  @UseGuards(JwtAuthGuard)
   createDraft(
     @GetUserContext() user: AuthenticatedUserContext,
     @Body() dto: CreateApplicationDto,
@@ -67,6 +98,7 @@ export class ApplicationsController {
 
   @GetApplicationApi()
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
   findById(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUserContext() user: AuthenticatedUserContext,
@@ -76,6 +108,7 @@ export class ApplicationsController {
 
   @AttachApplicationDocumentApi()
   @Post(':id/documents')
+  @UseGuards(JwtAuthGuard)
   attachDocument(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUserContext() user: AuthenticatedUserContext,
@@ -86,6 +119,7 @@ export class ApplicationsController {
 
   @GetApplicationDocumentCompletenessApi()
   @Get(':id/document-completeness')
+  @UseGuards(JwtAuthGuard)
   getDocumentCompleteness(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUserContext() user: AuthenticatedUserContext,
@@ -96,6 +130,7 @@ export class ApplicationsController {
   @SubmitApplicationApi()
   @HttpCode(HttpStatus.OK)
   @Post(':id/submit')
+  @UseGuards(JwtAuthGuard)
   submit(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUserContext() user: AuthenticatedUserContext,
@@ -105,6 +140,7 @@ export class ApplicationsController {
 
   @CreateNeedsInfoItemApi()
   @Post(':id/needs-info-items')
+  @UseGuards(JwtAuthGuard)
   createNeedsInfoItem(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUserContext() user: AuthenticatedUserContext,
@@ -115,6 +151,7 @@ export class ApplicationsController {
 
   @ReplyToNeedsInfoItemApi()
   @Post(':id/needs-info-items/:itemId/replies')
+  @UseGuards(JwtAuthGuard)
   replyToNeedsInfoItem(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
@@ -127,6 +164,7 @@ export class ApplicationsController {
   @ResubmitApplicationApi()
   @HttpCode(HttpStatus.OK)
   @Post(':id/resubmit')
+  @UseGuards(JwtAuthGuard)
   resubmit(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUserContext() user: AuthenticatedUserContext,
@@ -137,6 +175,7 @@ export class ApplicationsController {
 
   @GetNeedsInfoThreadApi()
   @Get(':id/needs-info-thread')
+  @UseGuards(JwtAuthGuard)
   getNeedsInfoThread(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUserContext() user: AuthenticatedUserContext,

@@ -515,6 +515,34 @@ describe('AuthService', () => {
       {
         email: unconfirmedUser.email,
         token: 'new-verification-token',
+        confirmationPath: '/register/student',
+      },
+    );
+  });
+
+  it('resends confirmation email with company owner confirmation path', async () => {
+    users.findByEmail.mockResolvedValue({
+      ...unconfirmedUser,
+      role: UserRole.COMPANY_OWNER,
+    });
+    emailVerification.createForUser.mockResolvedValue({
+      id: 'verification-3',
+      userId: user.id,
+      token: 'owner-verification-token',
+      expiresAt: new Date('2030-01-03T00:00:00.000Z'),
+      acceptedAt: null,
+    });
+
+    await expect(
+      service.resendConfirmationEmail(unconfirmedUser.email),
+    ).resolves.toBeUndefined();
+
+    expect(queueService.addEmail).toHaveBeenCalledWith(
+      EMAIL_JOBS.USER_CONFIRMATION,
+      {
+        email: unconfirmedUser.email,
+        token: 'owner-verification-token',
+        confirmationPath: '/register/company-owner/confirm-email',
       },
     );
   });

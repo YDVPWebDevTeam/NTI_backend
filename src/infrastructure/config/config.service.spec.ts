@@ -66,4 +66,14 @@ describe('ConfigService', () => {
       true,
     );
   });
+
+  it('exposes optional email logo url when configured', () => {
+    process.env.EMAIL_LOGO_URL = 'https://cdn.example.com/icons/nti-logo.svg';
+
+    const configService = new ConfigService();
+
+    expect(configService.emailLogoUrl).toBe(
+      'https://cdn.example.com/icons/nti-logo.svg',
+    );
+  });
 });

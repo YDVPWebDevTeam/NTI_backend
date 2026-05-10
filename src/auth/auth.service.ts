@@ -28,6 +28,7 @@ import { toAuthenticatedUserContext } from '../user/user.mapper';
 import { AuthRegistrationService } from './auth-registration.service';
 import { OrganizationInviteRepository } from '../organization/organization-invitation.repository';
 import { AcceptInviteOrgDto } from './dto/accept-invite-org.dto';
+import { getConfirmationPathByRole } from './confirmation-paths';
 
 export type AuthTokensResponse = {
   accessToken: string;
@@ -255,6 +256,7 @@ export class AuthService {
     await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
       email: user.email,
       token: verificationToken.token,
+      confirmationPath: getConfirmationPathByRole(user.role),
     });
   }
 

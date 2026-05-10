@@ -1,10 +1,8 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { UserRole } from '../../generated/prisma/enums';
 import type {
   ApplicationSection,
   ApplicationSectionHistory,
@@ -13,20 +11,19 @@ import type {
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { PrismaDbClient } from '../infrastructure/database';
 import { ApplicationSectionsRepository } from './application-sections.repository';
-import {
-  ApplicationWithRelations,
-  ApplicationsRepository,
-} from './applications.repository';
+import { ApplicationsRepository } from './applications.repository';
 import { ApplicationSectionDto } from './dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from './dto/application-section-history.dto';
 import { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
 import { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
+import { ApplicationSectionsRulesService } from './rules/application-sections-rules.service';
 
 @Injectable()
 export class ApplicationSectionsService {
   constructor(
     private readonly applicationsRepository: ApplicationsRepository,
     private readonly sectionsRepository: ApplicationSectionsRepository,
+    private readonly sectionsRules: ApplicationSectionsRulesService,
   ) {}
 
   async listSections(
@@ -40,7 +37,7 @@ export class ApplicationSectionsService {
       throw new NotFoundException('Application not found');
     }
 
-    this.assertReadAccess(application, user);
+    this.sectionsRules.assertReadAccess(application, user);
 
     const sections =
       await this.sectionsRepository.findByApplicationId(applicationId);
@@ -62,16 +59,7 @@ export class ApplicationSectionsService {
           ? null
           : (historyMap.get(`${section.id}:${section.activeVersion}`) ?? null);
 
-      return {
-        id: section.id,
-        applicationId: section.applicationId,
-        key: section.key,
-        valueJson: activeHistory?.valueJson ?? section.valueJson,
-        version: section.version,
-        activeVersion: section.activeVersion,
-        updatedById: section.updatedById,
-        updatedAt: section.updatedAt,
-      };
+      return this.mapSectionToDto(section, activeHistory);
     });
   }
 
@@ -92,7 +80,8 @@ export class ApplicationSectionsService {
         throw new NotFoundException('Application not found');
       }
 
-      this.assertWriteAccess(application, user);
+      this.sectionsRules.assertApplicationIsDraft(application.status);
+      this.sectionsRules.assertWriteAccess(application, user);
       this.assertSectionStructure(key, dto.valueJson);
 
       const section = await this.sectionsRepository.upsertSection(
@@ -111,7 +100,13 @@ export class ApplicationSectionsService {
         db,
       );
 
-      return this.toSectionDto(section, db);
+      const updatedSection = await this.sectionsRepository.setActiveVersion(
+        section.id,
+        section.version,
+        db,
+      );
+
+      return this.toSectionDto(updatedSection, db);
     });
   }
 
@@ -127,7 +122,7 @@ export class ApplicationSectionsService {
       throw new NotFoundException('Application not found');
     }
 
-    this.assertAdminAccess(user);
+    this.sectionsRules.assertAdminAccess(user);
 
     const section = await this.sectionsRepository.findByApplicationIdAndKey(
       applicationId,
@@ -162,7 +157,7 @@ export class ApplicationSectionsService {
         throw new NotFoundException('Application not found');
       }
 
-      this.assertAdminAccess(user);
+      this.sectionsRules.assertAdminAccess(user);
 
       const section = await this.sectionsRepository.findByApplicationIdAndKey(
         applicationId,
@@ -220,16 +215,7 @@ export class ApplicationSectionsService {
             db,
           );
 
-    return {
-      id: row.id,
-      applicationId: row.applicationId,
-      key: row.key,
-      valueJson: activeHistory?.valueJson ?? row.valueJson,
-      version: row.version,
-      activeVersion: row.activeVersion,
-      updatedById: row.updatedById,
-      updatedAt: row.updatedAt,
-    };
+    return this.mapSectionToDto(row, activeHistory);
   }
 
   private toHistoryDto(
@@ -242,6 +228,22 @@ export class ApplicationSectionsService {
       valueJson: row.valueJson,
       savedById: row.savedById,
       createdAt: row.createdAt,
+    };
+  }
+
+  private mapSectionToDto(
+    row: ApplicationSection,
+    activeHistory: ApplicationSectionHistory | null,
+  ): ApplicationSectionDto {
+    return {
+      id: row.id,
+      applicationId: row.applicationId,
+      key: row.key,
+      valueJson: activeHistory?.valueJson ?? row.valueJson,
+      version: row.version,
+      activeVersion: row.activeVersion,
+      updatedById: row.updatedById,
+      updatedAt: row.updatedAt,
     };
   }
 
@@ -263,43 +265,8 @@ export class ApplicationSectionsService {
   ): ((valueJson: Record<string, unknown>) => void) | null {
     switch (key) {
       default:
+        // TODO: add per-section JSON schema validators once section shapes are finalized.
         return null;
-    }
-  }
-
-  private assertReadAccess(
-    application: ApplicationWithRelations,
-    user: AuthenticatedUserContext,
-  ): void {
-    if (user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN) {
-      return;
-    }
-
-    const isTeamMember =
-      application.team.leaderId === user.id ||
-      application.team.members?.some((member) => member.userId === user.id);
-
-    if (!isTeamMember) {
-      throw new ForbiddenException(
-        'You do not have permission to view this application',
-      );
-    }
-  }
-
-  private assertWriteAccess(
-    application: ApplicationWithRelations,
-    user: AuthenticatedUserContext,
-  ): void {
-    if (application.team.leaderId !== user.id) {
-      throw new ForbiddenException(
-        'Only team lead can update application sections',
-      );
-    }
-  }
-
-  private assertAdminAccess(user: AuthenticatedUserContext): void {
-    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Admin access required');
     }
   }
 }

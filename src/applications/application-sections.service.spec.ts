@@ -11,8 +11,9 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { UserRole } from '../../generated/prisma/enums';
+import { ApplicationStatus, UserRole } from '../../generated/prisma/enums';
 import { ApplicationSectionsService } from './application-sections.service';
+import { ApplicationSectionsRulesService } from './rules/application-sections-rules.service';
 
 describe('ApplicationSectionsService', () => {
   let service: ApplicationSectionsService;
@@ -29,6 +30,12 @@ describe('ApplicationSectionsService', () => {
     upsertSection: jest.Mock;
     createHistoryEntry: jest.Mock;
     setActiveVersion: jest.Mock;
+  };
+  let sectionsRules: {
+    assertReadAccess: jest.Mock;
+    assertWriteAccess: jest.Mock;
+    assertAdminAccess: jest.Mock;
+    assertApplicationIsDraft: jest.Mock;
   };
 
   const mockApplication = {
@@ -94,9 +101,17 @@ describe('ApplicationSectionsService', () => {
       setActiveVersion: jest.fn(),
     };
 
+    sectionsRules = {
+      assertReadAccess: jest.fn(),
+      assertWriteAccess: jest.fn(),
+      assertAdminAccess: jest.fn(),
+      assertApplicationIsDraft: jest.fn(),
+    };
+
     service = new ApplicationSectionsService(
       applicationsRepository as never,
       sectionsRepository as never,
+      sectionsRules as ApplicationSectionsRulesService,
     );
   });
 
@@ -104,6 +119,7 @@ describe('ApplicationSectionsService', () => {
     applicationsRepository.findByIdWithRelations.mockResolvedValue(
       mockApplication,
     );
+    sectionsRules.assertReadAccess.mockImplementation(() => undefined);
     sectionsRepository.findByApplicationId.mockResolvedValue([baseSection]);
 
     const result = await service.listSections('application-1', {
@@ -124,6 +140,7 @@ describe('ApplicationSectionsService', () => {
     applicationsRepository.findByIdWithRelations.mockResolvedValue(
       mockApplication,
     );
+    sectionsRules.assertReadAccess.mockImplementation(() => undefined);
     sectionsRepository.findByApplicationId.mockResolvedValue([
       {
         ...baseSection,
@@ -158,6 +175,12 @@ describe('ApplicationSectionsService', () => {
     applicationsRepository.findByIdWithRelations.mockResolvedValue(
       mockApplication,
     );
+    sectionsRules.assertReadAccess.mockImplementation(() => undefined);
+    sectionsRules.assertReadAccess.mockImplementation(() => {
+      throw new ForbiddenException(
+        'You do not have permission to view this application',
+      );
+    });
 
     await expect(
       service.listSections('application-1', {
@@ -191,12 +214,18 @@ describe('ApplicationSectionsService', () => {
     applicationsRepository.findByIdWithRelations.mockResolvedValue(
       mockApplication,
     );
+    sectionsRules.assertApplicationIsDraft.mockImplementation(() => undefined);
+    sectionsRules.assertWriteAccess.mockImplementation(() => undefined);
     sectionsRepository.upsertSection.mockResolvedValue({
       ...baseSection,
       activeVersion: null,
     });
     sectionsRepository.createHistoryEntry.mockResolvedValue({
       id: 'history-1',
+    });
+    sectionsRepository.setActiveVersion.mockResolvedValue({
+      ...baseSection,
+      activeVersion: 2,
     });
 
     const result = await service.upsertSection(
@@ -227,6 +256,11 @@ describe('ApplicationSectionsService', () => {
       'user-1',
       transactionClient,
     );
+    expect(sectionsRepository.setActiveVersion).toHaveBeenCalledWith(
+      'section-1',
+      2,
+      transactionClient,
+    );
     expect(result.key).toBe('profile');
   });
 
@@ -239,6 +273,12 @@ describe('ApplicationSectionsService', () => {
     applicationsRepository.findByIdWithRelations.mockResolvedValue(
       mockApplication,
     );
+    sectionsRules.assertApplicationIsDraft.mockImplementation(() => undefined);
+    sectionsRules.assertWriteAccess.mockImplementation(() => {
+      throw new ForbiddenException(
+        'Only team lead can update application sections',
+      );
+    });
 
     await expect(
       service.upsertSection(
@@ -258,10 +298,48 @@ describe('ApplicationSectionsService', () => {
     expect(sectionsRepository.upsertSection).not.toHaveBeenCalled();
   });
 
+  it('upsertSection forbids non-draft applications', async () => {
+    const transactionClient = { tx: 'db-client' } as never;
+
+    applicationsRepository.transaction.mockImplementation(
+      (fn: (db: never) => Promise<unknown>) => fn(transactionClient),
+    );
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...mockApplication,
+      status: ApplicationStatus.SUBMITTED,
+    });
+    sectionsRules.assertApplicationIsDraft.mockImplementation(() => {
+      throw new BadRequestException(
+        'Only draft applications can be modified (status: SUBMITTED)',
+      );
+    });
+
+    await expect(
+      service.upsertSection(
+        'application-1',
+        'profile',
+        {
+          valueJson: { name: 'Jane' },
+        },
+        {
+          id: 'user-1',
+          email: 'lead@example.com',
+          role: UserRole.STUDENT,
+        } as never,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(sectionsRepository.upsertSection).not.toHaveBeenCalled();
+  });
+
   it('getSectionHistory requires admin', async () => {
     applicationsRepository.findByIdWithRelations.mockResolvedValue(
       mockApplication,
     );
+    sectionsRules.assertAdminAccess.mockImplementation(() => undefined);
+    sectionsRules.assertAdminAccess.mockImplementation(() => {
+      throw new ForbiddenException('Admin access required');
+    });
 
     await expect(
       service.getSectionHistory('application-1', 'profile', {
@@ -278,6 +356,7 @@ describe('ApplicationSectionsService', () => {
     applicationsRepository.findByIdWithRelations.mockResolvedValue(
       mockApplication,
     );
+    sectionsRules.assertAdminAccess.mockImplementation(() => undefined);
     sectionsRepository.findByApplicationIdAndKey.mockResolvedValue(baseSection);
     sectionsRepository.findHistoryBySectionId.mockResolvedValue([
       {
@@ -320,6 +399,7 @@ describe('ApplicationSectionsService', () => {
     applicationsRepository.findByIdWithRelations.mockResolvedValue(
       mockApplication,
     );
+    sectionsRules.assertAdminAccess.mockImplementation(() => undefined);
     sectionsRepository.findByApplicationIdAndKey.mockResolvedValue(baseSection);
     sectionsRepository.findHistoryEntry.mockResolvedValue(null);
 
@@ -355,6 +435,7 @@ describe('ApplicationSectionsService', () => {
     applicationsRepository.findByIdWithRelations.mockResolvedValue(
       mockApplication,
     );
+    sectionsRules.assertAdminAccess.mockImplementation(() => undefined);
     sectionsRepository.findByApplicationIdAndKey
       .mockResolvedValueOnce(baseSection)
       .mockResolvedValueOnce(updatedSection);

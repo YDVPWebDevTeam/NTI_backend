@@ -11,6 +11,7 @@ import { ApplicationsRepository } from './applications.repository';
 import { ApplicationsService } from './applications.service';
 import { CallsRepository } from './calls.repository';
 import { ApplicationRulesService } from './rules/application-rules.service';
+import { ApplicationSectionsRulesService } from './rules/application-sections-rules.service';
 import { TeamModule } from '../team/team.module';
 
 @Module({
@@ -23,6 +24,7 @@ import { TeamModule } from '../team/team.module';
     ApplicationDocumentsRepository,
     CallsRepository,
     ApplicationRulesService,
+    ApplicationSectionsRulesService,
     ApplicationsService,
     ApplicationSectionsService,
   ],

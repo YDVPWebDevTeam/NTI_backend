@@ -348,6 +348,11 @@ export const SetActiveSectionVersionApi = () =>
     extraDecorators: [ApiBearerAuth('access-token')],
     errors: [
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
+      ApiBadRequestResponse({
+        description:
+          'Request body validation failed, for example version must be an integer greater than or equal to 1.',
+      }),
       ApiBadRequestResponse({ description: 'Version not found in history.' }),
       ApiForbiddenResponse({ description: 'Admin access required.' }),
       ApiNotFoundResponse({

@@ -1,6 +1,7 @@
 import type { PdfTemplateRenderOptions } from '../pdf/pdf.types';
 
 import { UserRole } from '../../../generated/prisma/enums';
+import type { ConfirmationPath } from '../../auth/confirmation-paths';
 
 export const EMAIL_JOBS = {
   PASSWORD_RESET: 'password-reset',
@@ -20,7 +21,7 @@ export interface EmailJobData {
   [EMAIL_JOBS.USER_CONFIRMATION]: {
     email: string;
     token: string;
-    confirmationPath: string;
+    confirmationPath: ConfirmationPath;
   };
 
   [EMAIL_JOBS.SYSTEM_INVITE_SENT]: {

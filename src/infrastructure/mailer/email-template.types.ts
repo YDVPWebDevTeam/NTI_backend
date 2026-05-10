@@ -1,4 +1,5 @@
 import { UserRole } from '../../../generated/prisma/enums';
+import type { ConfirmationPath } from '../../auth/confirmation-paths';
 
 export const EMAIL_TEMPLATES = {
   PASSWORD_RESET: 'password-reset',
@@ -18,7 +19,7 @@ export interface EmailTemplateDataByName {
   [EMAIL_TEMPLATES.PASSWORD_RESET]: { token: string };
   [EMAIL_TEMPLATES.USER_CONFIRMATION]: {
     token: string;
-    confirmationPath: string;
+    confirmationPath: ConfirmationPath;
   };
   [EMAIL_TEMPLATES.SYSTEM_INVITE]: {
     token: string;

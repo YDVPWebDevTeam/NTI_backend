@@ -1,6 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '../config';
 import { UserRole } from '../../../generated/prisma/enums';
+import type { ConfirmationPath } from '../../auth/confirmation-paths';
 import { EmailTemplateRegistryService } from './email-template-registry.service';
 import {
   EMAIL_TEMPLATES,
@@ -68,7 +69,7 @@ export class MailerService {
   async sendConfirmationEmail(
     email: string,
     token: string,
-    confirmationPath: string,
+    confirmationPath: ConfirmationPath,
   ): Promise<void> {
     await this.sendTemplate(email, EMAIL_TEMPLATES.USER_CONFIRMATION, {
       token,

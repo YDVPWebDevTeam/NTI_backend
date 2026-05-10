@@ -11,11 +11,10 @@ import { RegisterViaInviteDto } from './dto/register-via-invite.dto';
 import { EmailVerificationService } from './email-verification/email-verification.service';
 import { HashingService } from '../infrastructure/hashing';
 import { InvitesService } from '../invites/invites.service';
+import { getConfirmationPathByRole } from './confirmation-paths';
 
 const REGISTER_VIA_INVITE_SUCCESS_MESSAGE =
   'Registration via invite completed successfully.';
-const STUDENT_CONFIRMATION_PATH = '/register/student';
-const COMPANY_OWNER_CONFIRMATION_PATH = '/register/company-owner/confirm-email';
 
 @Injectable()
 export class AuthRegistrationService {
@@ -127,10 +126,7 @@ export class AuthRegistrationService {
     await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
       email: user.email,
       token: verificationToken.token,
-      confirmationPath:
-        input.role === UserRole.COMPANY_OWNER
-          ? COMPANY_OWNER_CONFIRMATION_PATH
-          : STUDENT_CONFIRMATION_PATH,
+      confirmationPath: getConfirmationPathByRole(input.role),
     });
 
     return toAuthenticatedUserContext(user);

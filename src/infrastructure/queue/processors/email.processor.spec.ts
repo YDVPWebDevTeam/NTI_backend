@@ -4,6 +4,7 @@ jest.mock('../../mailer/mailer.service', () => ({
 
 import { Job } from 'bullmq';
 import { UserRole } from '../../../../generated/prisma/enums';
+import type { ConfirmationPath } from '../../../auth/confirmation-paths';
 import { EMAIL_JOBS } from '../queue.types';
 import { MailerService } from '../../mailer/mailer.service';
 import { EmailProcessor } from './email.processor';
@@ -79,7 +80,7 @@ describe('EmailProcessor', () => {
       {
         email: string;
         token: string;
-        confirmationPath: string;
+        confirmationPath: ConfirmationPath;
       },
       void,
       typeof EMAIL_JOBS.USER_CONFIRMATION

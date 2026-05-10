@@ -186,10 +186,12 @@ model User {
 
   uploads UploadedFile[]
 
-  applicationsCreated           Application[]         @relation("ApplicationCreatedBy")
-  applicationDocumentsCreated   ApplicationDocument[] @relation("ApplicationDocumentCreatedBy")
-  applicationDocumentsForMember ApplicationDocument[] @relation("ApplicationDocumentMember")
-  productOwnerForBacklogItems   BacklogItem[]         @relation("BacklogItemProductOwner")
+  applicationsCreated           Application[]               @relation("ApplicationCreatedBy")
+  updatedApplicationSections    ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
+  applicationSectionHistories   ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
+  applicationDocumentsCreated   ApplicationDocument[]       @relation("ApplicationDocumentCreatedBy")
+  applicationDocumentsForMember ApplicationDocument[]       @relation("ApplicationDocumentMember")
+  productOwnerForBacklogItems   BacklogItem[]               @relation("BacklogItemProductOwner")
 
   needsInfoItemsCreated          NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
   needsInfoItemsResolved         NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
@@ -308,6 +310,8 @@ model Application {
   submittedAt DateTime?
   decidedAt   DateTime?
 
+  sections ApplicationSection[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -384,6 +388,39 @@ model ApplicationDocument {
   @@index([applicationId, documentScope, isActive])
   @@index([applicationId, memberUserId, documentType, isActive])
   @@index([uploadedFileId])
+}
+
+model ApplicationSection {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  key           String
+  valueJson     Json
+  version       Int                         @default(1)
+  activeVersion Int?
+  history       ApplicationSectionHistory[]
+
+  updatedById String
+  updatedBy   User   @relation("ApplicationSectionUpdatedBy", fields: [updatedById], references: [id])
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([applicationId, key])
+}
+
+model ApplicationSectionHistory {
+  id        String             @id @default(uuid())
+  sectionId String
+  section   ApplicationSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  version   Int
+  valueJson Json
+  savedById String
+  savedBy   User               @relation("SectionHistorySavedBy", fields: [savedById], references: [id])
+  createdAt DateTime           @default(now())
+
+  @@unique([sectionId, version])
 }
 
 model NeedsInfoItem {

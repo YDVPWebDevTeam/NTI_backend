@@ -10,6 +10,8 @@ import {
 import { ProgramType } from '../../../generated/prisma/enums';
 import { createPaginationQueryDecorators } from '../../common/pagination';
 import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
+import { ApplicationSectionDto } from '../dto/application-section.dto';
+import { ApplicationSectionHistoryDto } from '../dto/application-section-history.dto';
 import { ApplicationDetailDto } from '../dto/application-detail.dto';
 import { ApplicationDocumentDto } from '../dto/application-document.dto';
 import { AttachApplicationDocumentDto } from '../dto/attach-application-document.dto';
@@ -25,6 +27,8 @@ import { PUBLIC_CALL_SORT_VALUES } from '../dto/public-calls-query.dto';
 import { PublicCallsResponseDto } from '../dto/public-calls-response.dto';
 import { RequiredDocumentsResponseDto } from '../dto/required-documents-response.dto';
 import { ResubmitApplicationDto } from '../dto/resubmit-application.dto';
+import { SetActiveSectionVersionDto } from '../dto/set-active-section-version.dto';
+import { UpsertApplicationSectionDto } from '../dto/upsert-application-section.dto';
 
 export const CreateApplicationApi = () =>
   createApiDecorator({
@@ -214,9 +218,27 @@ export const GetApplicationDocumentCompletenessApi = () =>
     extraDecorators: [ApiBearerAuth('access-token')],
     errors: [
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
-      ApiBadRequestResponse({
-        description: 'Invalid application id format.',
-      }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
+      ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const ListApplicationSectionsApi = () =>
+  createApiDecorator({
+    summary: 'List application sections',
+    description:
+      'Returns all sections for an application with resolved active values.',
+    successResponse: {
+      status: 200,
+      type: ApplicationSectionDto,
+      isArray: true,
+      description: 'Application sections.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
       ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],
@@ -245,6 +267,28 @@ export const SubmitApplicationApi = () =>
       ApiConflictResponse({
         description:
           'Call is not open for applications, application is not in a submittable state, or required documents are missing.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const UpsertApplicationSectionApi = () =>
+  createApiDecorator({
+    summary: 'Upsert application section',
+    description:
+      'Creates or updates one application section and stores its history snapshot.',
+    body: UpsertApplicationSectionDto,
+    successResponse: {
+      status: 200,
+      type: ApplicationSectionDto,
+      description: 'Application section was saved.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid identifiers or payload.' }),
+      ApiForbiddenResponse({
+        description: 'Only team lead can update sections.',
       }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],
@@ -307,6 +351,26 @@ export const ReplyToNeedsInfoItemApi = () =>
     ],
   });
 
+export const GetSectionHistoryApi = () =>
+  createApiDecorator({
+    summary: 'Get section change history',
+    description: 'Returns the history snapshots for a section. Admin only.',
+    successResponse: {
+      status: 200,
+      type: ApplicationSectionHistoryDto,
+      isArray: true,
+      description: 'Section history entries.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiForbiddenResponse({ description: 'Admin access required.' }),
+      ApiNotFoundResponse({
+        description: 'Application or section was not found.',
+      }),
+    ],
+  });
+
 export const ResubmitApplicationApi = () =>
   createApiDecorator({
     summary: 'Resubmit application after needs-info replies',
@@ -353,5 +417,32 @@ export const GetNeedsInfoThreadApi = () =>
         description: 'User has no access to this application.',
       }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const SetActiveSectionVersionApi = () =>
+  createApiDecorator({
+    summary: 'Set active section version',
+    description:
+      'Pins a historical version as the active payload for a section. Admin only.',
+    body: SetActiveSectionVersionDto,
+    successResponse: {
+      status: 200,
+      type: ApplicationSectionDto,
+      description: 'Active section version was updated.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
+      ApiBadRequestResponse({
+        description:
+          'Request body validation failed, for example version must be an integer greater than or equal to 1.',
+      }),
+      ApiBadRequestResponse({ description: 'Version not found in history.' }),
+      ApiForbiddenResponse({ description: 'Admin access required.' }),
+      ApiNotFoundResponse({
+        description: 'Application or section was not found.',
+      }),
     ],
   });

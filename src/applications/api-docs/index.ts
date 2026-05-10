@@ -9,7 +9,11 @@ export {
   GetPublicCallByIdApi,
   GetPublicCallsApi,
   GetRequiredDocumentsApi,
+  GetSectionHistoryApi,
+  ListApplicationSectionsApi,
   ReplyToNeedsInfoItemApi,
   ResubmitApplicationApi,
+  SetActiveSectionVersionApi,
   SubmitApplicationApi,
+  UpsertApplicationSectionApi,
 } from './applications-api-docs.decorators';

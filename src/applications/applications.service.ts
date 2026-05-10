@@ -25,7 +25,7 @@ import type { AuthenticatedUserContext } from '../common/types/auth-user-context
 import { FilesRepository } from '../files/files.repository';
 import { TeamRepository } from '../team/team.repository';
 import { ApplicationDocumentsRepository } from './application-documents.repository';
-import { ApplicationRulesService } from './application-rules.service';
+import { ApplicationRulesService } from './rules/application-rules.service';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationDocumentDto } from './dto/application-document.dto';
 import { ApplicationStatusEventDto } from './dto/application-status-event.dto';

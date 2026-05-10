@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Put,
   Post,
   Query,
   UseGuards,
@@ -21,13 +22,19 @@ import {
   GetApplicationApi,
   GetApplicationDocumentCompletenessApi,
   GetNeedsInfoThreadApi,
+  GetSectionHistoryApi,
+  ListApplicationSectionsApi,
   GetPublicActiveCallsApi,
   GetPublicCallByIdApi,
   GetPublicCallsApi,
   ReplyToNeedsInfoItemApi,
   ResubmitApplicationApi,
+  SetActiveSectionVersionApi,
   SubmitApplicationApi,
+  UpsertApplicationSectionApi,
 } from './api-docs';
+import { ApplicationSectionDto } from './dto/application-section.dto';
+import { ApplicationSectionHistoryDto } from './dto/application-section-history.dto';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationDocumentDto } from './dto/application-document.dto';
 import { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
@@ -42,12 +49,18 @@ import { PublicCallDto } from './dto/public-call.dto';
 import { PublicCallsQueryDto } from './dto/public-calls-query.dto';
 import { PublicCallsResponseDto } from './dto/public-calls-response.dto';
 import { ResubmitApplicationDto } from './dto/resubmit-application.dto';
+import { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
+import { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
 import { ApplicationsService } from './applications.service';
+import { ApplicationSectionsService } from './application-sections.service';
 
 @ApiTags('Applications')
 @Controller('applications')
 export class ApplicationsController {
-  constructor(private readonly applicationsService: ApplicationsService) {}
+  constructor(
+    private readonly applicationsService: ApplicationsService,
+    private readonly sectionsService: ApplicationSectionsService,
+  ) {}
 
   @GetPublicCallsApi()
   @Get('calls')
@@ -168,5 +181,46 @@ export class ApplicationsController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<NeedsInfoThreadDto> {
     return this.applicationsService.getNeedsInfoThread(id, user);
+  }
+
+  @ListApplicationSectionsApi()
+  @Get(':applicationId/sections')
+  listSections(
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ApplicationSectionDto[]> {
+    return this.sectionsService.listSections(applicationId, user);
+  }
+
+  @UpsertApplicationSectionApi()
+  @Put(':applicationId/sections/:key')
+  upsertSection(
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Param('key') key: string,
+    @Body() dto: UpsertApplicationSectionDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ApplicationSectionDto> {
+    return this.sectionsService.upsertSection(applicationId, key, dto, user);
+  }
+
+  @GetSectionHistoryApi()
+  @Get(':applicationId/sections/:key/history')
+  getSectionHistory(
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Param('key') key: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ApplicationSectionHistoryDto[]> {
+    return this.sectionsService.getSectionHistory(applicationId, key, user);
+  }
+
+  @SetActiveSectionVersionApi()
+  @Put(':applicationId/sections/:key/active-version')
+  setActiveVersion(
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Param('key') key: string,
+    @Body() dto: SetActiveSectionVersionDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ApplicationSectionDto> {
+    return this.sectionsService.setActiveVersion(applicationId, key, dto, user);
   }
 }

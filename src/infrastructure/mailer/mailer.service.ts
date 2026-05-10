@@ -1,23 +1,28 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '../config';
 import { UserRole } from '../../../generated/prisma/enums';
+import { EmailTemplateRegistryService } from './email-template-registry.service';
+import {
+  EMAIL_TEMPLATES,
+  type EmailTemplateDataByName,
+  type EmailTemplateName,
+} from './email-template.types';
 
 @Injectable()
 export class MailerService {
   private readonly brevoSendEmailUrl = 'https://api.brevo.com/v3/smtp/email';
 
-  private escapeHtml(value: string): string {
-    return value
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#39;');
-  }
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly emailTemplateRegistryService: EmailTemplateRegistryService,
+  ) {}
 
-  constructor(private readonly configService: ConfigService) {}
-
-  async sendEmail(to: string, subject: string, html: string): Promise<void> {
+  async sendEmail(
+    to: string,
+    subject: string,
+    html: string,
+    text?: string,
+  ): Promise<void> {
     try {
       const response = await fetch(this.brevoSendEmailUrl, {
         method: 'POST',
@@ -31,6 +36,7 @@ export class MailerService {
           to: [{ email: to }],
           subject,
           htmlContent: html,
+          textContent: text,
         }),
       });
 
@@ -50,16 +56,24 @@ export class MailerService {
     }
   }
 
-  async sendConfirmationEmail(email: string, token: string): Promise<void> {
-    const link = `${this.configService.frontUrl}/confirm?token=${token}`;
+  async sendTemplate<K extends EmailTemplateName>(
+    to: string,
+    template: K,
+    data: EmailTemplateDataByName[K],
+  ): Promise<void> {
+    const rendered = this.emailTemplateRegistryService.render(template, data);
+    await this.sendEmail(to, rendered.subject, rendered.html, rendered.text);
+  }
 
-    const html = `
-        <h1>Hello, please confirm your email address via this link </h1>
-        <p>click the link</p>
-        <a href="${link}">${link}</a>
-        `;
-
-    await this.sendEmail(email, 'Email confirmation', html);
+  async sendConfirmationEmail(
+    email: string,
+    token: string,
+    confirmationPath: string,
+  ): Promise<void> {
+    await this.sendTemplate(email, EMAIL_TEMPLATES.USER_CONFIRMATION, {
+      token,
+      confirmationPath,
+    });
   }
 
   async sendTeamConfirm(
@@ -67,33 +81,14 @@ export class MailerService {
     teamName: string,
     token: string,
   ): Promise<void> {
-    const link = `${this.configService.frontUrl}/invite?token=${token}`;
-
-    const html = `
-        <h1>Team invitation</h1>
-
-        <p>Hey, you have been invited to: <b>${teamName}</b></p>
-
-        <a href="${link}">Confirm invitation</a>
-
-        `;
-
-    await this.sendEmail(email, 'Team Invitation', html);
+    await this.sendTemplate(email, EMAIL_TEMPLATES.TEAM_INVITATION, {
+      teamName,
+      token,
+    });
   }
 
   async sendPasswordResetEmail(email: string, token: string): Promise<void> {
-    const link = `${this.configService.frontUrl}/reset-password?token=${token}`;
-
-    const html = `
-        <h1>Password reset</h1>
-
-        <p>You requested a password reset for your account.</p>
-        <p>If this was you, use the link below to choose a new password:</p>
-
-        <a href="${link}">${link}</a>
-        `;
-
-    await this.sendEmail(email, 'Password reset', html);
+    await this.sendTemplate(email, EMAIL_TEMPLATES.PASSWORD_RESET, { token });
   }
 
   async sendSystemInvite(
@@ -101,15 +96,10 @@ export class MailerService {
     token: string,
     roleToAssign: UserRole,
   ): Promise<void> {
-    const link = `${this.configService.frontUrl}/invite?token=${token}`;
-
-    const html = `
-        <h1>System invitation</h1>
-        <p>You have been invited as <b>${roleToAssign}</b>.</p>
-        <a href="${link}">Accept invitation</a>
-        `;
-
-    await this.sendEmail(email, 'System Invitation', html);
+    await this.sendTemplate(email, EMAIL_TEMPLATES.SYSTEM_INVITE, {
+      token,
+      roleToAssign,
+    });
   }
 
   async sendOrgInviteEmail(
@@ -117,32 +107,19 @@ export class MailerService {
     token: string,
     organizationName: string,
   ): Promise<void> {
-    const link = `${this.configService.frontUrl}/invite?token=${token}`;
-
-    const html = `
-        <h1>Organization invitation</h1>
-        <p>You have been invited to join <b>${organizationName}</b>.</p>
-        <a href="${link}">Accept invitation</a>
-        `;
-
-    await this.sendEmail(email, 'Organization Invitation', html);
+    await this.sendTemplate(email, EMAIL_TEMPLATES.ORG_INVITE, {
+      token,
+      organizationName,
+    });
   }
 
   async sendOrgPendingReviewEmail(
     email: string,
     organizationId: string,
   ): Promise<void> {
-    const link = `${this.configService.frontUrl}/admin/organizations/${organizationId}`;
-
-    const html = `
-      <h1>New organization pending review</h1>
-
-      <p>A new organization has been created and requires review.</p>
-
-      <a href="${link}">Review organization</a>
-  `;
-
-    await this.sendEmail(email, 'Organization pending review', html);
+    await this.sendTemplate(email, EMAIL_TEMPLATES.ORG_PENDING_REVIEW, {
+      organizationId,
+    });
   }
 
   async sendOrgApprovedEmail(
@@ -150,18 +127,10 @@ export class MailerService {
     organizationId: string,
     organizationName: string,
   ): Promise<void> {
-    const link = `${this.configService.frontUrl}/organization/${organizationId}`;
-    const safeOrganizationName = this.escapeHtml(organizationName);
-
-    const html = `
-      <h1>Organization approved</h1>
-
-      <p>Your organization <b>${safeOrganizationName}</b> has been approved.</p>
-
-      <a href="${link}">Open organization</a>
-  `;
-
-    await this.sendEmail(email, 'Organization approved', html);
+    await this.sendTemplate(email, EMAIL_TEMPLATES.ORG_APPROVED, {
+      organizationId,
+      organizationName,
+    });
   }
 
   async sendOrgRejectedEmail(
@@ -170,19 +139,10 @@ export class MailerService {
     organizationName: string,
     rejectionReason: string,
   ): Promise<void> {
-    const link = `${this.configService.frontUrl}/organization/${organizationId}`;
-    const safeOrganizationName = this.escapeHtml(organizationName);
-    const safeRejectionReason = this.escapeHtml(rejectionReason);
-
-    const html = `
-      <h1>Organization rejected</h1>
-
-      <p>Your organization <b>${safeOrganizationName}</b> was rejected.</p>
-      <p><b>Reason:</b> ${safeRejectionReason}</p>
-
-      <a href="${link}">Open organization</a>
-  `;
-
-    await this.sendEmail(email, 'Organization rejected', html);
+    await this.sendTemplate(email, EMAIL_TEMPLATES.ORG_REJECTED, {
+      organizationId,
+      organizationName,
+      rejectionReason,
+    });
   }
 }

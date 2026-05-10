@@ -17,7 +17,11 @@ export type EmailJobName = (typeof EMAIL_JOBS)[keyof typeof EMAIL_JOBS];
 export interface EmailJobData {
   [EMAIL_JOBS.PASSWORD_RESET]: { userId: string; email: string; token: string };
 
-  [EMAIL_JOBS.USER_CONFIRMATION]: { email: string; token: string };
+  [EMAIL_JOBS.USER_CONFIRMATION]: {
+    email: string;
+    token: string;
+    confirmationPath: string;
+  };
 
   [EMAIL_JOBS.SYSTEM_INVITE_SENT]: {
     email: string;

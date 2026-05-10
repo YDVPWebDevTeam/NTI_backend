@@ -57,6 +57,8 @@ export type MessageResponse = {
 
 const FORGOT_PASSWORD_SUCCESS_MESSAGE =
   'If the email exists, a reset link was sent.';
+const STUDENT_CONFIRMATION_PATH = '/register/student';
+const COMPANY_OWNER_CONFIRMATION_PATH = '/register/company-owner/confirm-email';
 const RESET_PASSWORD_SUCCESS_MESSAGE = 'Password reset successfully.';
 const INVALID_RESET_TOKEN_MESSAGE = 'Invalid or expired password reset token';
 
@@ -255,7 +257,14 @@ export class AuthService {
     await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
       email: user.email,
       token: verificationToken.token,
+      confirmationPath: this.getConfirmationPathByRole(user.role),
     });
+  }
+
+  private getConfirmationPathByRole(role: UserRole): string {
+    return role === UserRole.COMPANY_OWNER
+      ? COMPANY_OWNER_CONFIRMATION_PATH
+      : STUDENT_CONFIRMATION_PATH;
   }
 
   async forceChangePassword(

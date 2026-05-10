@@ -14,6 +14,8 @@ import { InvitesService } from '../invites/invites.service';
 
 const REGISTER_VIA_INVITE_SUCCESS_MESSAGE =
   'Registration via invite completed successfully.';
+const STUDENT_CONFIRMATION_PATH = '/register/student';
+const COMPANY_OWNER_CONFIRMATION_PATH = '/register/company-owner/confirm-email';
 
 @Injectable()
 export class AuthRegistrationService {
@@ -125,6 +127,10 @@ export class AuthRegistrationService {
     await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
       email: user.email,
       token: verificationToken.token,
+      confirmationPath:
+        input.role === UserRole.COMPANY_OWNER
+          ? COMPANY_OWNER_CONFIRMATION_PATH
+          : STUDENT_CONFIRMATION_PATH,
     });
 
     return toAuthenticatedUserContext(user);

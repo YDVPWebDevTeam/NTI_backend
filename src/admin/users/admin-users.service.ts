@@ -50,13 +50,17 @@ export class AdminUsersService {
       ...(query.organizationId && { organizationId: query.organizationId }),
     };
 
-    const primarySort: Prisma.UserOrderByWithRelationInput =
+    // 'name' is not a DB column — sort by firstName then lastName for full-name ordering
+    const primarySorts: Prisma.UserOrderByWithRelationInput[] =
       query.sort === 'name'
-        ? { firstName: resolveSortOrder(query.order) }
-        : { [query.sort]: resolveSortOrder(query.order) };
+        ? [
+            { firstName: resolveSortOrder(query.order) },
+            { lastName: resolveSortOrder(query.order) },
+          ]
+        : [{ [query.sort]: resolveSortOrder(query.order) }];
 
     const orderBy: Prisma.UserOrderByWithRelationInput[] = [
-      primarySort,
+      ...primarySorts,
       { id: 'asc' },
     ];
     const pagination = resolvePagination(query);

@@ -28,12 +28,14 @@ import { OrganizationRepository } from '../../organization/organization.reposito
 import { UserRepository } from '../../user/user.repository';
 import { AdminOrganizationsService } from './admin-organizations.service';
 import { MANAGEABLE_ORG_STATUSES } from './dto/update-org-status.dto';
+import type { ListOrganizationsQueryDto } from './dto/list-organizations-query.dto';
 
 describe('AdminOrganizationsService', () => {
   let service: AdminOrganizationsService;
   let organizationRepository: {
     findUnique: jest.Mock;
     updateMany: jest.Mock;
+    findManyForAdminPaginated: jest.Mock;
   };
   let userRepository: {
     findOrganizationOwner: jest.Mock;
@@ -71,10 +73,18 @@ describe('AdminOrganizationsService', () => {
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
 
+  const defaultQuery: ListOrganizationsQueryDto = {
+    page: 1,
+    limit: 20,
+    sort: 'createdAt',
+    order: 'desc',
+  };
+
   beforeEach(() => {
     organizationRepository = {
       findUnique: jest.fn(),
       updateMany: jest.fn(),
+      findManyForAdminPaginated: jest.fn(),
     };
 
     userRepository = {
@@ -90,6 +100,47 @@ describe('AdminOrganizationsService', () => {
       userRepository as unknown as UserRepository,
       queueService as unknown as QueueService,
     );
+  });
+
+  describe('listOrganizations', () => {
+    it('returns paginated organization list for admins', async () => {
+      organizationRepository.findManyForAdminPaginated.mockResolvedValue({
+        data: [{ ...pendingOrganization, membersCount: 3 }],
+        total: 1,
+      });
+
+      const result = await service.listOrganizations(actorAdmin, defaultQuery);
+
+      expect(
+        organizationRepository.findManyForAdminPaginated,
+      ).toHaveBeenCalled();
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toMatchObject({
+        id: pendingOrganization.id,
+        name: pendingOrganization.name,
+        ico: pendingOrganization.ico,
+        status: pendingOrganization.status,
+        membersCount: 3,
+      });
+      expect(result.meta).toMatchObject({
+        page: 1,
+        limit: 20,
+        total: 1,
+        totalPages: 1,
+        sort: 'createdAt',
+        order: 'desc',
+      });
+    });
+
+    it('throws forbidden when non-admin requests organizations list', async () => {
+      await expect(
+        service.listOrganizations(actorStudent, defaultQuery),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(
+        organizationRepository.findManyForAdminPaginated,
+      ).not.toHaveBeenCalled();
+    });
   });
 
   it('throws when actor is not an administrator', async () => {

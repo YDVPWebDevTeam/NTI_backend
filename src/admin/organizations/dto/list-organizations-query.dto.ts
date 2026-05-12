@@ -1,4 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsEnum, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { OrganizationStatus } from '../../../../generated/prisma/enums';
 import {
@@ -17,6 +18,9 @@ export class ListOrganizationsQueryDto extends PaginationQueryDto {
   })
   @IsOptional()
   @IsString()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @MaxLength(120)
   q?: string;
 
@@ -28,6 +32,9 @@ export class ListOrganizationsQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({ example: 'IT' })
   @IsOptional()
   @IsString()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @MaxLength(120)
   sector?: string;
 

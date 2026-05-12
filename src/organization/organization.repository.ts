@@ -28,20 +28,24 @@ export class OrganizationRepository extends BaseRepository<
     return client.organization;
   }
 
-  async findManyForAdminPaginated(args: {
-    where?: Prisma.OrganizationWhereInput;
-    orderBy?:
-      | Prisma.OrganizationOrderByWithRelationInput
-      | Prisma.OrganizationOrderByWithRelationInput[];
-    skip?: number;
-    take?: number;
-  }): Promise<{ data: OrgWithMembersCount[]; total: number }> {
+  async findManyForAdminPaginated(
+    args: {
+      where?: Prisma.OrganizationWhereInput;
+      orderBy?:
+        | Prisma.OrganizationOrderByWithRelationInput
+        | Prisma.OrganizationOrderByWithRelationInput[];
+      skip?: number;
+      take?: number;
+    },
+    db?: PrismaDbClient,
+  ): Promise<{ data: OrgWithMembersCount[]; total: number }> {
+    const client = db ?? this.prisma.client;
     const [rows, total] = await Promise.all([
-      this.prisma.client.organization.findMany({
+      client.organization.findMany({
         ...args,
         include: { _count: { select: { users: true } } },
       }),
-      this.prisma.client.organization.count({ where: args.where }),
+      client.organization.count({ where: args.where }),
     ]);
 
     return {

@@ -8,6 +8,8 @@ import {
 
 type OrganizationDelegate = PrismaClient['organization'];
 
+export type OrgWithMembersCount = Organization & { membersCount: number };
+
 @Injectable()
 export class OrganizationRepository extends BaseRepository<
   Organization,
@@ -24,5 +26,30 @@ export class OrganizationRepository extends BaseRepository<
   protected getDelegate(db?: PrismaDbClient): OrganizationDelegate {
     const client = db ?? this.prisma.client;
     return client.organization;
+  }
+
+  async findManyForAdminPaginated(args: {
+    where?: Prisma.OrganizationWhereInput;
+    orderBy?:
+      | Prisma.OrganizationOrderByWithRelationInput
+      | Prisma.OrganizationOrderByWithRelationInput[];
+    skip?: number;
+    take?: number;
+  }): Promise<{ data: OrgWithMembersCount[]; total: number }> {
+    const [rows, total] = await Promise.all([
+      this.prisma.client.organization.findMany({
+        ...args,
+        include: { _count: { select: { users: true } } },
+      }),
+      this.prisma.client.organization.count({ where: args.where }),
+    ]);
+
+    return {
+      data: rows.map(({ _count, ...org }) => ({
+        ...org,
+        membersCount: _count.users,
+      })),
+      total,
+    };
   }
 }

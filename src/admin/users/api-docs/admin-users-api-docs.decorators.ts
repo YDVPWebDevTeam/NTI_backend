@@ -1,63 +1,71 @@
-import { applyDecorators } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiForbiddenResponse,
-  ApiOkResponse,
   ApiNotFoundResponse,
-  ApiOperation,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { AuthenticatedUserDto } from '../../../auth/dto/authenticated-user.dto';
 import { createApiDecorator } from '../../../infrastructure/api-docs/api-docs-factory';
+import { createPaginationQueryDecorators } from '../../../common/pagination';
+import { AuthenticatedUserDto } from '../../../auth/dto/authenticated-user.dto';
+import { ListUsersResponseDto } from '../dto/list-users-response.dto';
 import { UpdateUserStatusDto } from '../dto/update-user-status.dto';
+import { USER_SORT_VALUES } from '../dto/list-users-query.dto';
 
 export const GetUsersAdminApi = () =>
-  applyDecorators(
-    ApiOperation({
-      summary: 'Get users',
-      description:
-        'Allows ADMIN and SUPER_ADMIN accounts to fetch all user accounts.',
-    }),
-    ApiOkResponse({
-      type: AuthenticatedUserDto,
-      isArray: true,
-      description: 'Users were fetched successfully.',
-    }),
-    ApiBearerAuth('access-token'),
-    ApiUnauthorizedResponse({
-      description: 'Bearer token is missing or invalid.',
-    }),
-    ApiForbiddenResponse({
-      description: 'Only administrators can access users.',
-    }),
-  );
+  createApiDecorator({
+    summary: 'List users (admin)',
+    description:
+      'Returns a paginated, filterable, and sortable list of all user accounts for administrators.',
+    successResponse: {
+      status: 200,
+      type: ListUsersResponseDto,
+      description: 'Paginated user list.',
+    },
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ...createPaginationQueryDecorators({
+        sortValues: USER_SORT_VALUES,
+        defaultSort: 'createdAt',
+        defaultOrder: 'desc',
+      }),
+    ],
+    errors: [
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only administrators can access users.',
+      }),
+    ],
+  });
 
 export const GetUserByIdAdminApi = () =>
-  applyDecorators(
-    ApiOperation({
-      summary: 'Get user by id',
-      description:
-        'Allows ADMIN and SUPER_ADMIN accounts to fetch one user account by identifier.',
-    }),
-    ApiOkResponse({
+  createApiDecorator({
+    summary: 'Get user by id',
+    description:
+      'Allows ADMIN and SUPER_ADMIN accounts to fetch one user account by identifier.',
+    successResponse: {
+      status: 200,
       type: AuthenticatedUserDto,
       description: 'User was fetched successfully.',
-    }),
-    ApiBearerAuth('access-token'),
-    ApiBadRequestResponse({
-      description: 'User id must be a valid UUID.',
-    }),
-    ApiUnauthorizedResponse({
-      description: 'Bearer token is missing or invalid.',
-    }),
-    ApiForbiddenResponse({
-      description: 'Only administrators can access users.',
-    }),
-    ApiNotFoundResponse({
-      description: 'Target user was not found.',
-    }),
-  );
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiBadRequestResponse({
+        description: 'User id must be a valid UUID.',
+      }),
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only administrators can access users.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Target user was not found.',
+      }),
+    ],
+  });
 
 export const UpdateUserStatusApi = () =>
   createApiDecorator({

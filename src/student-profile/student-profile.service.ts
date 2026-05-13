@@ -5,6 +5,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { UploadStatus } from '../../generated/prisma/enums';
+import { EligibilitySignalsService } from '../applications/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { GetMyStudentProfileResponseDto } from './dto/student-profile.dto';
 import { UpdateAcademicInformationDto } from './dto/update-academic-information.dto';
@@ -17,7 +18,10 @@ import {
 
 @Injectable()
 export class StudentProfileService {
-  constructor(private readonly repository: StudentProfileRepository) {}
+  constructor(
+    private readonly repository: StudentProfileRepository,
+    private readonly eligibilitySignalsService: EligibilitySignalsService,
+  ) {}
 
   async getMyProfile(
     authUser: AuthenticatedUserContext,
@@ -71,6 +75,10 @@ export class StudentProfileService {
     const profile = await this.repository.upsertAcademicInformation(
       authUser.id,
       dto,
+    );
+
+    await this.eligibilitySignalsService.recomputeForStudentApplications(
+      authUser.id,
     );
 
     return this.toMyProfileResponse(profile);

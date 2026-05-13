@@ -2,6 +2,10 @@ jest.mock('./student-profile.repository', () => ({
   StudentProfileRepository: class StudentProfileRepository {},
 }));
 
+jest.mock('../applications/eligibility-signals.service', () => ({
+  EligibilitySignalsService: class EligibilitySignalsService {},
+}));
+
 import {
   BadRequestException,
   NotFoundException,
@@ -14,6 +18,7 @@ import {
   StudentSkillLevel,
   UploadStatus,
 } from '../../generated/prisma/enums';
+import { EligibilitySignalsService } from '../applications/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { ProfileNotFoundError } from './student-profile.errors';
 import { StudentProfileService } from './student-profile.service';
@@ -31,6 +36,9 @@ describe('StudentProfileService', () => {
     replaceProfessionalSkills: jest.Mock;
     markCompleted: jest.Mock;
     transaction: jest.Mock;
+  };
+  let eligibilitySignalsService: {
+    recomputeForStudentApplications: jest.Mock;
   };
 
   const authUser: AuthenticatedUserContext = {
@@ -123,7 +131,14 @@ describe('StudentProfileService', () => {
       ),
     };
 
-    service = new StudentProfileService(repository as never);
+    eligibilitySignalsService = {
+      recomputeForStudentApplications: jest.fn().mockResolvedValue(undefined),
+    };
+
+    service = new StudentProfileService(
+      repository as never,
+      eligibilitySignalsService as unknown as EligibilitySignalsService,
+    );
   });
 
   it('returns an empty profile payload when user exists but profile is missing', async () => {
@@ -146,6 +161,35 @@ describe('StudentProfileService', () => {
     );
   });
 
+  it('updates academic information and recomputes eligibility signals', async () => {
+    const result = await service.updateAcademicInformation(authUser, {
+      universityId: 'university-1',
+      facultyId: 'faculty-1',
+      specializationId: 'specialization-1',
+      degreeLevel: DegreeLevel.BACHELOR,
+      studyYear: 2,
+      hasTransferredSubjects: false,
+      academicDeclarationAccepted: true,
+    });
+
+    expect(repository.upsertAcademicInformation).toHaveBeenCalledWith(
+      authUser.id,
+      {
+        universityId: 'university-1',
+        facultyId: 'faculty-1',
+        specializationId: 'specialization-1',
+        degreeLevel: DegreeLevel.BACHELOR,
+        studyYear: 2,
+        hasTransferredSubjects: false,
+        academicDeclarationAccepted: true,
+      },
+    );
+    expect(
+      eligibilitySignalsService.recomputeForStudentApplications,
+    ).toHaveBeenCalledWith(authUser.id);
+    expect(result.user.id).toBe(authUser.id);
+  });
+
   it('rejects academic update when declaration is not accepted', async () => {
     await expect(
       service.updateAcademicInformation(authUser, {
@@ -160,6 +204,9 @@ describe('StudentProfileService', () => {
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
     expect(repository.upsertAcademicInformation).not.toHaveBeenCalled();
+    expect(
+      eligibilitySignalsService.recomputeForStudentApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('maps ProfileNotFoundError to a user-facing UnprocessableEntityException', async () => {

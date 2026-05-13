@@ -47,6 +47,7 @@ import { CreateMentorshipNoteDto } from './dto/create-mentorship-note.dto';
 import { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
 import { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from './dto/document-completeness.dto';
+import { EligibilitySignalsResponseDto } from './dto/eligibility-signal.dto';
 import { MentorAssignmentDto } from './dto/mentor-assignment.dto';
 import { ProgramAMentorshipNoteDto } from './dto/program-a-mentorship-note.dto';
 import { NeedsInfoItemDto } from './dto/needs-info-item.dto';
@@ -132,6 +133,14 @@ export class ApplicationsController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<DocumentCompletenessDto> {
     return this.applicationsService.getDocumentCompleteness(id, user);
+  }
+
+  @Get(':id/eligibility-signals')
+  getEligibilitySignals(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<EligibilitySignalsResponseDto> {
+    return this.applicationsService.getEligibilitySignals(id, user);
   }
 
   @SubmitApplicationApi()

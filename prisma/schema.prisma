@@ -291,9 +291,10 @@ model Call {
 
   applications Application[]
 
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  requiredDocumentTypes RequiredDocumentType[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  requiredDocumentTypes  RequiredDocumentType[]
+  eligibilityRuleConfigs EligibilityRuleConfig[]
 
   @@index([type, status])
   @@index([status, opensAt, closesAt])
@@ -312,14 +313,15 @@ model Application {
   createdBy   User                  @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
   documents   ApplicationDocument[]
 
+  needsInfoItems     NeedsInfoItem[]
+  statusEvents       ApplicationStatusEvent[]
+  eligibilitySignals EligibilitySignal[]
   mentorUserId       String?
-  mentorUser         User?     @relation("ApplicationAssignedMentor", fields: [mentorUserId], references: [id], onDelete: SetNull)
+  mentorUser         User?                    @relation("ApplicationAssignedMentor", fields: [mentorUserId], references: [id], onDelete: SetNull)
   mentorAssignedAt   DateTime?
   mentorAssignedById String?
-  mentorAssignedBy   User?     @relation("ApplicationMentorAssignedBy", fields: [mentorAssignedById], references: [id], onDelete: SetNull)
+  mentorAssignedBy   User?                    @relation("ApplicationMentorAssignedBy", fields: [mentorAssignedById], references: [id], onDelete: SetNull)
 
-  needsInfoItems  NeedsInfoItem[]
-  statusEvents    ApplicationStatusEvent[]
   mentorshipNotes ProgramAMentorshipNote[]
 
   status      ApplicationStatus @default(DRAFT)
@@ -353,6 +355,36 @@ model ProgramAMentorshipNote {
 
   @@index([applicationId, createdAt, id])
   @@index([authorId, createdAt])
+}
+
+model EligibilitySignal {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  code      String
+  passed    Boolean
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([applicationId, code])
+  @@index([applicationId])
+}
+
+model EligibilityRuleConfig {
+  id String @id @default(uuid())
+
+  callId String
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  code      String
+  enabled   Boolean  @default(true)
+  threshold String?
+  createdAt DateTime @default(now())
+
+  @@unique([callId, code])
 }
 
 model BacklogItem {

@@ -38,6 +38,7 @@ import { CreateMentorshipNoteDto } from './dto/create-mentorship-note.dto';
 import { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
 import { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from './dto/document-completeness.dto';
+import { EligibilitySignalsResponseDto } from './dto/eligibility-signal.dto';
 import { MentorAssignmentDto } from './dto/mentor-assignment.dto';
 import { MentorshipNoteAuthorDto } from './dto/mentorship-note-author.dto';
 import { NeedsInfoItemDto } from './dto/needs-info-item.dto';
@@ -55,6 +56,7 @@ import {
   ApplicationWorkflowView,
 } from './applications.repository';
 import { CallsRepository } from './calls.repository';
+import { EligibilitySignalsService } from './eligibility-signals.service';
 import { NeedsInfoRepository } from './needs-info.repository';
 import {
   ProgramAMentorshipNoteWithAuthor,
@@ -100,6 +102,7 @@ export class ApplicationsService {
     private readonly teamRepository: TeamRepository,
     private readonly filesRepository: FilesRepository,
     private readonly needsInfoRepository: NeedsInfoRepository,
+    private readonly eligibilitySignalsService: EligibilitySignalsService,
     private readonly programAMentorshipRepository: ProgramAMentorshipRepository,
     private readonly userRepository: UserRepository,
   ) {}
@@ -314,6 +317,32 @@ export class ApplicationsService {
     return this.buildDocumentCompleteness(application);
   }
 
+  async getEligibilitySignals(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<EligibilitySignalsResponseDto> {
+    const application =
+      await this.applicationsRepository.findByIdWithRelations(applicationId);
+
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    this.validateEligibilitySignalsAccess(application, user);
+
+    await this.eligibilitySignalsService.recomputeForApplication(applicationId);
+
+    const signals =
+      await this.eligibilitySignalsService.getSignalsForApplication(
+        applicationId,
+      );
+
+    return {
+      applicationId,
+      signals,
+    };
+  }
+
   async submit(
     applicationId: string,
     user: AuthenticatedUserContext,
@@ -341,6 +370,11 @@ export class ApplicationsService {
 
         const now = new Date();
         await this.applicationsRepository.submitDraft(application.id, now, db);
+
+        await this.eligibilitySignalsService.recomputeForApplication(
+          application.id,
+          db,
+        );
 
         if (application.team.lockedAt === null) {
           await this.teamRepository.update(
@@ -892,6 +926,31 @@ export class ApplicationsService {
     if (!isTeamMember) {
       throw new ForbiddenException(
         'You do not have access to this application',
+      );
+    }
+  }
+
+  private validateEligibilitySignalsAccess(
+    application: ApplicationWithRelations,
+    user: AuthenticatedUserContext,
+  ): void {
+    const allowedRoles: UserRole[] = [
+      UserRole.EVALUATOR,
+      UserRole.ADMIN,
+      UserRole.SUPER_ADMIN,
+    ];
+
+    if (allowedRoles.includes(user.role)) {
+      return;
+    }
+
+    const isTeamMember =
+      application.team.leaderId === user.id ||
+      application.team.members?.some((member) => member.userId === user.id);
+
+    if (!isTeamMember) {
+      throw new ForbiddenException(
+        'You do not have permission to view eligibility signals',
       );
     }
   }

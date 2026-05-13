@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  InternalServerErrorException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -43,6 +44,7 @@ import { OrganizationInviteRepository } from './organization-invitation.reposito
 import { OrganizationRepository } from './organization.repository';
 import { normalizeInviteEmail } from '../common/validation/invite-email.validation';
 import { OrganizationInviteValidationResponseDto } from './dto/organization-invite-validation-response.dto';
+import { ORGANIZATION_INVITABLE_ROLE_VALUES } from './dto/organization-role.constants';
 
 @Injectable()
 export class OrganizationService {
@@ -288,6 +290,7 @@ export class OrganizationService {
 
     this.ensureOrganizationCanAcceptInvites(organization);
     this.assertInvitationIsAcceptable(invitation, new Date());
+    this.assertInvitationRoleIsAllowed(invitation.roleToAssign);
 
     return {
       email: invitation.email,
@@ -421,8 +424,11 @@ export class OrganizationService {
         throw new NotFoundException('Organization not found');
       }
 
+      const now = new Date();
+
       this.ensureOrganizationCanAcceptInvites(organization);
-      this.assertInvitationIsAcceptable(invitation, new Date());
+      this.assertInvitationIsAcceptable(invitation, now);
+      this.assertInvitationRoleIsAllowed(invitation.roleToAssign);
 
       if (user.organizationId !== null) {
         throw new ConflictException(
@@ -430,7 +436,6 @@ export class OrganizationService {
         );
       }
 
-      const now = new Date();
       const accepted =
         await this.organizationInviteRepository.markAcceptedIfPending(
           invitation.id,
@@ -819,6 +824,14 @@ export class OrganizationService {
 
     if (invitation.status !== InvitationStatus.PENDING) {
       throw new BadRequestException('Invitation is not active');
+    }
+  }
+
+  private assertInvitationRoleIsAllowed(role: UserRole): void {
+    if (!ORGANIZATION_INVITABLE_ROLE_VALUES.includes(role)) {
+      throw new InternalServerErrorException(
+        'Invitation role is not permitted for organization invites',
+      );
     }
   }
 

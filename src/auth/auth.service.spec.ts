@@ -42,7 +42,11 @@ jest.mock('../infrastructure/queue', () => ({
   },
   QueueService: class QueueService {},
 }));
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { PrismaDbClient } from '../infrastructure/database';
 import {
@@ -312,6 +316,26 @@ describe('AuthService', () => {
         password: 'strongpass123',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('throws when invite registration succeeds but the user cannot be reloaded', async () => {
+    authRegistration.registerViaInvite.mockResolvedValue({
+      id: user.id,
+      email: user.email,
+      role: UserRole.STUDENT,
+      status: UserStatus.ACTIVE,
+      organizationId: null,
+    });
+    users.findById.mockResolvedValue(null);
+
+    await expect(
+      service.registerViaInvite({
+        firstName: 'Student',
+        lastName: 'User',
+        token: 'invite-token',
+        password: 'strongpass123',
+      }),
+    ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 
   it('accepts organization invite and creates an employee account', async () => {

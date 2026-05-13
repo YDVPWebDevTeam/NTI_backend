@@ -79,6 +79,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -559,6 +560,28 @@ describe('OrganizationService', () => {
         'Organization is not accepting invitations',
       );
     });
+
+    it('rejects validation when the invitation role is not organization-invitable', async () => {
+      organizationInviteRepository.findByToken.mockResolvedValue({
+        id: 'invite-1',
+        email: 'employee@example.com',
+        token: 'token-1',
+        status: InvitationStatus.PENDING,
+        organizationId: 'org-1',
+        roleToAssign: UserRole.COMPANY_OWNER,
+        revokedById: null,
+        createdAt: new Date('2026-04-28T10:00:00.000Z'),
+        updatedAt: new Date('2026-04-28T10:00:00.000Z'),
+        expiresAt: new Date('2030-05-02T10:00:00.000Z'),
+        acceptedAt: null,
+        revokedAt: null,
+      });
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      await expect(
+        service.validateInviteToken('token-1'),
+      ).rejects.toBeInstanceOf(InternalServerErrorException);
+    });
   });
 
   describe('organization members', () => {
@@ -670,6 +693,38 @@ describe('OrganizationService', () => {
       await expect(
         service.acceptInvite('token-1', employee),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('rejects accepting an invite with a non-invitable organization role', async () => {
+      organizationRepository.transaction.mockImplementation(runTransaction);
+      organizationInviteRepository.findByTokenForUpdate.mockResolvedValue({
+        id: 'invite-1',
+        email: 'candidate@example.com',
+        token: 'token-1',
+        status: InvitationStatus.PENDING,
+        organizationId: 'org-1',
+        roleToAssign: UserRole.COMPANY_OWNER,
+        revokedById: null,
+        createdAt: new Date('2026-04-28T10:00:00.000Z'),
+        updatedAt: new Date('2026-04-28T10:00:00.000Z'),
+        expiresAt: new Date('2030-05-02T10:00:00.000Z'),
+        acceptedAt: null,
+        revokedAt: null,
+      });
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      await expect(
+        service.acceptInvite('token-1', {
+          id: 'user-2',
+          email: 'candidate@example.com',
+          role: UserRole.STUDENT,
+          status: UserStatus.ACTIVE,
+          organizationId: null,
+        }),
+      ).rejects.toBeInstanceOf(InternalServerErrorException);
+      expect(
+        userRepository.linkToOrganizationIfUnlinked,
+      ).not.toHaveBeenCalled();
     });
 
     it('blocks cross-org member listing', async () => {

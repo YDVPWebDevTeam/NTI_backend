@@ -13,3 +13,7 @@ export const ORGANIZATION_INVITABLE_ROLES = {
 
 export type OrganizationInvitableRole =
   (typeof ORGANIZATION_INVITABLE_ROLES)[keyof typeof ORGANIZATION_INVITABLE_ROLES];
+
+export const ORGANIZATION_INVITABLE_ROLE_VALUES: readonly UserRole[] = [
+  ORGANIZATION_INVITABLE_ROLES.COMPANY_EMPLOYEE,
+];

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  InternalServerErrorException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -107,7 +108,9 @@ export class AuthService {
     const user = await this.usersService.findById(registeredUser.id);
 
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new InternalServerErrorException(
+        'Registered user could not be loaded',
+      );
     }
 
     return this.issueAuthTokens(user);

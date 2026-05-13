@@ -71,6 +71,9 @@ export const ValidateOrganizationInviteApi = () =>
         description:
           'Invitation token is invalid for acceptance because it is expired, revoked, or otherwise inactive.',
       }),
+      ApiConflictResponse({
+        description: 'Invitation was already accepted.',
+      }),
       ApiNotFoundResponse({
         description: 'Invitation or organization was not found.',
       }),

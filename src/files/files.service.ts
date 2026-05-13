@@ -182,6 +182,10 @@ export class FilesService {
     };
   }
 
+  async findOne(id: string): Promise<UploadedFile | null> {
+    return this.filesRepository.findUnique({ id });
+  }
+
   async createServerGeneratedFile(
     authUser: AuthenticatedUserContext,
     input: CreateServerGeneratedFileInput,

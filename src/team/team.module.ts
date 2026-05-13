@@ -14,7 +14,7 @@ import { TeamService } from './team.service';
 
 @Module({
   imports: [ConfigModule, HashingModule, QueueModule],
-  controllers: [TeamController, InvitationController],
+  controllers: [InvitationController, TeamController],
   providers: [
     TeamService,
     TeamRepository,
@@ -24,6 +24,6 @@ import { TeamService } from './team.service';
     TeamLeadGuard,
     RolesGuard,
   ],
-  exports: [TeamRepository, InvitationService],
+  exports: [TeamService, TeamRepository, InvitationService],
 })
 export class TeamModule {}

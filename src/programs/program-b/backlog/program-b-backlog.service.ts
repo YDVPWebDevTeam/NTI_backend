@@ -5,12 +5,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { BacklogItem, Prisma } from 'generated/prisma/client';
+import { BacklogItem, Prisma } from '../../../../generated/prisma/client';
 import {
   BacklogItemStatus,
   OrganizationStatus,
   UserStatus,
-} from 'generated/prisma/enums';
+} from '../../../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../../common/types/auth-user-context.type';
 import {
   buildOrderBy,
@@ -172,6 +172,10 @@ export class ProgramBBacklogService {
       data: items,
       meta: buildPaginationMeta(total, pagination.page, pagination.limit),
     };
+  }
+
+  async findOne(id: string): Promise<BacklogItem | null> {
+    return this.backlogRepository.findUnique({ id });
   }
 
   async publish(

@@ -92,6 +92,15 @@ export class TeamService {
     return team;
   }
 
+  async findOne(id: string): Promise<Team | null> {
+    return this.teamRepository.findUnique({ id });
+  }
+
+  async isTeamMember(teamId: string, userId: string): Promise<boolean> {
+    const membership = await this.teamRepository.findMember(teamId, userId);
+    return !!membership;
+  }
+
   async findPublicById(id: string): Promise<TeamPublicView> {
     const team = await this.teamRepository.findPublicById(id);
 

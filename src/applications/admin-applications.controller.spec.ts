@@ -16,6 +16,10 @@ import { ApplicationsService } from './applications.service';
 describe('AdminApplicationsController', () => {
   let controller: AdminApplicationsController;
   let applicationsService: {
+    formalVerify: jest.Mock;
+    startEvaluation: jest.Mock;
+    approve: jest.Mock;
+    reject: jest.Mock;
     startOnboarding: jest.Mock;
     activate: jest.Mock;
     pause: jest.Mock;
@@ -25,6 +29,10 @@ describe('AdminApplicationsController', () => {
 
   beforeEach(() => {
     applicationsService = {
+      formalVerify: jest.fn().mockResolvedValue({ id: 'application-1' }),
+      startEvaluation: jest.fn().mockResolvedValue({ id: 'application-1' }),
+      approve: jest.fn().mockResolvedValue({ id: 'application-1' }),
+      reject: jest.fn().mockResolvedValue({ id: 'application-1' }),
       startOnboarding: jest.fn().mockResolvedValue({ id: 'application-1' }),
       activate: jest.fn().mockResolvedValue({ id: 'application-1' }),
       pause: jest.fn().mockResolvedValue({ id: 'application-1' }),
@@ -34,6 +42,58 @@ describe('AdminApplicationsController', () => {
 
     controller = new AdminApplicationsController(
       applicationsService as unknown as ApplicationsService,
+    );
+  });
+
+  it('delegates formal verification with optional note', async () => {
+    const user = { id: 'reviewer-1', role: 'EVALUATOR' } as never;
+    const dto = { reason: 'Documents validated' };
+
+    await controller.formalVerify('application-1', user, dto);
+
+    expect(applicationsService.formalVerify).toHaveBeenCalledWith(
+      'application-1',
+      user,
+      'Documents validated',
+    );
+  });
+
+  it('delegates evaluation start with optional note', async () => {
+    const user = { id: 'reviewer-1', role: 'ADMIN' } as never;
+    const dto = { reason: 'Committee review started' };
+
+    await controller.startEvaluation('application-1', user, dto);
+
+    expect(applicationsService.startEvaluation).toHaveBeenCalledWith(
+      'application-1',
+      user,
+      'Committee review started',
+    );
+  });
+
+  it('delegates approval with optional note', async () => {
+    const user = { id: 'reviewer-1', role: 'ADMIN' } as never;
+    const dto = { reason: 'Strong fit for Program A' };
+
+    await controller.approve('application-1', user, dto);
+
+    expect(applicationsService.approve).toHaveBeenCalledWith(
+      'application-1',
+      user,
+      'Strong fit for Program A',
+    );
+  });
+
+  it('delegates rejection with required reason', async () => {
+    const user = { id: 'reviewer-1', role: 'ADMIN' } as never;
+    const dto = { reason: 'Eligibility expectations were not met' };
+
+    await controller.reject('application-1', user, dto);
+
+    expect(applicationsService.reject).toHaveBeenCalledWith(
+      'application-1',
+      user,
+      'Eligibility expectations were not met',
     );
   });
 

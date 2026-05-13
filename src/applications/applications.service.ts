@@ -26,6 +26,7 @@ import type { AuthenticatedUserContext } from '../common/types/auth-user-context
 import { FilesRepository } from '../files/files.repository';
 import { TeamRepository } from '../team/team.repository';
 import { UserRepository } from '../user/user.repository';
+import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { ApplicationDocumentsRepository } from './application-documents.repository';
 import { ApplicationRulesService } from './rules/application-rules.service';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
@@ -105,6 +106,7 @@ export class ApplicationsService {
     private readonly eligibilitySignalsService: EligibilitySignalsService,
     private readonly programAMentorshipRepository: ProgramAMentorshipRepository,
     private readonly userRepository: UserRepository,
+    private readonly queueService: QueueService,
   ) {}
 
   async createDraft(
@@ -370,6 +372,15 @@ export class ApplicationsService {
 
         const now = new Date();
         await this.applicationsRepository.submitDraft(application.id, now, db);
+        await this.needsInfoRepository.createStatusEvent(
+          {
+            applicationId: application.id,
+            fromStatus: ApplicationStatus.DRAFT,
+            toStatus: ApplicationStatus.SUBMITTED,
+            changedById: user.id,
+          },
+          db,
+        );
 
         await this.eligibilitySignalsService.recomputeForApplication(
           application.id,
@@ -398,6 +409,13 @@ export class ApplicationsService {
       },
     );
 
+    if (submitted.call.type === ProgramType.PROGRAM_A) {
+      await this.sendProgramAApplicationEmail(
+        submitted,
+        EMAIL_JOBS.APPLICATION_SUBMITTED,
+      );
+    }
+
     return this.toDetailDto(submitted);
   }
 
@@ -412,7 +430,7 @@ export class ApplicationsService {
       );
     }
 
-    return this.applicationsRepository.transaction(async (db) => {
+    const result = await this.applicationsRepository.transaction(async (db) => {
       const application = await this.loadWorkflowApplicationOrThrow(
         applicationId,
         db,
@@ -465,11 +483,20 @@ export class ApplicationsService {
         db,
       );
 
-      return this.toNeedsInfoItemDto({
-        ...item,
-        replies: [],
-      });
+      return {
+        item: this.toNeedsInfoItemDto({
+          ...item,
+          replies: [],
+        }),
+        application,
+      };
     }, this.needsInfoTransactionOptions);
+
+    if (result.application.call.type === ProgramType.PROGRAM_A) {
+      await this.enqueueNeedsInfoEmail(result.application);
+    }
+
+    return result.item;
   }
 
   async replyToNeedsInfoItem(
@@ -655,7 +682,7 @@ export class ApplicationsService {
   ): Promise<MentorAssignmentDto> {
     ensureAdminRole(user.role, 'Only administrators can assign mentors');
 
-    return this.applicationsRepository.transaction(async (db) => {
+    const result = await this.applicationsRepository.transaction(async (db) => {
       const application = await this.loadWorkflowApplicationOrThrow(
         applicationId,
         db,
@@ -692,12 +719,23 @@ export class ApplicationsService {
       );
 
       return {
-        applicationId: assignment.id,
-        mentorUserId: assignment.mentorUserId ?? mentor.id,
-        assignedAt: assignment.mentorAssignedAt ?? assignedAt,
-        assignedById: assignment.mentorAssignedById ?? user.id,
+        assignment: {
+          applicationId: assignment.id,
+          mentorUserId: assignment.mentorUserId ?? mentor.id,
+          assignedAt: assignment.mentorAssignedAt ?? assignedAt,
+          assignedById: assignment.mentorAssignedById ?? user.id,
+        },
+        application,
+        mentorEmail: mentor.email,
       };
     });
+
+    await this.enqueueMentorAssignmentEmail(
+      result.application,
+      result.mentorEmail,
+    );
+
+    return result.assignment;
   }
 
   async createMentorshipNote(
@@ -755,6 +793,80 @@ export class ApplicationsService {
       from: [ApplicationStatus.APPROVED],
       to: ApplicationStatus.ONBOARDING,
     });
+  }
+
+  async formalVerify(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    reason?: string,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionReviewState(
+      applicationId,
+      user,
+      {
+        from: [ApplicationStatus.SUBMITTED],
+        to: ApplicationStatus.FORMALLY_VERIFIED,
+      },
+      reason,
+    );
+  }
+
+  async startEvaluation(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    reason?: string,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionReviewState(
+      applicationId,
+      user,
+      {
+        from: [ApplicationStatus.FORMALLY_VERIFIED],
+        to: ApplicationStatus.EVALUATING,
+      },
+      reason,
+    );
+  }
+
+  async approve(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    reason?: string,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionReviewState(
+      applicationId,
+      user,
+      {
+        from: [ApplicationStatus.EVALUATING],
+        to: ApplicationStatus.APPROVED,
+        setDecidedAt: true,
+        notificationJob: EMAIL_JOBS.APPLICATION_APPROVED,
+      },
+      reason,
+    );
+  }
+
+  async reject(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    reason: string,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionReviewState(
+      applicationId,
+      user,
+      {
+        from: [
+          ApplicationStatus.SUBMITTED,
+          ApplicationStatus.FORMALLY_VERIFIED,
+          ApplicationStatus.EVALUATING,
+          ApplicationStatus.NEEDS_INFO,
+        ],
+        to: ApplicationStatus.REJECTED,
+        reasonRequired: true,
+        setDecidedAt: true,
+        notificationJob: EMAIL_JOBS.APPLICATION_REJECTED,
+      },
+      reason,
+    );
   }
 
   async activate(
@@ -897,6 +1009,94 @@ export class ApplicationsService {
         return refreshed;
       },
     );
+
+    return this.toDetailDto(updatedApplication);
+  }
+
+  private async transitionReviewState(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    transition: LifecycleTransitionDefinition & {
+      setDecidedAt?: boolean;
+      notificationJob?:
+        | typeof EMAIL_JOBS.APPLICATION_APPROVED
+        | typeof EMAIL_JOBS.APPLICATION_REJECTED;
+    },
+    reason?: string,
+  ): Promise<ApplicationDetailDto> {
+    if (!this.isReviewerSideUser(user)) {
+      throw new ForbiddenException(
+        'Only reviewer-side users can manage Program A review transitions',
+      );
+    }
+
+    const normalizedReason = reason?.trim();
+
+    if (transition.reasonRequired && !normalizedReason) {
+      throw new BadRequestException('Reason is required for this transition');
+    }
+
+    const updatedApplication = await this.applicationsRepository.transaction(
+      async (db) => {
+        const application = await this.loadWorkflowApplicationOrThrow(
+          applicationId,
+          db,
+        );
+
+        this.ensureProgramAApplicationLifecycle(application);
+
+        if (!transition.from.includes(application.status)) {
+          throw new ConflictException(
+            `Invalid application lifecycle transition from ${application.status} to ${transition.to}`,
+          );
+        }
+
+        const updated = await this.applicationsRepository.updateStatusIfCurrent(
+          application.id,
+          application.status,
+          transition.to,
+          db,
+          transition.setDecidedAt ? { decidedAt: new Date() } : undefined,
+        );
+
+        if (updated.count !== 1) {
+          throw new ConflictException(
+            'Application status was changed concurrently. Please retry.',
+          );
+        }
+
+        await this.needsInfoRepository.createStatusEvent(
+          {
+            applicationId: application.id,
+            fromStatus: application.status,
+            toStatus: transition.to,
+            changedById: user.id,
+            reason: normalizedReason,
+          },
+          db,
+        );
+
+        const refreshed =
+          await this.applicationsRepository.findByIdWithRelations(
+            application.id,
+            db,
+          );
+
+        if (!refreshed) {
+          throw new NotFoundException('Application not found');
+        }
+
+        return refreshed;
+      },
+    );
+
+    if (transition.notificationJob) {
+      await this.sendProgramAApplicationEmail(
+        updatedApplication,
+        transition.notificationJob,
+        normalizedReason,
+      );
+    }
 
     return this.toDetailDto(updatedApplication);
   }
@@ -1257,6 +1457,98 @@ export class ApplicationsService {
       data: calls.map((call) => this.toPublicCallDto(call)),
       meta: buildPaginationMeta(total, pagination.page, pagination.limit),
     };
+  }
+
+  private async enqueueNeedsInfoEmail(
+    application: ApplicationWorkflowView,
+  ): Promise<void> {
+    const recipientEmails = this.getApplicationRecipientEmails(application);
+
+    if (recipientEmails.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      recipientEmails.map((email) =>
+        this.queueService.addEmail(
+          EMAIL_JOBS.APPLICATION_NEEDS_INFO_REQUESTED,
+          {
+            email,
+            applicationId: application.id,
+            applicationTitle: application.call.title,
+          },
+        ),
+      ),
+    );
+  }
+
+  private async enqueueMentorAssignmentEmail(
+    application: ApplicationWorkflowView,
+    mentorEmail: string,
+  ): Promise<void> {
+    const recipientEmails = [
+      ...new Set([
+        mentorEmail,
+        ...this.getApplicationRecipientEmails(application),
+      ]),
+    ];
+
+    if (recipientEmails.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      recipientEmails.map((email) =>
+        this.queueService.addEmail(EMAIL_JOBS.APPLICATION_MENTOR_ASSIGNED, {
+          email,
+          applicationId: application.id,
+          applicationTitle: application.call.title,
+        }),
+      ),
+    );
+  }
+
+  private async sendProgramAApplicationEmail(
+    application: ApplicationWithRelations,
+    jobName:
+      | typeof EMAIL_JOBS.APPLICATION_SUBMITTED
+      | typeof EMAIL_JOBS.APPLICATION_APPROVED
+      | typeof EMAIL_JOBS.APPLICATION_REJECTED,
+    reason?: string,
+  ): Promise<void> {
+    const recipientEmails = this.getApplicationRecipientEmails(application);
+
+    if (recipientEmails.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      recipientEmails.map((email) =>
+        this.queueService.addEmail(jobName, {
+          email,
+          applicationId: application.id,
+          applicationTitle: application.call.title,
+          ...(jobName === EMAIL_JOBS.APPLICATION_REJECTED
+            ? { reason: reason ?? 'No reason provided' }
+            : {}),
+        } as never),
+      ),
+    );
+  }
+
+  private getApplicationRecipientEmails(
+    application: ApplicationWithRelations | ApplicationWorkflowView,
+  ): string[] {
+    const members = application.team.members as Array<{
+      user?: { email?: string | null } | null;
+    }>;
+    return [
+      ...new Set(
+        members
+          .map((member) => member.user?.email)
+          .filter((email): email is string => Boolean(email)),
+      ),
+    ];
   }
 
   private toDetailDto(

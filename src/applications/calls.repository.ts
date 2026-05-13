@@ -1,11 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import type { Call, Prisma } from '../../generated/prisma/client';
-import { CallStatus, ProgramType } from '../../generated/prisma/enums';
+import {
+  CallStatus,
+  DocumentType,
+  ProgramType,
+} from '../../generated/prisma/enums';
 import { BaseRepository, PrismaDbClient } from '../infrastructure/database';
 import { PrismaService } from '../infrastructure/database/prisma.service';
 
 export type CallWithRequiredDocumentTypes = Prisma.CallGetPayload<{
   select: ReturnType<CallsRepository['requiredDocumentTypesSelect']>;
+}>;
+
+export type AdminCallRecord = Prisma.CallGetPayload<{
+  select: ReturnType<CallsRepository['adminCallSelect']>;
 }>;
 
 @Injectable()
@@ -38,6 +46,133 @@ export class CallsRepository extends BaseRepository<
     return (db ?? this.prisma.client).call.findUnique({
       where: { id },
       select: this.requiredDocumentTypesSelect(),
+    });
+  }
+
+  findAdminById(
+    id: string,
+    db?: PrismaDbClient,
+  ): Promise<AdminCallRecord | null> {
+    return (db ?? this.prisma.client).call.findUnique({
+      where: { id },
+      select: this.adminCallSelect(),
+    });
+  }
+
+  findManyForAdmin(
+    args: {
+      where?: Prisma.CallWhereInput;
+      skip?: number;
+      take?: number;
+      orderBy?: Prisma.CallOrderByWithRelationInput[];
+    },
+    db?: PrismaDbClient,
+  ): Promise<AdminCallRecord[]> {
+    return (db ?? this.prisma.client).call.findMany({
+      where: args.where,
+      skip: args.skip,
+      take: args.take,
+      orderBy: args.orderBy,
+      select: this.adminCallSelect(),
+    });
+  }
+
+  countForAdmin(where?: Prisma.CallWhereInput, db?: PrismaDbClient) {
+    return (db ?? this.prisma.client).call.count({ where });
+  }
+
+  createAdminCall(
+    data: {
+      type: ProgramType;
+      title: string;
+      opensAt: Date | null;
+      closesAt: Date | null;
+      requiredDocumentTypes: DocumentType[];
+      eligibilityRuleConfigs?: Array<{
+        code: string;
+        threshold: string;
+      }>;
+    },
+    db?: PrismaDbClient,
+  ): Promise<AdminCallRecord> {
+    return (db ?? this.prisma.client).call.create({
+      data: {
+        type: data.type,
+        title: data.title,
+        status: CallStatus.DRAFT,
+        opensAt: data.opensAt,
+        closesAt: data.closesAt,
+        requiredDocumentTypes: {
+          create: data.requiredDocumentTypes.map((documentType) => ({
+            documentType,
+            isRequired: true,
+          })),
+        },
+        ...(data.eligibilityRuleConfigs
+          ? {
+              eligibilityRuleConfigs: {
+                create: data.eligibilityRuleConfigs.map((config) => ({
+                  code: config.code,
+                  threshold: config.threshold,
+                  enabled: true,
+                })),
+              },
+            }
+          : {}),
+      },
+      select: this.adminCallSelect(),
+    });
+  }
+
+  updateAdminCall(
+    id: string,
+    data: {
+      type?: ProgramType;
+      title?: string;
+      status?: CallStatus;
+      opensAt?: Date | null;
+      closesAt?: Date | null;
+      requiredDocumentTypes?: DocumentType[];
+      eligibilityRuleConfigs?: Array<{
+        code: string;
+        threshold: string;
+      }>;
+    },
+    db?: PrismaDbClient,
+  ): Promise<AdminCallRecord> {
+    return (db ?? this.prisma.client).call.update({
+      where: { id },
+      data: {
+        ...(data.type !== undefined ? { type: data.type } : {}),
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.status !== undefined ? { status: data.status } : {}),
+        ...(data.opensAt !== undefined ? { opensAt: data.opensAt } : {}),
+        ...(data.closesAt !== undefined ? { closesAt: data.closesAt } : {}),
+        ...(data.requiredDocumentTypes !== undefined
+          ? {
+              requiredDocumentTypes: {
+                deleteMany: {},
+                create: data.requiredDocumentTypes.map((documentType) => ({
+                  documentType,
+                  isRequired: true,
+                })),
+              },
+            }
+          : {}),
+        ...(data.eligibilityRuleConfigs !== undefined
+          ? {
+              eligibilityRuleConfigs: {
+                deleteMany: {},
+                create: data.eligibilityRuleConfigs.map((config) => ({
+                  code: config.code,
+                  threshold: config.threshold,
+                  enabled: true,
+                })),
+              },
+            }
+          : {}),
+      },
+      select: this.adminCallSelect(),
     });
   }
 
@@ -144,6 +279,50 @@ export class CallsRepository extends BaseRepository<
         },
         orderBy: {
           documentType: 'asc',
+        },
+      },
+      eligibilityRuleConfigs: {
+        where: {
+          enabled: true,
+        },
+        select: {
+          code: true,
+          threshold: true,
+        },
+      },
+    } as const;
+  }
+
+  private adminCallSelect() {
+    return {
+      id: true,
+      type: true,
+      title: true,
+      status: true,
+      opensAt: true,
+      closesAt: true,
+      createdAt: true,
+      updatedAt: true,
+      requiredDocumentTypes: {
+        where: {
+          isRequired: true,
+        },
+        select: {
+          id: true,
+          documentType: true,
+          isRequired: true,
+        },
+        orderBy: {
+          documentType: 'asc',
+        },
+      },
+      eligibilityRuleConfigs: {
+        where: {
+          enabled: true,
+        },
+        select: {
+          code: true,
+          threshold: true,
         },
       },
     } as const;

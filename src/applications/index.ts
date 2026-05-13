@@ -1,4 +1,6 @@
 export { ApplicationsModule } from './applications.module';
+export { AdminCallsController } from './admin-calls.controller';
+export { AdminCallsService } from './admin-calls.service';
 export { ApplicationsService } from './applications.service';
 export { ApplicationSectionsService } from './application-sections.service';
 export { ApplicationsRepository } from './applications.repository';
@@ -11,6 +13,8 @@ export { CallsDocumentsController } from './calls-documents.controller';
 export { ApplicationRulesService } from './rules/application-rules.service';
 export { CallsRepository } from './calls.repository';
 export {
+  ApproveApplicationApi,
+  FormalVerifyApplicationApi,
   ActivateApplicationApi,
   ArchiveApplicationApi,
   AssignMentorApi,
@@ -30,9 +34,11 @@ export {
   GetSectionHistoryApi,
   ListApplicationSectionsApi,
   ReplyToNeedsInfoItemApi,
+  RejectApplicationApi,
   ResubmitApplicationApi,
   PauseApplicationApi,
   SetActiveSectionVersionApi,
+  StartEvaluationApplicationApi,
   StartApplicationOnboardingApi,
   SubmitApplicationApi,
   UpsertApplicationSectionApi,
@@ -49,11 +55,16 @@ export { CreateMentorshipNoteDto } from './dto/create-mentorship-note.dto';
 export { PublicCallDto } from './dto/public-call.dto';
 export { PublicCallsQueryDto } from './dto/public-calls-query.dto';
 export { PublicCallsResponseDto } from './dto/public-calls-response.dto';
+export { AdminCallDto } from './dto/admin-call.dto';
+export { AdminCallsQueryDto } from './dto/admin-calls-query.dto';
+export { AdminCallsResponseDto } from './dto/admin-calls-response.dto';
+export { CreateAdminCallDto } from './dto/create-admin-call.dto';
 export { DocumentCompletenessDto } from './dto/document-completeness.dto';
 export { DocumentCompletenessItemDto } from './dto/document-completeness-item.dto';
 export { RequiredDocumentTypeDto } from './dto/required-document-type.dto';
 export { RequiredDocumentsResponseDto } from './dto/required-documents-response.dto';
 export { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
+export { UpdateAdminCallDto } from './dto/update-admin-call.dto';
 export { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
 export { NeedsInfoRepository } from './needs-info.repository';
 export { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
@@ -65,4 +76,5 @@ export { MentorshipNoteAuthorDto } from './dto/mentorship-note-author.dto';
 export { NeedsInfoItemDto } from './dto/needs-info-item.dto';
 export { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
 export { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';
+export { OptionalApplicationTransitionNoteDto } from './dto/optional-application-transition-note.dto';
 export { ProgramAMentorshipNoteDto } from './dto/program-a-mentorship-note.dto';

@@ -3,6 +3,8 @@ import { AuthModule } from '../auth/auth.module';
 import { FilesModule } from '../files';
 import { TeamModule } from '../team/team.module';
 import { ApplicationDocumentsRepository } from './application-documents.repository';
+import { AdminCallsController } from './admin-calls.controller';
+import { AdminCallsService } from './admin-calls.service';
 import { ApplicationsController } from './applications.controller';
 import { ApplicationsRepository } from './applications.repository';
 import { ApplicationsService } from './applications.service';
@@ -23,6 +25,7 @@ import { ApplicationSectionsService } from './application-sections.service';
   controllers: [
     ApplicationsController,
     AdminApplicationsController,
+    AdminCallsController,
     CallsDocumentsController,
   ],
   providers: [
@@ -35,6 +38,7 @@ import { ApplicationSectionsService } from './application-sections.service';
     UserRepository,
     ApplicationRulesService,
     ApplicationSectionsRulesService,
+    AdminCallsService,
     ApplicationsService,
     ApplicationSectionsService,
   ],

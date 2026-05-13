@@ -16,6 +16,7 @@ import {
   UploadStatus,
   UserRole,
 } from '../../generated/prisma/enums';
+import { ensureAdminRole, isAdminRole } from '../auth/admin-role.helper';
 import {
   buildOrderBy,
   buildPaginationMeta,
@@ -24,21 +25,27 @@ import {
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { FilesRepository } from '../files/files.repository';
 import { TeamRepository } from '../team/team.repository';
+import { UserRepository } from '../user/user.repository';
 import { ApplicationDocumentsRepository } from './application-documents.repository';
 import { ApplicationRulesService } from './rules/application-rules.service';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationDocumentDto } from './dto/application-document.dto';
 import { ApplicationStatusEventDto } from './dto/application-status-event.dto';
+import { AssignMentorDto } from './dto/assign-mentor.dto';
 import { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import { CreateMentorshipNoteDto } from './dto/create-mentorship-note.dto';
 import { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
 import { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from './dto/document-completeness.dto';
+import { MentorAssignmentDto } from './dto/mentor-assignment.dto';
+import { MentorshipNoteAuthorDto } from './dto/mentorship-note-author.dto';
 import { NeedsInfoItemDto } from './dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';
 import { PublicCallDto } from './dto/public-call.dto';
 import { PublicCallsQueryDto } from './dto/public-calls-query.dto';
+import { ProgramAMentorshipNoteDto } from './dto/program-a-mentorship-note.dto';
 import { PublicCallsResponseDto } from './dto/public-calls-response.dto';
 import { RequiredDocumentsResponseDto } from './dto/required-documents-response.dto';
 import { ResubmitApplicationDto } from './dto/resubmit-application.dto';
@@ -49,6 +56,10 @@ import {
 } from './applications.repository';
 import { CallsRepository } from './calls.repository';
 import { NeedsInfoRepository } from './needs-info.repository';
+import {
+  ProgramAMentorshipNoteWithAuthor,
+  ProgramAMentorshipRepository,
+} from './program-a-mentorship.repository';
 
 type RequiredDocumentSlot = {
   documentType: DocumentType;
@@ -58,6 +69,15 @@ type RequiredDocumentSlot = {
 
 @Injectable()
 export class ApplicationsService {
+  private readonly mentorshipAssignableStatuses: readonly ApplicationStatus[] =
+    [
+      ApplicationStatus.APPROVED,
+      ApplicationStatus.ONBOARDING,
+      ApplicationStatus.ACTIVE_PROJECT,
+      ApplicationStatus.PAUSED,
+      ApplicationStatus.COMPLETED,
+    ];
+
   private readonly applicationDocumentAttachTransactionOptions = {
     isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
   } as const;
@@ -74,6 +94,8 @@ export class ApplicationsService {
     private readonly teamRepository: TeamRepository,
     private readonly filesRepository: FilesRepository,
     private readonly needsInfoRepository: NeedsInfoRepository,
+    private readonly programAMentorshipRepository: ProgramAMentorshipRepository,
+    private readonly userRepository: UserRepository,
   ) {}
 
   async createDraft(
@@ -586,6 +608,104 @@ export class ApplicationsService {
     };
   }
 
+  async assignMentor(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    dto: AssignMentorDto,
+  ): Promise<MentorAssignmentDto> {
+    ensureAdminRole(user.role, 'Only administrators can assign mentors');
+
+    return this.applicationsRepository.transaction(async (db) => {
+      const application = await this.loadWorkflowApplicationOrThrow(
+        applicationId,
+        db,
+      );
+
+      this.ensureProgramAMentorshipWorkflow(application);
+
+      if (!this.mentorshipAssignableStatuses.includes(application.status)) {
+        throw new BadRequestException(
+          `Mentor assignment is not allowed for application status ${application.status}`,
+        );
+      }
+
+      const mentor = await this.userRepository.findUnique(
+        { id: dto.mentorUserId },
+        db,
+      );
+
+      if (!mentor) {
+        throw new NotFoundException('Mentor user not found');
+      }
+
+      if (mentor.role !== UserRole.MENTOR) {
+        throw new BadRequestException('Target user must have mentor role');
+      }
+
+      const assignedAt = new Date();
+      const assignment = await this.applicationsRepository.assignMentor(
+        application.id,
+        mentor.id,
+        assignedAt,
+        user.id,
+        db,
+      );
+
+      return {
+        applicationId: assignment.id,
+        mentorUserId: assignment.mentorUserId ?? mentor.id,
+        assignedAt: assignment.mentorAssignedAt ?? assignedAt,
+        assignedById: assignment.mentorAssignedById ?? user.id,
+      };
+    });
+  }
+
+  async createMentorshipNote(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    dto: CreateMentorshipNoteDto,
+  ): Promise<ProgramAMentorshipNoteDto> {
+    return this.applicationsRepository.transaction(async (db) => {
+      const application = await this.loadWorkflowApplicationOrThrow(
+        applicationId,
+        db,
+      );
+
+      this.ensureProgramAMentorshipWorkflow(application);
+      this.ensureMentorAssigned(application);
+      this.ensureMentorshipAccess(application, user);
+
+      const note = await this.programAMentorshipRepository.createNote(
+        {
+          applicationId: application.id,
+          authorId: user.id,
+          content: dto.content,
+        },
+        db,
+      );
+
+      return this.toProgramAMentorshipNoteDto(note);
+    });
+  }
+
+  async listMentorshipNotes(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramAMentorshipNoteDto[]> {
+    const application =
+      await this.loadWorkflowApplicationOrThrow(applicationId);
+
+    this.ensureProgramAMentorshipWorkflow(application);
+    this.ensureMentorAssigned(application);
+    this.ensureMentorshipAccess(application, user);
+
+    const notes = await this.programAMentorshipRepository.listNotes(
+      application.id,
+    );
+
+    return notes.map((note) => this.toProgramAMentorshipNoteDto(note));
+  }
+
   private async loadWorkflowApplicationOrThrow(
     applicationId: string,
     db?: Parameters<ApplicationsRepository['findByIdForWorkflow']>[1],
@@ -637,6 +757,39 @@ export class ApplicationsService {
         'Application document pack is supported only for Program A applications',
       );
     }
+  }
+
+  private ensureProgramAMentorshipWorkflow(
+    application: ApplicationWorkflowView,
+  ): void {
+    if (application.call.type !== ProgramType.PROGRAM_A) {
+      throw new ConflictException(
+        'Program A mentorship is supported only for Program A applications',
+      );
+    }
+  }
+
+  private ensureMentorAssigned(application: ApplicationWorkflowView): void {
+    if (!application.mentorUserId) {
+      throw new BadRequestException('Application has no assigned mentor');
+    }
+  }
+
+  private ensureMentorshipAccess(
+    application: ApplicationWorkflowView,
+    user: AuthenticatedUserContext,
+  ): void {
+    if (isAdminRole(user.role)) {
+      return;
+    }
+
+    if (user.role === UserRole.MENTOR && application.mentorUserId === user.id) {
+      return;
+    }
+
+    throw new ForbiddenException(
+      'Only the assigned mentor or an administrator can access mentorship notes',
+    );
   }
 
   private ensureApplicationManagedByTeamLead(
@@ -1000,6 +1153,31 @@ export class ApplicationsService {
       reason: event.reason,
       needsInfoItemId: event.needsInfoItemId,
       createdAt: event.createdAt,
+    };
+  }
+
+  private toProgramAMentorshipNoteDto(
+    note: ProgramAMentorshipNoteWithAuthor,
+  ): ProgramAMentorshipNoteDto {
+    return {
+      id: note.id,
+      applicationId: note.applicationId,
+      content: note.content,
+      createdAt: note.createdAt,
+      author: this.toMentorshipNoteAuthorDto(note.author),
+    };
+  }
+
+  private toMentorshipNoteAuthorDto(author: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  }): MentorshipNoteAuthorDto {
+    return {
+      id: author.id,
+      email: author.email,
+      name: `${author.firstName} ${author.lastName}`.trim(),
     };
   }
 

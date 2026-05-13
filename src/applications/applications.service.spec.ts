@@ -48,6 +48,7 @@ describe('ApplicationsService', () => {
     findByIdForWorkflow: jest.Mock;
     submitDraft: jest.Mock;
     transaction: jest.Mock;
+    assignMentor: jest.Mock;
   };
   let applicationDocumentsRepository: {
     deactivateActiveBySlot: jest.Mock;
@@ -71,6 +72,13 @@ describe('ApplicationsService', () => {
   };
   let filesRepository: {
     findByIdForOwners: jest.Mock;
+  };
+  let programAMentorshipRepository: {
+    createNote: jest.Mock;
+    listNotes: jest.Mock;
+  };
+  let userRepository: {
+    findUnique: jest.Mock;
   };
 
   const mockCall = {
@@ -113,6 +121,9 @@ describe('ApplicationsService', () => {
     call: mockCall,
     team: mockTeam,
     documents: [],
+    mentorUserId: null,
+    mentorAssignedAt: null,
+    mentorAssignedById: null,
   };
 
   const detailApplication = {
@@ -123,6 +134,9 @@ describe('ApplicationsService', () => {
     status: ApplicationStatus.DRAFT,
     submittedAt: null,
     decidedAt: null,
+    mentorUserId: null,
+    mentorAssignedAt: null,
+    mentorAssignedById: null,
     createdAt: new Date('2026-04-20T12:00:00.000Z'),
     updatedAt: new Date('2026-04-20T12:00:00.000Z'),
     call: mockCall,
@@ -144,6 +158,7 @@ describe('ApplicationsService', () => {
       findByIdWithRelations: jest.fn(),
       findByIdForWorkflow: jest.fn(),
       submitDraft: jest.fn(),
+      assignMentor: jest.fn(),
       transaction: jest.fn((fn: (db: never) => Promise<unknown>) =>
         fn({ tx: 'db-client' } as never),
       ),
@@ -179,6 +194,15 @@ describe('ApplicationsService', () => {
       findByIdForOwners: jest.fn(),
     };
 
+    programAMentorshipRepository = {
+      createNote: jest.fn(),
+      listNotes: jest.fn(),
+    };
+
+    userRepository = {
+      findUnique: jest.fn(),
+    };
+
     service = new ApplicationsService(
       applicationsRepository as never,
       applicationDocumentsRepository as never,
@@ -197,6 +221,8 @@ describe('ApplicationsService', () => {
         getStatusEvents: jest.fn(),
         createStatusEvent: jest.fn(),
       } as never,
+      programAMentorshipRepository as never,
+      userRepository as never,
     );
   });
 
@@ -597,5 +623,349 @@ describe('ApplicationsService', () => {
     await expect(service.findPublicCallById('call-404')).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('allows admin to assign mentor on approved Program A application', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.APPROVED,
+    });
+    userRepository.findUnique.mockResolvedValue({
+      id: 'mentor-1',
+      role: UserRole.MENTOR,
+    });
+    applicationsRepository.assignMentor.mockResolvedValue({
+      id: 'application-1',
+      mentorUserId: 'mentor-1',
+      mentorAssignedAt: new Date('2026-05-13T10:00:00.000Z'),
+      mentorAssignedById: 'admin-1',
+    });
+
+    const result = await service.assignMentor(
+      'application-1',
+      {
+        id: 'admin-1',
+        email: 'admin@example.com',
+        role: UserRole.ADMIN,
+      } as never,
+      { mentorUserId: 'mentor-1' },
+    );
+
+    expect(applicationsRepository.assignMentor).toHaveBeenCalledWith(
+      'application-1',
+      'mentor-1',
+      expect.any(Date),
+      'admin-1',
+      { tx: 'db-client' },
+    );
+    expect(result).toEqual({
+      applicationId: 'application-1',
+      mentorUserId: 'mentor-1',
+      assignedAt: new Date('2026-05-13T10:00:00.000Z'),
+      assignedById: 'admin-1',
+    });
+  });
+
+  it('rejects mentor assignment for non-Program-A application', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.APPROVED,
+      call: {
+        ...mockCall,
+        type: ProgramType.PROGRAM_B,
+      },
+    });
+
+    await expect(
+      service.assignMentor(
+        'application-1',
+        {
+          id: 'admin-1',
+          email: 'admin@example.com',
+          role: UserRole.ADMIN,
+        } as never,
+        { mentorUserId: 'mentor-1' },
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects mentor assignment before approval', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.EVALUATING,
+    });
+
+    await expect(
+      service.assignMentor(
+        'application-1',
+        {
+          id: 'admin-1',
+          email: 'admin@example.com',
+          role: UserRole.ADMIN,
+        } as never,
+        { mentorUserId: 'mentor-1' },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects mentor assignment when target user does not exist', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.APPROVED,
+    });
+    userRepository.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.assignMentor(
+        'application-1',
+        {
+          id: 'admin-1',
+          email: 'admin@example.com',
+          role: UserRole.SUPER_ADMIN,
+        } as never,
+        { mentorUserId: 'mentor-404' },
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects mentor assignment when target user is not a mentor', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.APPROVED,
+    });
+    userRepository.findUnique.mockResolvedValue({
+      id: 'user-2',
+      role: UserRole.STUDENT,
+    });
+
+    await expect(
+      service.assignMentor(
+        'application-1',
+        {
+          id: 'admin-1',
+          email: 'admin@example.com',
+          role: UserRole.ADMIN,
+        } as never,
+        { mentorUserId: 'user-2' },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('reassignment overwrites current mentor assignment fields', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.ACTIVE_PROJECT,
+      mentorUserId: 'mentor-old',
+      mentorAssignedAt: new Date('2026-05-01T08:00:00.000Z'),
+      mentorAssignedById: 'admin-old',
+    });
+    userRepository.findUnique.mockResolvedValue({
+      id: 'mentor-new',
+      role: UserRole.MENTOR,
+    });
+    applicationsRepository.assignMentor.mockResolvedValue({
+      id: 'application-1',
+      mentorUserId: 'mentor-new',
+      mentorAssignedAt: new Date('2026-05-13T11:00:00.000Z'),
+      mentorAssignedById: 'admin-1',
+    });
+
+    const result = await service.assignMentor(
+      'application-1',
+      {
+        id: 'admin-1',
+        email: 'admin@example.com',
+        role: UserRole.ADMIN,
+      } as never,
+      { mentorUserId: 'mentor-new' },
+    );
+
+    expect(result.mentorUserId).toBe('mentor-new');
+    expect(result.assignedById).toBe('admin-1');
+  });
+
+  it('assigned mentor can create mentorship note', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.APPROVED,
+      mentorUserId: 'mentor-1',
+    });
+    programAMentorshipRepository.createNote.mockResolvedValue({
+      id: 'note-1',
+      applicationId: 'application-1',
+      authorId: 'mentor-1',
+      content: 'Kickoff done',
+      createdAt: new Date('2026-05-13T12:00:00.000Z'),
+      author: {
+        id: 'mentor-1',
+        email: 'mentor@example.com',
+        firstName: 'Mina',
+        lastName: 'Tor',
+      },
+    });
+
+    const result = await service.createMentorshipNote(
+      'application-1',
+      {
+        id: 'mentor-1',
+        email: 'mentor@example.com',
+        role: UserRole.MENTOR,
+      } as never,
+      { content: 'Kickoff done' },
+    );
+
+    expect(programAMentorshipRepository.createNote).toHaveBeenCalledWith(
+      {
+        applicationId: 'application-1',
+        authorId: 'mentor-1',
+        content: 'Kickoff done',
+      },
+      { tx: 'db-client' },
+    );
+    expect(result.author).toEqual({
+      id: 'mentor-1',
+      email: 'mentor@example.com',
+      name: 'Mina Tor',
+    });
+  });
+
+  it('admin can create mentorship note', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.ONBOARDING,
+      mentorUserId: 'mentor-1',
+    });
+    programAMentorshipRepository.createNote.mockResolvedValue({
+      id: 'note-2',
+      applicationId: 'application-1',
+      authorId: 'admin-1',
+      content: 'Admin follow-up',
+      createdAt: new Date('2026-05-13T12:30:00.000Z'),
+      author: {
+        id: 'admin-1',
+        email: 'admin@example.com',
+        firstName: 'Ada',
+        lastName: 'Min',
+      },
+    });
+
+    const result = await service.createMentorshipNote(
+      'application-1',
+      {
+        id: 'admin-1',
+        email: 'admin@example.com',
+        role: UserRole.ADMIN,
+      } as never,
+      { content: 'Admin follow-up' },
+    );
+
+    expect(result.author.name).toBe('Ada Min');
+  });
+
+  it('forbids unassigned mentor from creating mentorship note', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.APPROVED,
+      mentorUserId: 'mentor-1',
+    });
+
+    await expect(
+      service.createMentorshipNote(
+        'application-1',
+        {
+          id: 'mentor-2',
+          email: 'other-mentor@example.com',
+          role: UserRole.MENTOR,
+        } as never,
+        { content: 'No access' },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('forbids team member from creating mentorship note', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.APPROVED,
+      mentorUserId: 'mentor-1',
+    });
+
+    await expect(
+      service.createMentorshipNote(
+        'application-1',
+        {
+          id: 'user-2',
+          email: 'member@example.com',
+          role: UserRole.STUDENT,
+        } as never,
+        { content: 'No access' },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('rejects mentorship note creation when no mentor is assigned', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.APPROVED,
+      mentorUserId: null,
+    });
+
+    await expect(
+      service.createMentorshipNote(
+        'application-1',
+        {
+          id: 'admin-1',
+          email: 'admin@example.com',
+          role: UserRole.ADMIN,
+        } as never,
+        { content: 'No mentor yet' },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('lists mentorship notes in createdAt asc and id asc order', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.PAUSED,
+      mentorUserId: 'mentor-1',
+    });
+    programAMentorshipRepository.listNotes.mockResolvedValue([
+      {
+        id: 'note-1',
+        applicationId: 'application-1',
+        authorId: 'mentor-1',
+        content: 'First',
+        createdAt: new Date('2026-05-13T08:00:00.000Z'),
+        author: {
+          id: 'mentor-1',
+          email: 'mentor@example.com',
+          firstName: 'Mina',
+          lastName: 'Tor',
+        },
+      },
+      {
+        id: 'note-2',
+        applicationId: 'application-1',
+        authorId: 'admin-1',
+        content: 'Second',
+        createdAt: new Date('2026-05-13T08:00:00.000Z'),
+        author: {
+          id: 'admin-1',
+          email: 'admin@example.com',
+          firstName: 'Ada',
+          lastName: 'Min',
+        },
+      },
+    ]);
+
+    const result = await service.listMentorshipNotes('application-1', {
+      id: 'mentor-1',
+      email: 'mentor@example.com',
+      role: UserRole.MENTOR,
+    } as never);
+
+    expect(programAMentorshipRepository.listNotes).toHaveBeenCalledWith(
+      'application-1',
+    );
+    expect(result.map((note) => note.id)).toEqual(['note-1', 'note-2']);
   });
 });

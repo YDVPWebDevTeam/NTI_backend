@@ -12,16 +12,20 @@ import { createPaginationQueryDecorators } from '../../common/pagination';
 import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
 import { ApplicationSectionDto } from '../dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from '../dto/application-section-history.dto';
+import { AssignMentorDto } from '../dto/assign-mentor.dto';
 import { ApplicationDetailDto } from '../dto/application-detail.dto';
 import { ApplicationDocumentDto } from '../dto/application-document.dto';
 import { AttachApplicationDocumentDto } from '../dto/attach-application-document.dto';
 import { CreateApplicationDto } from '../dto/create-application.dto';
+import { CreateMentorshipNoteDto } from '../dto/create-mentorship-note.dto';
 import { CreateNeedsInfoItemDto } from '../dto/create-needs-info-item.dto';
 import { CreateNeedsInfoReplyDto } from '../dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from '../dto/document-completeness.dto';
+import { MentorAssignmentDto } from '../dto/mentor-assignment.dto';
 import { NeedsInfoItemDto } from '../dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from '../dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from '../dto/needs-info-thread.dto';
+import { ProgramAMentorshipNoteDto } from '../dto/program-a-mentorship-note.dto';
 import { PublicCallDto } from '../dto/public-call.dto';
 import { PUBLIC_CALL_SORT_VALUES } from '../dto/public-calls-query.dto';
 import { PublicCallsResponseDto } from '../dto/public-calls-response.dto';
@@ -317,6 +321,97 @@ export const CreateNeedsInfoItemApi = () =>
       }),
       ApiConflictResponse({
         description: 'Application status was changed concurrently.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const AssignMentorApi = () =>
+  createApiDecorator({
+    summary: 'Assign mentor to Program A application',
+    description:
+      'Assigns or reassigns the current mentor for an approved-or-later Program A application. Admin and super-admin only.',
+    body: AssignMentorDto,
+    successResponse: {
+      status: 201,
+      type: MentorAssignmentDto,
+      description: 'Mentor assignment was saved.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id, invalid mentor id, unsupported application status, or target user is not a mentor.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only administrators can assign mentors.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application does not belong to the Program A mentorship workflow.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Application or mentor user was not found.',
+      }),
+    ],
+  });
+
+export const CreateMentorshipNoteApi = () =>
+  createApiDecorator({
+    summary: 'Create Program A mentorship note',
+    description:
+      'Creates an append-only mentorship note for a Program A application. Accessible to the assigned mentor, admin, and super-admin.',
+    body: CreateMentorshipNoteDto,
+    successResponse: {
+      status: 201,
+      type: ProgramAMentorshipNoteDto,
+      description: 'Mentorship note was created.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id or the application has no assigned mentor.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only the assigned mentor or an administrator can create mentorship notes.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application does not belong to the Program A mentorship workflow.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const GetMentorshipNotesApi = () =>
+  createApiDecorator({
+    summary: 'List Program A mentorship notes',
+    description:
+      'Returns mentorship notes for a Program A application in deterministic ascending order.',
+    successResponse: {
+      status: 200,
+      type: ProgramAMentorshipNoteDto,
+      isArray: true,
+      description: 'Mentorship notes.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id or the application has no assigned mentor.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only the assigned mentor or an administrator can view mentorship notes.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application does not belong to the Program A mentorship workflow.',
       }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],

@@ -4,9 +4,15 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '../../../generated/prisma/client';
 import { OrganizationStatus } from '../../../generated/prisma/enums';
 import { ensureAdminRole } from '../../auth/admin-role.helper';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import {
+  buildOrderBy,
+  buildPaginationMeta,
+  resolvePagination,
+} from '../../common/pagination';
 import { EMAIL_JOBS, QueueService } from '../../infrastructure/queue';
 import { OrganizationRepository } from '../../organization/organization.repository';
 import { UserRepository } from '../../user/user.repository';
@@ -16,6 +22,8 @@ import {
   MANAGEABLE_ORG_STATUSES,
   UpdateOrgStatusDto,
 } from './dto/update-org-status.dto';
+import type { ListOrganizationsQueryDto } from './dto/list-organizations-query.dto';
+import type { ListOrganizationsResponseDto } from './dto/list-organizations-response.dto';
 
 @Injectable()
 export class AdminOrganizationsService {
@@ -26,6 +34,54 @@ export class AdminOrganizationsService {
     private readonly userRepository: UserRepository,
     private readonly queueService: QueueService,
   ) {}
+
+  async listOrganizations(
+    actor: AuthenticatedUserContext,
+    query: ListOrganizationsQueryDto,
+  ): Promise<ListOrganizationsResponseDto> {
+    ensureAdminRole(actor.role, 'Only administrators can access organizations');
+
+    const where: Prisma.OrganizationWhereInput = {
+      ...(query.q && {
+        OR: [
+          { name: { contains: query.q, mode: 'insensitive' } },
+          { ico: { contains: query.q, mode: 'insensitive' } },
+        ],
+      }),
+      ...(query.status && { status: query.status }),
+      ...(query.sector && {
+        sector: { contains: query.sector, mode: 'insensitive' },
+      }),
+    };
+
+    const orderBy = buildOrderBy(query.sort, query.order, [{ id: 'asc' }]);
+    const pagination = resolvePagination(query);
+
+    const { data, total } =
+      await this.organizationRepository.findManyForAdminPaginated({
+        where,
+        orderBy,
+        skip: pagination.skip,
+        take: pagination.take,
+      });
+
+    return {
+      data: data.map((org) => ({
+        id: org.id,
+        name: org.name,
+        ico: org.ico,
+        status: org.status,
+        sector: org.sector,
+        membersCount: org.membersCount,
+        createdAt: org.createdAt,
+      })),
+      meta: {
+        ...buildPaginationMeta(total, pagination.page, pagination.limit),
+        sort: query.sort,
+        order: query.order,
+      },
+    };
+  }
 
   async getOrganization(
     actor: AuthenticatedUserContext,

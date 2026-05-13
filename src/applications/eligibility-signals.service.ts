@@ -8,6 +8,8 @@ export const ELIGIBILITY_SIGNAL_CODES = [
   'TEAM_SIZE_MIN',
   'DECLARATION_PRESENT',
   'ACADEMIC_EVIDENCE_PRESENT',
+  'TRANSFERRED_SUBJECTS_MAX',
+  'PROFILE_SUBJECTS_AVERAGE_MAX',
 ] as const;
 
 type EligibilitySignalCode = (typeof ELIGIBILITY_SIGNAL_CODES)[number];
@@ -52,6 +54,8 @@ export class EligibilitySignalsService {
       this.computeTeamSizeMin(application, configByCode),
       this.computeDeclarationPresent(application),
       this.computeAcademicEvidencePresent(application),
+      this.computeTransferredSubjectsMax(application, configByCode),
+      this.computeProfileSubjectsAverageMax(application, configByCode),
     ];
 
     const existingSignals =
@@ -158,7 +162,7 @@ export class EligibilitySignalsService {
     }
 
     const config = configByCode.get('TEAM_SIZE_MIN');
-    const defaultRequiredMinimum = 2;
+    const defaultRequiredMinimum = 3;
     const parsedRequiredMinimum =
       config?.threshold != null && config.threshold.trim() !== ''
         ? Number(config.threshold)
@@ -227,6 +231,90 @@ export class EligibilitySignalsService {
       reason: passed
         ? null
         : `Missing academic evidence for member(s): ${missingMembers
+            .map((member) => member.user.email)
+            .join(', ')}.`,
+    };
+  }
+
+  private computeTransferredSubjectsMax(
+    application: Awaited<
+      ReturnType<ApplicationsRepository['findByIdForEligibility']>
+    >,
+    configByCode: Map<string, { threshold: string | null }>,
+  ): SignalResult {
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    const config = configByCode.get('TRANSFERRED_SUBJECTS_MAX');
+    const defaultMaximum = 0;
+    const parsedMaximum =
+      config?.threshold != null && config.threshold.trim() !== ''
+        ? Number(config.threshold)
+        : defaultMaximum;
+    const maximum = Number.isFinite(parsedMaximum)
+      ? parsedMaximum
+      : defaultMaximum;
+
+    const violatingMembers = application.team.members.filter((member) => {
+      const profile = member.user.studentProfile;
+
+      if (!profile?.hasTransferredSubjects) {
+        return false;
+      }
+
+      const transferredSubjectsCount = profile.transferredSubjectsCount ?? 1;
+
+      return transferredSubjectsCount > maximum;
+    });
+
+    const passed = violatingMembers.length === 0;
+
+    return {
+      code: 'TRANSFERRED_SUBJECTS_MAX',
+      passed,
+      reason: passed
+        ? null
+        : `Transferred subjects exceed the recommended maximum for member(s): ${violatingMembers
+            .map((member) => member.user.email)
+            .join(', ')}.`,
+    };
+  }
+
+  private computeProfileSubjectsAverageMax(
+    application: Awaited<
+      ReturnType<ApplicationsRepository['findByIdForEligibility']>
+    >,
+    configByCode: Map<string, { threshold: string | null }>,
+  ): SignalResult {
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    const config = configByCode.get('PROFILE_SUBJECTS_AVERAGE_MAX');
+    const defaultMaximum = 2;
+    const parsedMaximum =
+      config?.threshold != null && config.threshold.trim() !== ''
+        ? Number(config.threshold)
+        : defaultMaximum;
+    const maximum = Number.isFinite(parsedMaximum)
+      ? parsedMaximum
+      : defaultMaximum;
+
+    const violatingMembers = application.team.members.filter((member) => {
+      const average = member.user.studentProfile?.profileSubjectsAverage;
+
+      return average != null && average > maximum;
+    });
+
+    const passed = violatingMembers.length === 0;
+
+    return {
+      code: 'PROFILE_SUBJECTS_AVERAGE_MAX',
+      passed,
+      reason: passed
+        ? null
+        : `Profile-subject average exceeds the recommended maximum for member(s): ${violatingMembers
             .map((member) => member.user.email)
             .join(', ')}.`,
     };

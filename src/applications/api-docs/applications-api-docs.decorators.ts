@@ -26,6 +26,7 @@ import { MentorAssignmentDto } from '../dto/mentor-assignment.dto';
 import { NeedsInfoItemDto } from '../dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from '../dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from '../dto/needs-info-thread.dto';
+import { OptionalApplicationTransitionNoteDto } from '../dto/optional-application-transition-note.dto';
 import { ProgramAMentorshipNoteDto } from '../dto/program-a-mentorship-note.dto';
 import { PublicCallDto } from '../dto/public-call.dto';
 import { PUBLIC_CALL_SORT_VALUES } from '../dto/public-calls-query.dto';
@@ -547,6 +548,7 @@ function createAdminLifecycleTransitionApi(config: {
   summary: string;
   description: string;
   body?: typeof ApplicationLifecycleTransitionDto;
+  forbiddenDescription?: string;
 }) {
   return createApiDecorator({
     summary: config.summary,
@@ -566,6 +568,7 @@ function createAdminLifecycleTransitionApi(config: {
       }),
       ApiForbiddenResponse({
         description:
+          config.forbiddenDescription ??
           'Only reviewer-side users may manage Program A post-approval lifecycle transitions.',
       }),
       ApiConflictResponse({
@@ -577,11 +580,81 @@ function createAdminLifecycleTransitionApi(config: {
   });
 }
 
+function createReviewerDecisionTransitionApi(config: {
+  summary: string;
+  description: string;
+  body?:
+    | typeof OptionalApplicationTransitionNoteDto
+    | typeof ApplicationLifecycleTransitionDto;
+}) {
+  return createApiDecorator({
+    summary: config.summary,
+    description: config.description,
+    body: config.body,
+    successResponse: {
+      status: 200,
+      type: ApplicationDetailDto,
+      description: 'Application review state was updated.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id format or request body validation failed.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only reviewer-side users may manage Program A review transitions.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application is not a Program A application, the current review state does not allow this transition, or another update changed the status concurrently.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+}
+
+export const FormalVerifyApplicationApi = () =>
+  createReviewerDecisionTransitionApi({
+    summary: 'Formal verify Program A application',
+    description:
+      'Moves a Program A application from SUBMITTED to FORMALLY_VERIFIED. Reviewer-side users only.',
+    body: OptionalApplicationTransitionNoteDto,
+  });
+
+export const StartEvaluationApplicationApi = () =>
+  createReviewerDecisionTransitionApi({
+    summary: 'Start Program A evaluation',
+    description:
+      'Moves a Program A application from FORMALLY_VERIFIED to EVALUATING. Reviewer-side users only.',
+    body: OptionalApplicationTransitionNoteDto,
+  });
+
+export const ApproveApplicationApi = () =>
+  createReviewerDecisionTransitionApi({
+    summary: 'Approve Program A application',
+    description:
+      'Moves a Program A application from EVALUATING to APPROVED and records an optional reviewer note. Reviewer-side users only.',
+    body: OptionalApplicationTransitionNoteDto,
+  });
+
+export const RejectApplicationApi = () =>
+  createReviewerDecisionTransitionApi({
+    summary: 'Reject Program A application',
+    description:
+      'Moves a Program A application to REJECTED from an active review state and stores the provided reason. Reviewer-side users only.',
+    body: ApplicationLifecycleTransitionDto,
+  });
+
 export const StartApplicationOnboardingApi = () =>
   createAdminLifecycleTransitionApi({
     summary: 'Start Program A onboarding',
     description:
       'Moves a Program A application from APPROVED to ONBOARDING. Reviewer-side users only.',
+    forbiddenDescription:
+      'Only reviewer-side users may manage Program A post-approval lifecycle transitions.',
   });
 
 export const ActivateApplicationApi = () =>

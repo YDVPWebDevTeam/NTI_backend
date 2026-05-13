@@ -16,15 +16,20 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import {
-  ActivateApplicationApi,
+  ApproveApplicationApi,
   ArchiveApplicationApi,
+  ActivateApplicationApi,
   CompleteApplicationApi,
+  FormalVerifyApplicationApi,
   PauseApplicationApi,
+  RejectApplicationApi,
+  StartEvaluationApplicationApi,
   StartApplicationOnboardingApi,
 } from './api-docs';
 import { ApplicationsService } from './applications.service';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationLifecycleTransitionDto } from './dto/application-lifecycle-transition.dto';
+import { OptionalApplicationTransitionNoteDto } from './dto/optional-application-transition-note.dto';
 
 @ApiTags('Admin')
 @Controller('admin/applications')
@@ -32,6 +37,50 @@ import { ApplicationLifecycleTransitionDto } from './dto/application-lifecycle-t
 @Roles(UserRole.EVALUATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
 export class AdminApplicationsController {
   constructor(private readonly applicationsService: ApplicationsService) {}
+
+  @FormalVerifyApplicationApi()
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/formal-verify')
+  formalVerify(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: OptionalApplicationTransitionNoteDto,
+  ): Promise<ApplicationDetailDto> {
+    return this.applicationsService.formalVerify(id, user, dto?.reason);
+  }
+
+  @StartEvaluationApplicationApi()
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/start-evaluation')
+  startEvaluation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: OptionalApplicationTransitionNoteDto,
+  ): Promise<ApplicationDetailDto> {
+    return this.applicationsService.startEvaluation(id, user, dto?.reason);
+  }
+
+  @ApproveApplicationApi()
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/approve')
+  approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: OptionalApplicationTransitionNoteDto,
+  ): Promise<ApplicationDetailDto> {
+    return this.applicationsService.approve(id, user, dto?.reason);
+  }
+
+  @RejectApplicationApi()
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/reject')
+  reject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: ApplicationLifecycleTransitionDto,
+  ): Promise<ApplicationDetailDto> {
+    return this.applicationsService.reject(id, user, dto.reason);
+  }
 
   @StartApplicationOnboardingApi()
   @HttpCode(HttpStatus.OK)

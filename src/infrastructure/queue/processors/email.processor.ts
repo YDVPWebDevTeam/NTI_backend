@@ -110,6 +110,42 @@ export class EmailProcessor extends WorkerHost {
         data.organizationName,
       );
     },
+    [EMAIL_JOBS.APPLICATION_SUBMITTED]: async (data) => {
+      await this.mailerService.sendApplicationSubmittedEmail(
+        data.email,
+        data.applicationId,
+        data.applicationTitle,
+      );
+    },
+    [EMAIL_JOBS.APPLICATION_NEEDS_INFO_REQUESTED]: async (data) => {
+      await this.mailerService.sendApplicationNeedsInfoEmail(
+        data.email,
+        data.applicationId,
+        data.applicationTitle,
+      );
+    },
+    [EMAIL_JOBS.APPLICATION_APPROVED]: async (data) => {
+      await this.mailerService.sendApplicationApprovedEmail(
+        data.email,
+        data.applicationId,
+        data.applicationTitle,
+      );
+    },
+    [EMAIL_JOBS.APPLICATION_REJECTED]: async (data) => {
+      await this.mailerService.sendApplicationRejectedEmail(
+        data.email,
+        data.applicationId,
+        data.applicationTitle,
+        data.reason,
+      );
+    },
+    [EMAIL_JOBS.APPLICATION_MENTOR_ASSIGNED]: async (data) => {
+      await this.mailerService.sendApplicationMentorAssignedEmail(
+        data.email,
+        data.applicationId,
+        data.applicationTitle,
+      );
+    },
   };
 
   async process(job: Job<EmailJobData[EmailJobName]>): Promise<void> {

@@ -26,6 +26,17 @@ jest.mock('./eligibility-signals.service', () => ({
   EligibilitySignalsService: class EligibilitySignalsService {},
 }));
 
+jest.mock('../infrastructure/queue', () => ({
+  QueueService: class QueueService {},
+  EMAIL_JOBS: {
+    APPLICATION_SUBMITTED: 'application-submitted',
+    APPLICATION_NEEDS_INFO_REQUESTED: 'application-needs-info-requested',
+    APPLICATION_APPROVED: 'application-approved',
+    APPLICATION_REJECTED: 'application-rejected',
+    APPLICATION_MENTOR_ASSIGNED: 'application-mentor-assigned',
+  },
+}));
+
 import {
   BadRequestException,
   ConflictException,
@@ -100,6 +111,9 @@ describe('ApplicationsService', () => {
     recomputeForApplication: jest.Mock;
     getSignalsForApplication: jest.Mock;
   };
+  let queueService: {
+    addEmail: jest.Mock;
+  };
 
   const mockCall = {
     id: 'call-1',
@@ -125,7 +139,10 @@ describe('ApplicationsService', () => {
     leaderId: 'user-1',
     lockedAt: null,
     archivedAt: null,
-    members: [{ userId: 'user-1' }, { userId: 'user-2' }],
+    members: [
+      { userId: 'user-1', user: { email: 'lead@example.com' } },
+      { userId: 'user-2', user: { email: 'member@example.com' } },
+    ],
   };
 
   const workflowApplication = {
@@ -241,6 +258,10 @@ describe('ApplicationsService', () => {
       createStatusEvent: jest.fn(),
     };
 
+    queueService = {
+      addEmail: jest.fn().mockResolvedValue(undefined),
+    };
+
     service = new ApplicationsService(
       applicationsRepository as never,
       applicationDocumentsRepository as never,
@@ -252,6 +273,7 @@ describe('ApplicationsService', () => {
       eligibilitySignalsService as never,
       programAMentorshipRepository as never,
       userRepository as never,
+      queueService as never,
     );
   });
 
@@ -588,6 +610,22 @@ describe('ApplicationsService', () => {
     expect(
       eligibilitySignalsService.recomputeForApplication,
     ).toHaveBeenCalledWith('application-1', { tx: 'db-client' });
+    expect(needsInfoRepository.createStatusEvent).toHaveBeenCalledWith(
+      {
+        applicationId: 'application-1',
+        fromStatus: ApplicationStatus.DRAFT,
+        toStatus: ApplicationStatus.SUBMITTED,
+        changedById: 'user-1',
+      },
+      { tx: 'db-client' },
+    );
+    expect(queueService.addEmail).toHaveBeenCalledWith(
+      'application-submitted',
+      expect.objectContaining({
+        email: 'lead@example.com',
+        applicationId: 'application-1',
+      }),
+    );
     expect(teamRepository.update).toHaveBeenCalled();
     expect(result.status).toBe(ApplicationStatus.SUBMITTED);
   });
@@ -709,6 +747,7 @@ describe('ApplicationsService', () => {
     userRepository.findUnique.mockResolvedValue({
       id: 'mentor-1',
       role: UserRole.MENTOR,
+      email: 'mentor@example.com',
     });
     applicationsRepository.assignMentor.mockResolvedValue({
       id: 'application-1',
@@ -740,6 +779,13 @@ describe('ApplicationsService', () => {
       assignedAt: new Date('2026-05-13T10:00:00.000Z'),
       assignedById: 'admin-1',
     });
+    expect(queueService.addEmail).toHaveBeenCalledWith(
+      'application-mentor-assigned',
+      expect.objectContaining({
+        email: 'mentor@example.com',
+        applicationId: 'application-1',
+      }),
+    );
   });
 
   it('rejects mentor assignment for non-Program-A application', async () => {
@@ -838,6 +884,7 @@ describe('ApplicationsService', () => {
     userRepository.findUnique.mockResolvedValue({
       id: 'mentor-new',
       role: UserRole.MENTOR,
+      email: 'mentor-new@example.com',
     });
     applicationsRepository.assignMentor.mockResolvedValue({
       id: 'application-1',
@@ -1125,6 +1172,142 @@ describe('ApplicationsService', () => {
     expect(result.status).toBe(ApplicationStatus.ACTIVE_PROJECT);
   });
 
+  it('formally verifies submitted Program A application', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.SUBMITTED,
+    });
+    applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+      count: 1,
+    });
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...detailApplication,
+      status: ApplicationStatus.FORMALLY_VERIFIED,
+    });
+
+    const result = await service.formalVerify(
+      'application-1',
+      {
+        id: 'reviewer-1',
+        email: 'reviewer@example.com',
+        role: UserRole.EVALUATOR,
+      } as never,
+      'Formal review complete',
+    );
+
+    expect(applicationsRepository.updateStatusIfCurrent).toHaveBeenCalledWith(
+      'application-1',
+      ApplicationStatus.SUBMITTED,
+      ApplicationStatus.FORMALLY_VERIFIED,
+      { tx: 'db-client' },
+      undefined,
+    );
+    expect(result.status).toBe(ApplicationStatus.FORMALLY_VERIFIED);
+  });
+
+  it('starts evaluation after formal verification', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.FORMALLY_VERIFIED,
+    });
+    applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+      count: 1,
+    });
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...detailApplication,
+      status: ApplicationStatus.EVALUATING,
+    });
+
+    const result = await service.startEvaluation(
+      'application-1',
+      {
+        id: 'reviewer-1',
+        email: 'reviewer@example.com',
+        role: UserRole.EVALUATOR,
+      } as never,
+      'Evaluation started',
+    );
+
+    expect(result.status).toBe(ApplicationStatus.EVALUATING);
+  });
+
+  it('approves Program A application from evaluating and sends notification', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.EVALUATING,
+    });
+    applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+      count: 1,
+    });
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...detailApplication,
+      status: ApplicationStatus.APPROVED,
+      decidedAt: new Date('2026-05-14T12:00:00.000Z'),
+    });
+
+    const result = await service.approve(
+      'application-1',
+      {
+        id: 'reviewer-1',
+        email: 'reviewer@example.com',
+        role: UserRole.EVALUATOR,
+      } as never,
+      'Approved by the committee',
+    );
+
+    expect(applicationsRepository.updateStatusIfCurrent).toHaveBeenCalledWith(
+      'application-1',
+      ApplicationStatus.EVALUATING,
+      ApplicationStatus.APPROVED,
+      { tx: 'db-client' },
+      expect.objectContaining({
+        decidedAt: expect.any(Date) as unknown as Date,
+      }),
+    );
+    expect(queueService.addEmail).toHaveBeenCalledWith(
+      'application-approved',
+      expect.objectContaining({
+        email: 'lead@example.com',
+        applicationId: 'application-1',
+      }),
+    );
+    expect(result.status).toBe(ApplicationStatus.APPROVED);
+  });
+
+  it('rejects Program A application and requires reason', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.EVALUATING,
+    });
+    applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+      count: 1,
+    });
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...detailApplication,
+      status: ApplicationStatus.REJECTED,
+      decidedAt: new Date('2026-05-14T12:30:00.000Z'),
+    });
+
+    const result = await service.reject(
+      'application-1',
+      {
+        id: 'reviewer-1',
+        email: 'reviewer@example.com',
+        role: UserRole.EVALUATOR,
+      } as never,
+      'Eligibility expectations were not met',
+    );
+
+    expect(queueService.addEmail).toHaveBeenCalledWith(
+      'application-rejected',
+      expect.objectContaining({
+        email: 'lead@example.com',
+        reason: 'Eligibility expectations were not met',
+      }),
+    );
+    expect(result.status).toBe(ApplicationStatus.REJECTED);
+  });
+
   it('reactivates application from paused state', async () => {
     applicationsRepository.findByIdForWorkflow.mockResolvedValue({
       ...workflowApplication,
@@ -1277,6 +1460,20 @@ describe('ApplicationsService', () => {
           id: 'admin-1',
           email: 'admin@example.com',
           role: UserRole.ADMIN,
+        } as never,
+        '   ',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects application rejection without reason', async () => {
+    await expect(
+      service.reject(
+        'application-1',
+        {
+          id: 'reviewer-1',
+          email: 'reviewer@example.com',
+          role: UserRole.EVALUATOR,
         } as never,
         '   ',
       ),

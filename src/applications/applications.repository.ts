@@ -119,6 +119,7 @@ export class ApplicationsRepository extends BaseRepository<
     currentStatus: ApplicationStatus,
     nextStatus: ApplicationStatus,
     db?: PrismaDbClient,
+    data?: Prisma.ApplicationUncheckedUpdateInput,
   ) {
     return (db ?? this.prisma.client).application.updateMany({
       where: {
@@ -127,6 +128,7 @@ export class ApplicationsRepository extends BaseRepository<
       },
       data: {
         status: nextStatus,
+        ...(data ?? {}),
       },
     });
   }
@@ -187,6 +189,11 @@ export class ApplicationsRepository extends BaseRepository<
           members: {
             select: {
               userId: true,
+              user: {
+                select: {
+                  email: true,
+                },
+              },
             },
           },
         },
@@ -251,6 +258,20 @@ export class ApplicationsRepository extends BaseRepository<
           members: {
             select: {
               userId: true,
+              user: {
+                select: {
+                  email: true,
+                  studentProfile: {
+                    select: {
+                      academicDeclarationAcceptedAt: true,
+                      academicEvidenceFileId: true,
+                      hasTransferredSubjects: true,
+                      transferredSubjectsCount: true,
+                      profileSubjectsAverage: true,
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -293,6 +314,9 @@ export class ApplicationsRepository extends BaseRepository<
                     select: {
                       academicDeclarationAcceptedAt: true,
                       academicEvidenceFileId: true,
+                      hasTransferredSubjects: true,
+                      transferredSubjectsCount: true,
+                      profileSubjectsAverage: true,
                     },
                   },
                 },

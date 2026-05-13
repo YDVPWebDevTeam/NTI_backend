@@ -201,6 +201,91 @@ export class EmailTemplateRegistryService {
             subject: 'Organization rejected',
           }),
       },
+      [EMAIL_TEMPLATES.APPLICATION_SUBMITTED]: {
+        render: (data) =>
+          this.createActionEmail({
+            title: 'Application submitted',
+            preheader:
+              'Your NTI Program A application was submitted successfully.',
+            intro: [
+              `Your application ${data.applicationTitle} was submitted successfully.`,
+              'You can track future review updates from your NTI dashboard.',
+            ],
+            cta: {
+              label: 'Open dashboard',
+              url: `${this.configService.frontUrl}/dashboard`,
+            },
+            subject: 'Application submitted',
+          }),
+      },
+      [EMAIL_TEMPLATES.APPLICATION_NEEDS_INFO_REQUESTED]: {
+        render: (data) =>
+          this.createActionEmail({
+            title: 'Additional information requested',
+            preheader:
+              'NTI requested additional information for your Program A application.',
+            intro: [
+              `Your application ${data.applicationTitle} needs additional information before review can continue.`,
+              'Open your dashboard, review the request, and submit your reply when ready.',
+            ],
+            cta: {
+              label: 'Open dashboard',
+              url: `${this.configService.frontUrl}/dashboard`,
+            },
+            subject: 'Additional information requested',
+          }),
+      },
+      [EMAIL_TEMPLATES.APPLICATION_APPROVED]: {
+        render: (data) =>
+          this.createActionEmail({
+            title: 'Application approved',
+            preheader: 'Your NTI Program A application has been approved.',
+            intro: [
+              `Your application ${data.applicationTitle} has been approved.`,
+              'You can open your dashboard to review the next steps.',
+            ],
+            cta: {
+              label: 'Open dashboard',
+              url: `${this.configService.frontUrl}/dashboard`,
+            },
+            subject: 'Application approved',
+          }),
+      },
+      [EMAIL_TEMPLATES.APPLICATION_REJECTED]: {
+        render: (data) =>
+          this.createActionEmail({
+            title: 'Application rejected',
+            preheader:
+              'Your NTI Program A application was reviewed and not approved.',
+            intro: [
+              `Your application ${data.applicationTitle} was reviewed and not approved.`,
+              'Open your dashboard to review the latest status and the reviewer note below.',
+            ],
+            cta: {
+              label: 'Open dashboard',
+              url: `${this.configService.frontUrl}/dashboard`,
+            },
+            note: `Reason: ${data.reason}`,
+            subject: 'Application rejected',
+          }),
+      },
+      [EMAIL_TEMPLATES.APPLICATION_MENTOR_ASSIGNED]: {
+        render: (data) =>
+          this.createActionEmail({
+            title: 'Mentor assigned',
+            preheader:
+              'A mentor was assigned to your NTI Program A application.',
+            intro: [
+              `A mentor was assigned to ${data.applicationTitle}.`,
+              'Open your dashboard to continue with the next Program A steps.',
+            ],
+            cta: {
+              label: 'Open dashboard',
+              url: `${this.configService.frontUrl}/dashboard`,
+            },
+            subject: 'Mentor assigned',
+          }),
+      },
     };
   }
 }

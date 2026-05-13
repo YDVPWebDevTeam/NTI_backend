@@ -10,6 +10,11 @@ export const EMAIL_TEMPLATES = {
   ORG_REJECTED: 'org-rejected',
   ORG_INVITE: 'org-invite',
   TEAM_INVITATION: 'team-invitation',
+  APPLICATION_SUBMITTED: 'application-submitted',
+  APPLICATION_NEEDS_INFO_REQUESTED: 'application-needs-info-requested',
+  APPLICATION_APPROVED: 'application-approved',
+  APPLICATION_REJECTED: 'application-rejected',
+  APPLICATION_MENTOR_ASSIGNED: 'application-mentor-assigned',
 } as const;
 
 export type EmailTemplateName =
@@ -44,6 +49,27 @@ export interface EmailTemplateDataByName {
   [EMAIL_TEMPLATES.ORG_INVITE]: {
     token: string;
     organizationName: string;
+  };
+  [EMAIL_TEMPLATES.APPLICATION_SUBMITTED]: {
+    applicationId: string;
+    applicationTitle: string;
+  };
+  [EMAIL_TEMPLATES.APPLICATION_NEEDS_INFO_REQUESTED]: {
+    applicationId: string;
+    applicationTitle: string;
+  };
+  [EMAIL_TEMPLATES.APPLICATION_APPROVED]: {
+    applicationId: string;
+    applicationTitle: string;
+  };
+  [EMAIL_TEMPLATES.APPLICATION_REJECTED]: {
+    applicationId: string;
+    applicationTitle: string;
+    reason: string;
+  };
+  [EMAIL_TEMPLATES.APPLICATION_MENTOR_ASSIGNED]: {
+    applicationId: string;
+    applicationTitle: string;
   };
 }
 

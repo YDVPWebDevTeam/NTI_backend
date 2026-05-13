@@ -1,4 +1,6 @@
 export {
+  ApproveApplicationApi,
+  FormalVerifyApplicationApi,
   ActivateApplicationApi,
   ArchiveApplicationApi,
   AssignMentorApi,
@@ -18,9 +20,11 @@ export {
   GetSectionHistoryApi,
   ListApplicationSectionsApi,
   ReplyToNeedsInfoItemApi,
+  RejectApplicationApi,
   ResubmitApplicationApi,
   PauseApplicationApi,
   SetActiveSectionVersionApi,
+  StartEvaluationApplicationApi,
   StartApplicationOnboardingApi,
   SubmitApplicationApi,
   UpsertApplicationSectionApi,

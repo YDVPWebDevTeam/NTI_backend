@@ -5,13 +5,17 @@ export { ApplicationsRepository } from './applications.repository';
 export { ApplicationDocumentsRepository } from './application-documents.repository';
 export { ApplicationSectionsRepository } from './application-sections.repository';
 export { ProgramAMentorshipRepository } from './program-a-mentorship.repository';
+export { AdminApplicationsController } from './admin-applications.controller';
 export { ApplicationsController } from './applications.controller';
 export { CallsDocumentsController } from './calls-documents.controller';
 export { ApplicationRulesService } from './rules/application-rules.service';
 export { CallsRepository } from './calls.repository';
 export {
+  ActivateApplicationApi,
+  ArchiveApplicationApi,
   AssignMentorApi,
   AttachApplicationDocumentApi,
+  CompleteApplicationApi,
   CreateMentorshipNoteApi,
   CreateApplicationApi,
   CreateNeedsInfoItemApi,
@@ -27,10 +31,13 @@ export {
   ListApplicationSectionsApi,
   ReplyToNeedsInfoItemApi,
   ResubmitApplicationApi,
+  PauseApplicationApi,
   SetActiveSectionVersionApi,
+  StartApplicationOnboardingApi,
   SubmitApplicationApi,
   UpsertApplicationSectionApi,
 } from './api-docs';
+export { ApplicationLifecycleTransitionDto } from './dto/application-lifecycle-transition.dto';
 export { ApplicationDetailDto } from './dto/application-detail.dto';
 export { ApplicationDocumentDto } from './dto/application-document.dto';
 export { ApplicationSectionDto } from './dto/application-section.dto';

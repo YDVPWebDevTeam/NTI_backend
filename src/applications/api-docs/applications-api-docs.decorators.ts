@@ -12,6 +12,7 @@ import { createPaginationQueryDecorators } from '../../common/pagination';
 import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
 import { ApplicationSectionDto } from '../dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from '../dto/application-section-history.dto';
+import { ApplicationLifecycleTransitionDto } from '../dto/application-lifecycle-transition.dto';
 import { AssignMentorDto } from '../dto/assign-mentor.dto';
 import { ApplicationDetailDto } from '../dto/application-detail.dto';
 import { ApplicationDocumentDto } from '../dto/application-document.dto';
@@ -540,4 +541,75 @@ export const SetActiveSectionVersionApi = () =>
         description: 'Application or section was not found.',
       }),
     ],
+  });
+
+function createAdminLifecycleTransitionApi(config: {
+  summary: string;
+  description: string;
+  body?: typeof ApplicationLifecycleTransitionDto;
+}) {
+  return createApiDecorator({
+    summary: config.summary,
+    description: config.description,
+    body: config.body,
+    successResponse: {
+      status: 200,
+      type: ApplicationDetailDto,
+      description: 'Application lifecycle state was updated.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id format or request body validation failed.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only reviewer-side users may manage Program A post-approval lifecycle transitions.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application is not a Program A application, the current lifecycle state does not allow this transition, or another update changed the status concurrently.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+}
+
+export const StartApplicationOnboardingApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Start Program A onboarding',
+    description:
+      'Moves a Program A application from APPROVED to ONBOARDING. Reviewer-side users only.',
+  });
+
+export const ActivateApplicationApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Activate Program A application',
+    description:
+      'Moves a Program A application from ONBOARDING to ACTIVE_PROJECT or from PAUSED back to ACTIVE_PROJECT. Reviewer-side users only.',
+  });
+
+export const PauseApplicationApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Pause Program A application',
+    description:
+      'Moves a Program A application from ACTIVE_PROJECT to PAUSED and stores the provided reason. Reviewer-side users only.',
+    body: ApplicationLifecycleTransitionDto,
+  });
+
+export const CompleteApplicationApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Complete Program A application',
+    description:
+      'Moves a Program A application from ACTIVE_PROJECT to COMPLETED. Reviewer-side users only.',
+  });
+
+export const ArchiveApplicationApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Archive Program A application',
+    description:
+      'Moves a Program A application from COMPLETED to ARCHIVED and stores the provided reason. Reviewer-side users only.',
+    body: ApplicationLifecycleTransitionDto,
   });

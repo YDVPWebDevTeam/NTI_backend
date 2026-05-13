@@ -172,6 +172,24 @@ export class UserRepository extends BaseRepository<
     });
   }
 
+  linkToOrganizationIfUnlinked(
+    userId: string,
+    organizationId: string,
+    role: UserRole,
+    db?: PrismaDbClient,
+  ) {
+    return this.getDelegate(db).updateMany({
+      where: {
+        id: userId,
+        organizationId: null,
+      },
+      data: {
+        organizationId,
+        role,
+      },
+    });
+  }
+
   removeOrganizationMember(
     userId: string,
     db?: PrismaDbClient,

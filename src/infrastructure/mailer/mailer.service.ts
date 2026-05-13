@@ -146,4 +146,69 @@ export class MailerService {
       rejectionReason,
     });
   }
+
+  async sendApplicationSubmittedEmail(
+    email: string,
+    applicationId: string,
+    applicationTitle: string,
+  ): Promise<void> {
+    await this.sendTemplate(email, EMAIL_TEMPLATES.APPLICATION_SUBMITTED, {
+      applicationId,
+      applicationTitle,
+    });
+  }
+
+  async sendApplicationNeedsInfoEmail(
+    email: string,
+    applicationId: string,
+    applicationTitle: string,
+  ): Promise<void> {
+    await this.sendTemplate(
+      email,
+      EMAIL_TEMPLATES.APPLICATION_NEEDS_INFO_REQUESTED,
+      {
+        applicationId,
+        applicationTitle,
+      },
+    );
+  }
+
+  async sendApplicationApprovedEmail(
+    email: string,
+    applicationId: string,
+    applicationTitle: string,
+  ): Promise<void> {
+    await this.sendTemplate(email, EMAIL_TEMPLATES.APPLICATION_APPROVED, {
+      applicationId,
+      applicationTitle,
+    });
+  }
+
+  async sendApplicationRejectedEmail(
+    email: string,
+    applicationId: string,
+    applicationTitle: string,
+    reason: string,
+  ): Promise<void> {
+    await this.sendTemplate(email, EMAIL_TEMPLATES.APPLICATION_REJECTED, {
+      applicationId,
+      applicationTitle,
+      reason,
+    });
+  }
+
+  async sendApplicationMentorAssignedEmail(
+    email: string,
+    applicationId: string,
+    applicationTitle: string,
+  ): Promise<void> {
+    await this.sendTemplate(
+      email,
+      EMAIL_TEMPLATES.APPLICATION_MENTOR_ASSIGNED,
+      {
+        applicationId,
+        applicationTitle,
+      },
+    );
+  }
 }

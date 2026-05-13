@@ -57,6 +57,15 @@ export class OrganizationInviteRepository extends BaseRepository<
     });
   }
 
+  findByToken(
+    token: string,
+    db?: PrismaDbClient,
+  ): Promise<OrgInvitation | null> {
+    return (db ?? this.prisma.client).orgInvitation.findUnique({
+      where: { token },
+    });
+  }
+
   async findByTokenForUpdate(
     token: string,
     tx: Prisma.TransactionClient,
@@ -68,5 +77,25 @@ export class OrganizationInviteRepository extends BaseRepository<
     `;
 
     return result[0] ?? null;
+  }
+
+  markAcceptedIfPending(
+    invitationId: string,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<Prisma.BatchPayload> {
+    return tx.orgInvitation.updateMany({
+      where: {
+        id: invitationId,
+        status: InvitationStatus.PENDING,
+        acceptedAt: null,
+        revokedAt: null,
+        expiresAt: { gt: at },
+      },
+      data: {
+        status: InvitationStatus.ACCEPTED,
+        acceptedAt: at,
+      },
+    });
   }
 }

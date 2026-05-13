@@ -12,6 +12,10 @@ export type ApplicationWorkflowView = Prisma.ApplicationGetPayload<{
   select: ReturnType<ApplicationsRepository['applicationWorkflowSelect']>;
 }>;
 
+export type ApplicationEligibilityView = Prisma.ApplicationGetPayload<{
+  select: ReturnType<ApplicationsRepository['applicationEligibilitySelect']>;
+}>;
+
 @Injectable()
 export class ApplicationsRepository extends BaseRepository<
   Application,
@@ -46,6 +50,16 @@ export class ApplicationsRepository extends BaseRepository<
     return (db ?? this.prisma.client).application.findUnique({
       where: { id },
       select: this.applicationWorkflowSelect(),
+    });
+  }
+
+  findByIdForEligibility(
+    id: string,
+    db?: PrismaDbClient,
+  ): Promise<ApplicationEligibilityView | null> {
+    return (db ?? this.prisma.client).application.findUnique({
+      where: { id },
+      select: this.applicationEligibilitySelect(),
     });
   }
 
@@ -105,6 +119,7 @@ export class ApplicationsRepository extends BaseRepository<
     currentStatus: ApplicationStatus,
     nextStatus: ApplicationStatus,
     db?: PrismaDbClient,
+    data?: Omit<Prisma.ApplicationUncheckedUpdateInput, 'status'>,
   ) {
     return (db ?? this.prisma.client).application.updateMany({
       where: {
@@ -112,7 +127,31 @@ export class ApplicationsRepository extends BaseRepository<
         status: currentStatus,
       },
       data: {
+        ...(data ?? {}),
         status: nextStatus,
+      },
+    });
+  }
+
+  assignMentor(
+    applicationId: string,
+    mentorUserId: string,
+    mentorAssignedAt: Date,
+    mentorAssignedById: string,
+    db?: PrismaDbClient,
+  ) {
+    return (db ?? this.prisma.client).application.update({
+      where: { id: applicationId },
+      data: {
+        mentorUserId,
+        mentorAssignedAt,
+        mentorAssignedById,
+      },
+      select: {
+        id: true,
+        mentorUserId: true,
+        mentorAssignedAt: true,
+        mentorAssignedById: true,
       },
     });
   }
@@ -123,6 +162,9 @@ export class ApplicationsRepository extends BaseRepository<
       callId: true,
       teamId: true,
       createdById: true,
+      mentorUserId: true,
+      mentorAssignedAt: true,
+      mentorAssignedById: true,
       status: true,
       submittedAt: true,
       decidedAt: true,
@@ -147,6 +189,11 @@ export class ApplicationsRepository extends BaseRepository<
           members: {
             select: {
               userId: true,
+              user: {
+                select: {
+                  email: true,
+                },
+              },
             },
           },
         },
@@ -170,6 +217,9 @@ export class ApplicationsRepository extends BaseRepository<
       callId: true,
       teamId: true,
       createdById: true,
+      mentorUserId: true,
+      mentorAssignedAt: true,
+      mentorAssignedById: true,
       status: true,
       submittedAt: true,
       decidedAt: true,
@@ -208,6 +258,20 @@ export class ApplicationsRepository extends BaseRepository<
           members: {
             select: {
               userId: true,
+              user: {
+                select: {
+                  email: true,
+                  studentProfile: {
+                    select: {
+                      academicDeclarationAcceptedAt: true,
+                      academicEvidenceFileId: true,
+                      hasTransferredSubjects: true,
+                      transferredSubjectsCount: true,
+                      profileSubjectsAverage: true,
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -225,6 +289,43 @@ export class ApplicationsRepository extends BaseRepository<
           isActive: true,
           uploadedFileId: true,
           createdAt: true,
+        },
+      },
+    } as const;
+  }
+
+  private applicationEligibilitySelect() {
+    return {
+      id: true,
+      callId: true,
+      teamId: true,
+      team: {
+        select: {
+          id: true,
+          leaderId: true,
+          members: {
+            select: {
+              userId: true,
+              user: {
+                select: {
+                  id: true,
+                  email: true,
+                  studentProfile: {
+                    select: {
+                      academicDeclarationAcceptedAt: true,
+                      academicEvidenceFileId: true,
+                      hasTransferredSubjects: true,
+                      transferredSubjectsCount: true,
+                      profileSubjectsAverage: true,
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: {
+              userId: 'asc',
+            },
+          },
         },
       },
     } as const;

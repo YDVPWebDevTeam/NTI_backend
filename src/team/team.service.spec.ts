@@ -26,12 +26,17 @@ jest.mock('../infrastructure/queue', () => ({
   QueueService: class QueueService {},
 }));
 
+jest.mock('../applications/eligibility-signals.service', () => ({
+  EligibilitySignalsService: class EligibilitySignalsService {},
+}));
+
 import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
+import { EligibilitySignalsService } from '../applications/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import type { PrismaDbClient } from '../infrastructure/database';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
@@ -69,6 +74,9 @@ describe('TeamService', () => {
   let queueService: {
     addEmail: jest.Mock;
     removeEmailJob: jest.Mock;
+  };
+  let eligibilitySignalsService: {
+    recomputeForTeamApplications: jest.Mock;
   };
   let transactionClient: PrismaDbClient;
 
@@ -151,10 +159,15 @@ describe('TeamService', () => {
       removeEmailJob: jest.fn().mockResolvedValue(undefined),
     };
 
+    eligibilitySignalsService = {
+      recomputeForTeamApplications: jest.fn().mockResolvedValue(undefined),
+    };
+
     service = new TeamService(
       teamRepository as unknown as TeamRepository,
       invitationService as unknown as InvitationService,
       queueService as unknown as QueueService,
+      eligibilitySignalsService as unknown as EligibilitySignalsService,
     );
   });
 
@@ -356,6 +369,9 @@ describe('TeamService', () => {
       'member-1',
       transactionClient,
     );
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).toHaveBeenCalledWith('team-1', transactionClient);
     expect(result).toEqual({
       teamId: 'team-1',
       memberId: 'member-1',
@@ -369,6 +385,9 @@ describe('TeamService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(teamRepository.deleteMembership).not.toHaveBeenCalled();
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects member removal for a locked team', async () => {
@@ -384,6 +403,9 @@ describe('TeamService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(teamRepository.deleteMembership).not.toHaveBeenCalled();
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects member removal when attempting to remove the current leader', async () => {
@@ -392,6 +414,9 @@ describe('TeamService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(teamRepository.findMember).not.toHaveBeenCalled();
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects member removal when membership does not exist', async () => {
@@ -400,6 +425,10 @@ describe('TeamService', () => {
     await expect(
       service.removeMember('team-1', 'leader-1', 'missing-member'),
     ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects member removal when membership disappears before delete', async () => {
@@ -408,6 +437,10 @@ describe('TeamService', () => {
     await expect(
       service.removeMember('team-1', 'leader-1', 'member-1'),
     ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('allows a non-leader member to leave a team', async () => {
@@ -429,6 +462,9 @@ describe('TeamService', () => {
       'member-1',
       transactionClient,
     );
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).toHaveBeenCalledWith('team-1', transactionClient);
     expect(result).toEqual({
       teamId: 'team-1',
       userId: 'member-1',
@@ -442,6 +478,10 @@ describe('TeamService', () => {
     await expect(
       service.leaveTeam('team-1', 'member-1'),
     ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects leave-team for the current leader', async () => {
@@ -455,6 +495,9 @@ describe('TeamService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(teamRepository.deleteMembership).not.toHaveBeenCalled();
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects leave-team for a locked team', async () => {
@@ -468,6 +511,10 @@ describe('TeamService', () => {
     await expect(
       service.leaveTeam('team-1', 'member-1'),
     ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects leave-team when the team does not exist', async () => {
@@ -476,6 +523,10 @@ describe('TeamService', () => {
     await expect(
       service.leaveTeam('missing-team', 'member-1'),
     ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('transfers leadership to an existing member inside a transaction', async () => {
@@ -505,6 +556,9 @@ describe('TeamService', () => {
       'member-2',
       transactionClient,
     );
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).toHaveBeenCalledWith('team-1', transactionClient);
     expect(result).toEqual({
       id: 'team-1',
       leaderId: 'member-2',
@@ -518,6 +572,9 @@ describe('TeamService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(teamRepository.updateLeader).not.toHaveBeenCalled();
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects leadership transfer when the new leader is not a team member', async () => {
@@ -528,6 +585,9 @@ describe('TeamService', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
 
     expect(teamRepository.updateLeader).not.toHaveBeenCalled();
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects leadership transfer for a locked team', async () => {
@@ -541,6 +601,10 @@ describe('TeamService', () => {
     await expect(
       service.transferLeadership('team-1', 'leader-1', 'member-2'),
     ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects lifecycle actions when the team does not exist', async () => {
@@ -549,6 +613,10 @@ describe('TeamService', () => {
     await expect(
       service.removeMember('missing-team', 'leader-1', 'member-1'),
     ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects leadership transfer when the team does not exist', async () => {
@@ -559,6 +627,9 @@ describe('TeamService', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
 
     expect(teamRepository.updateLeader).not.toHaveBeenCalled();
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects leave-team when membership disappears before delete', async () => {
@@ -567,5 +638,9 @@ describe('TeamService', () => {
     await expect(
       service.leaveTeam('team-1', 'member-1'),
     ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(
+      eligibilitySignalsService.recomputeForTeamApplications,
+    ).not.toHaveBeenCalled();
   });
 });

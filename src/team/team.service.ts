@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Invitation, Team } from '../../generated/prisma/client';
 import { Prisma } from '../../generated/prisma/client';
+import { EligibilitySignalsService } from '../applications/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import type {
   PrismaDbClient,
@@ -39,6 +40,7 @@ export class TeamService {
     private readonly teamRepository: TeamRepository,
     private readonly invitationService: InvitationService,
     private readonly queueService: QueueService,
+    private readonly eligibilitySignalsService: EligibilitySignalsService,
   ) {}
 
   async create(
@@ -240,6 +242,11 @@ export class TeamService {
         throw new NotFoundException('Team member not found');
       }
 
+      await this.eligibilitySignalsService.recomputeForTeamApplications(
+        team.id,
+        db,
+      );
+
       return {
         teamId: team.id,
         memberId,
@@ -283,6 +290,11 @@ export class TeamService {
         throw new NotFoundException('Team member not found');
       }
 
+      await this.eligibilitySignalsService.recomputeForTeamApplications(
+        team.id,
+        db,
+      );
+
       return {
         teamId: team.id,
         userId: actorId,
@@ -313,7 +325,18 @@ export class TeamService {
           throw new NotFoundException('Team member not found');
         }
 
-        return this.teamRepository.updateLeader(team.id, newLeaderId, db);
+        const updated = await this.teamRepository.updateLeader(
+          team.id,
+          newLeaderId,
+          db,
+        );
+
+        await this.eligibilitySignalsService.recomputeForTeamApplications(
+          team.id,
+          db,
+        );
+
+        return updated;
       },
     );
 

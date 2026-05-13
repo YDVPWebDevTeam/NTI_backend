@@ -12,16 +12,22 @@ import { createPaginationQueryDecorators } from '../../common/pagination';
 import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
 import { ApplicationSectionDto } from '../dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from '../dto/application-section-history.dto';
+import { ApplicationLifecycleTransitionDto } from '../dto/application-lifecycle-transition.dto';
+import { AssignMentorDto } from '../dto/assign-mentor.dto';
 import { ApplicationDetailDto } from '../dto/application-detail.dto';
 import { ApplicationDocumentDto } from '../dto/application-document.dto';
 import { AttachApplicationDocumentDto } from '../dto/attach-application-document.dto';
 import { CreateApplicationDto } from '../dto/create-application.dto';
+import { CreateMentorshipNoteDto } from '../dto/create-mentorship-note.dto';
 import { CreateNeedsInfoItemDto } from '../dto/create-needs-info-item.dto';
 import { CreateNeedsInfoReplyDto } from '../dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from '../dto/document-completeness.dto';
+import { MentorAssignmentDto } from '../dto/mentor-assignment.dto';
 import { NeedsInfoItemDto } from '../dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from '../dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from '../dto/needs-info-thread.dto';
+import { OptionalApplicationTransitionNoteDto } from '../dto/optional-application-transition-note.dto';
+import { ProgramAMentorshipNoteDto } from '../dto/program-a-mentorship-note.dto';
 import { PublicCallDto } from '../dto/public-call.dto';
 import { PUBLIC_CALL_SORT_VALUES } from '../dto/public-calls-query.dto';
 import { PublicCallsResponseDto } from '../dto/public-calls-response.dto';
@@ -322,6 +328,97 @@ export const CreateNeedsInfoItemApi = () =>
     ],
   });
 
+export const AssignMentorApi = () =>
+  createApiDecorator({
+    summary: 'Assign mentor to Program A application',
+    description:
+      'Assigns or reassigns the current mentor for an approved-or-later Program A application. Admin and super-admin only.',
+    body: AssignMentorDto,
+    successResponse: {
+      status: 201,
+      type: MentorAssignmentDto,
+      description: 'Mentor assignment was saved.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id, invalid mentor id, unsupported application status, or target user is not a mentor.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only administrators can assign mentors.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application does not belong to the Program A mentorship workflow.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Application or mentor user was not found.',
+      }),
+    ],
+  });
+
+export const CreateMentorshipNoteApi = () =>
+  createApiDecorator({
+    summary: 'Create Program A mentorship note',
+    description:
+      'Creates an append-only mentorship note for a Program A application. Accessible to the assigned mentor, admin, and super-admin.',
+    body: CreateMentorshipNoteDto,
+    successResponse: {
+      status: 201,
+      type: ProgramAMentorshipNoteDto,
+      description: 'Mentorship note was created.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id or the application has no assigned mentor.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only the assigned mentor or an administrator can create mentorship notes.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application does not belong to the Program A mentorship workflow.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const GetMentorshipNotesApi = () =>
+  createApiDecorator({
+    summary: 'List Program A mentorship notes',
+    description:
+      'Returns mentorship notes for a Program A application in deterministic ascending order.',
+    successResponse: {
+      status: 200,
+      type: ProgramAMentorshipNoteDto,
+      isArray: true,
+      description: 'Mentorship notes.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id or the application has no assigned mentor.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only the assigned mentor or an administrator can view mentorship notes.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application does not belong to the Program A mentorship workflow.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
 export const ReplyToNeedsInfoItemApi = () =>
   createApiDecorator({
     summary: 'Reply to needs-info item',
@@ -445,4 +542,147 @@ export const SetActiveSectionVersionApi = () =>
         description: 'Application or section was not found.',
       }),
     ],
+  });
+
+function createAdminLifecycleTransitionApi(config: {
+  summary: string;
+  description: string;
+  body?: typeof ApplicationLifecycleTransitionDto;
+  forbiddenDescription?: string;
+}) {
+  return createApiDecorator({
+    summary: config.summary,
+    description: config.description,
+    body: config.body,
+    successResponse: {
+      status: 200,
+      type: ApplicationDetailDto,
+      description: 'Application lifecycle state was updated.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id format or request body validation failed.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          config.forbiddenDescription ??
+          'Only reviewer-side users may manage Program A post-approval lifecycle transitions.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application is not a Program A application, the current lifecycle state does not allow this transition, or another update changed the status concurrently.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+}
+
+function createReviewerDecisionTransitionApi(config: {
+  summary: string;
+  description: string;
+  body?:
+    | typeof OptionalApplicationTransitionNoteDto
+    | typeof ApplicationLifecycleTransitionDto;
+}) {
+  return createApiDecorator({
+    summary: config.summary,
+    description: config.description,
+    body: config.body,
+    successResponse: {
+      status: 200,
+      type: ApplicationDetailDto,
+      description: 'Application review state was updated.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id format or request body validation failed.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only reviewer-side users may manage Program A review transitions.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application is not a Program A application, the current review state does not allow this transition, or another update changed the status concurrently.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+}
+
+export const FormalVerifyApplicationApi = () =>
+  createReviewerDecisionTransitionApi({
+    summary: 'Formal verify Program A application',
+    description:
+      'Moves a Program A application from SUBMITTED to FORMALLY_VERIFIED. Reviewer-side users only.',
+    body: OptionalApplicationTransitionNoteDto,
+  });
+
+export const StartEvaluationApplicationApi = () =>
+  createReviewerDecisionTransitionApi({
+    summary: 'Start Program A evaluation',
+    description:
+      'Moves a Program A application from FORMALLY_VERIFIED to EVALUATING. Reviewer-side users only.',
+    body: OptionalApplicationTransitionNoteDto,
+  });
+
+export const ApproveApplicationApi = () =>
+  createReviewerDecisionTransitionApi({
+    summary: 'Approve Program A application',
+    description:
+      'Moves a Program A application from EVALUATING to APPROVED and records an optional reviewer note. Reviewer-side users only.',
+    body: OptionalApplicationTransitionNoteDto,
+  });
+
+export const RejectApplicationApi = () =>
+  createReviewerDecisionTransitionApi({
+    summary: 'Reject Program A application',
+    description:
+      'Moves a Program A application to REJECTED from an active review state and stores the provided reason. Reviewer-side users only.',
+    body: ApplicationLifecycleTransitionDto,
+  });
+
+export const StartApplicationOnboardingApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Start Program A onboarding',
+    description:
+      'Moves a Program A application from APPROVED to ONBOARDING. Reviewer-side users only.',
+    forbiddenDescription:
+      'Only reviewer-side users may manage Program A post-approval lifecycle transitions.',
+  });
+
+export const ActivateApplicationApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Activate Program A application',
+    description:
+      'Moves a Program A application from ONBOARDING to ACTIVE_PROJECT or from PAUSED back to ACTIVE_PROJECT. Reviewer-side users only.',
+  });
+
+export const PauseApplicationApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Pause Program A application',
+    description:
+      'Moves a Program A application from ACTIVE_PROJECT to PAUSED and stores the provided reason. Reviewer-side users only.',
+    body: ApplicationLifecycleTransitionDto,
+  });
+
+export const CompleteApplicationApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Complete Program A application',
+    description:
+      'Moves a Program A application from ACTIVE_PROJECT to COMPLETED. Reviewer-side users only.',
+  });
+
+export const ArchiveApplicationApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Archive Program A application',
+    description:
+      'Moves a Program A application from COMPLETED to ARCHIVED and stores the provided reason. Reviewer-side users only.',
+    body: ApplicationLifecycleTransitionDto,
   });

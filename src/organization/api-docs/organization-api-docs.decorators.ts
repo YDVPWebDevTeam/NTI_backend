@@ -15,6 +15,7 @@ import { CreateOrganizationInviteDto } from '../dto/create-organization-invite.d
 import { CreateOrganizationDto } from '../dto/create-organization.dto';
 import { ORGANIZATION_INVITE_SORT_VALUES } from '../dto/get-organization-invites-query.dto';
 import { GetOrganizationInvitesResponseDto } from '../dto/get-organization-invites-response.dto';
+import { OrganizationInviteValidationResponseDto } from '../dto/organization-invite-validation-response.dto';
 import { OrganizationInviteResponseDto } from '../dto/organization-invite-response.dto';
 import { OrganizationResponseDto } from '../dto/organization-response.dto';
 import { ResendOrganizationInviteResponseDto } from '../dto/resend-organization-invite-response.dto';
@@ -23,6 +24,7 @@ import { UpdateOrganizationProfileDto } from '../dto/update-organization-profile
 import { OrganizationMemberResponseDto } from '../dto/organization-member-response.dto';
 import { TransferOrganizationOwnerDto } from '../dto/transfer-organization-owner.dto';
 import { UpdateOrganizationMemberRoleDto } from '../dto/update-organization-member-role.dto';
+import { ValidateOrganizationInviteDto } from '../dto/validate-organization-invite.dto';
 
 export const CreateOrganizationApi = () =>
   createApiDecorator({
@@ -49,6 +51,65 @@ export const CreateOrganizationApi = () =>
       ApiConflictResponse({
         description:
           'ICO already exists or the authenticated user is already linked to an organization.',
+      }),
+    ],
+  });
+
+export const ValidateOrganizationInviteApi = () =>
+  createApiDecorator({
+    summary: 'Validate organization invitation',
+    description:
+      'Validates an organization invitation token for frontend onboarding screens and returns the invite email, organization name, and role to assign.',
+    body: ValidateOrganizationInviteDto,
+    successResponse: {
+      status: 200,
+      type: OrganizationInviteValidationResponseDto,
+      description: 'Organization invitation is valid and may be accepted.',
+    },
+    errors: [
+      ApiBadRequestResponse({
+        description:
+          'Invitation token is invalid for acceptance because it is expired, revoked, or otherwise inactive.',
+      }),
+      ApiConflictResponse({
+        description: 'Invitation was already accepted.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Invitation or organization was not found.',
+      }),
+    ],
+  });
+
+export const AcceptOrganizationInviteApi = () =>
+  createApiDecorator({
+    summary: 'Accept organization invitation for existing account',
+    description:
+      'Allows an authenticated existing user to accept an organization invitation that matches their email and link their account to the organization.',
+    body: ValidateOrganizationInviteDto,
+    successResponse: {
+      status: 201,
+      type: OrganizationMemberResponseDto,
+      description: 'Organization invitation was accepted successfully.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiBadRequestResponse({
+        description:
+          'Invitation token is invalid for acceptance because it is expired, revoked, or otherwise inactive.',
+      }),
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Invitation token does not belong to the authenticated user.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Invitation or organization was not found.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Invitation was already accepted or the authenticated user is already linked to an organization.',
       }),
     ],
   });

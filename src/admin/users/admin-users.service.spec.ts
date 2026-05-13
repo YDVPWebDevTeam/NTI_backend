@@ -15,8 +15,10 @@ import type { AuthenticatedUserContext } from '../../common/types/auth-user-cont
 import type { PrismaDbClient } from '../../infrastructure/database';
 import { RefreshTokenService } from '../../auth/refresh-token/refresh-token.service';
 import { UserService } from '../../user/user.service';
+import { UserRepository } from '../../user/user.repository';
 import { AdminUsersService } from './admin-users.service';
 import { MANAGEABLE_USER_STATUSES } from './dto/update-user-status.dto';
+import type { ListUsersQueryDto } from './dto/list-users-query.dto';
 
 describe('AdminUsersService', () => {
   let service: AdminUsersService;
@@ -25,6 +27,9 @@ describe('AdminUsersService', () => {
     findMany: jest.Mock;
     update: jest.Mock;
     transaction: jest.Mock;
+  };
+  let userRepository: {
+    findManyPaginated: jest.Mock;
   };
   let refreshTokenService: {
     revokeAllActiveByUserId: jest.Mock;
@@ -67,6 +72,14 @@ describe('AdminUsersService', () => {
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
+
+  const defaultQuery: ListUsersQueryDto = {
+    page: 1,
+    limit: 20,
+    sort: 'createdAt',
+    order: 'desc',
+  };
+
   beforeEach(() => {
     userService = {
       findById: jest.fn(),
@@ -78,14 +91,121 @@ describe('AdminUsersService', () => {
           fn(transactionClient),
         ),
     };
+    userRepository = {
+      findManyPaginated: jest.fn(),
+    };
     refreshTokenService = {
       revokeAllActiveByUserId: jest.fn(),
     };
 
     service = new AdminUsersService(
       userService as unknown as UserService,
+      userRepository as unknown as UserRepository,
       refreshTokenService as unknown as RefreshTokenService,
     );
+  });
+
+  describe('listUsers', () => {
+    it('returns paginated user list for admins', async () => {
+      userRepository.findManyPaginated.mockResolvedValue({
+        data: [targetUser],
+        total: 1,
+      });
+
+      const result = await service.listUsers(actorAdmin, defaultQuery);
+
+      expect(userRepository.findManyPaginated).toHaveBeenCalled();
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toMatchObject({
+        id: targetUser.id,
+        email: targetUser.email,
+        firstName: targetUser.firstName,
+        lastName: targetUser.lastName,
+        role: targetUser.role,
+        status: targetUser.status,
+        organizationId: null,
+      });
+      expect(result.meta).toMatchObject({
+        page: 1,
+        limit: 20,
+        total: 1,
+        totalPages: 1,
+        sort: 'createdAt',
+        order: 'desc',
+      });
+    });
+
+    it('throws forbidden when non-admin requests users list', async () => {
+      await expect(
+        service.listUsers(actorStudent, defaultQuery),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(userRepository.findManyPaginated).not.toHaveBeenCalled();
+    });
+
+    it('passes q search as OR filter on email, firstName, lastName', async () => {
+      userRepository.findManyPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      });
+
+      await service.listUsers(actorAdmin, { ...defaultQuery, q: 'alice' });
+
+      expect(userRepository.findManyPaginated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            OR: [
+              { email: { contains: 'alice', mode: 'insensitive' } },
+              { firstName: { contains: 'alice', mode: 'insensitive' } },
+              { lastName: { contains: 'alice', mode: 'insensitive' } },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('passes role, status, organizationId as exact filters', async () => {
+      userRepository.findManyPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      });
+
+      await service.listUsers(actorAdmin, {
+        ...defaultQuery,
+        role: UserRole.STUDENT,
+        status: UserStatus.ACTIVE,
+        organizationId: 'org-1',
+      });
+
+      expect(userRepository.findManyPaginated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            role: UserRole.STUDENT,
+            status: UserStatus.ACTIVE,
+            organizationId: 'org-1',
+          },
+        }),
+      );
+    });
+
+    it('maps sort=name to firstName then lastName orderBy', async () => {
+      userRepository.findManyPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      });
+
+      await service.listUsers(actorAdmin, {
+        ...defaultQuery,
+        sort: 'name',
+        order: 'asc',
+      });
+
+      expect(userRepository.findManyPaginated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }, { id: 'asc' }],
+        }),
+      );
+    });
   });
 
   it('throws when target user does not exist', async () => {
@@ -98,46 +218,6 @@ describe('AdminUsersService', () => {
         MANAGEABLE_USER_STATUSES.ACTIVE,
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
-  });
-
-  it('returns safe users list for admins', async () => {
-    userService.findMany.mockResolvedValue([
-      targetUser,
-      {
-        ...targetUser,
-        id: 'user-2',
-        email: 'user-2@example.com',
-        role: UserRole.COMPANY_OWNER,
-      },
-    ]);
-
-    const result = await service.getUsers(actorAdmin);
-
-    expect(userService.findMany).toHaveBeenCalledWith();
-    expect(result).toEqual([
-      {
-        id: targetUser.id,
-        email: targetUser.email,
-        role: targetUser.role,
-        status: targetUser.status,
-        organizationId: null,
-      },
-      {
-        id: 'user-2',
-        email: 'user-2@example.com',
-        role: UserRole.COMPANY_OWNER,
-        status: targetUser.status,
-        organizationId: null,
-      },
-    ]);
-  });
-
-  it('throws forbidden when non-admin requests users list', async () => {
-    await expect(service.getUsers(actorStudent)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
-
-    expect(userService.findMany).not.toHaveBeenCalled();
   });
 
   it('returns safe user by id for admins', async () => {

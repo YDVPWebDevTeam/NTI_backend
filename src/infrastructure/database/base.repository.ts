@@ -126,6 +126,17 @@ export abstract class BaseRepository<
     return this.getDelegate(db).upsert(args);
   }
 
+  async findManyPaginated(
+    args: FindManyArgs<TWhereInput, TOrderByInput, TWhereUniqueInput>,
+    db?: PrismaDbClient,
+  ): Promise<{ data: TModel[]; total: number }> {
+    const [data, total] = await Promise.all([
+      this.findMany(args, db),
+      this.count(args.where, db),
+    ]);
+    return { data, total };
+  }
+
   transaction<T>(
     fn: (client: Prisma.TransactionClient) => Promise<T>,
     options?: PrismaTransactionOptions,

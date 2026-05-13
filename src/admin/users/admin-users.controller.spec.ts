@@ -7,18 +7,19 @@ import type { AuthenticatedUserContext } from '../../common/types/auth-user-cont
 import { AdminUsersController } from './admin-users.controller';
 import { AdminUsersService } from './admin-users.service';
 import { MANAGEABLE_USER_STATUSES } from './dto/update-user-status.dto';
+import type { ListUsersQueryDto } from './dto/list-users-query.dto';
 
 describe('AdminUsersController', () => {
   let controller: AdminUsersController;
   let adminUsersService: {
-    getUsers: jest.Mock;
+    listUsers: jest.Mock;
     getUserById: jest.Mock;
     updateStatus: jest.Mock;
   };
 
   beforeEach(() => {
     adminUsersService = {
-      getUsers: jest.fn(),
+      listUsers: jest.fn(),
       getUserById: jest.fn(),
       updateStatus: jest.fn(),
     };
@@ -61,7 +62,7 @@ describe('AdminUsersController', () => {
     });
   });
 
-  it('returns the safe users list', async () => {
+  it('returns the paginated users list', async () => {
     const actor: AuthenticatedUserContext = {
       id: 'admin-1',
       email: 'admin@example.com',
@@ -69,27 +70,40 @@ describe('AdminUsersController', () => {
       status: UserStatus.ACTIVE,
       organizationId: null,
     };
-
-    const users = [
-      {
-        id: 'user-1',
-        email: 'user1@example.com',
-        role: UserRole.STUDENT,
-        status: UserStatus.ACTIVE,
+    const query: ListUsersQueryDto = {
+      page: 1,
+      limit: 20,
+      sort: 'createdAt',
+      order: 'desc',
+    };
+    const response = {
+      data: [
+        {
+          id: 'user-1',
+          email: 'user1@example.com',
+          firstName: 'Alice',
+          lastName: 'Smith',
+          role: UserRole.STUDENT,
+          status: UserStatus.ACTIVE,
+          organizationId: null,
+          createdAt: new Date(),
+        },
+      ],
+      meta: {
+        page: 1,
+        limit: 20,
+        total: 1,
+        totalPages: 1,
+        sort: 'createdAt',
+        order: 'desc',
       },
-      {
-        id: 'user-2',
-        email: 'user2@example.com',
-        role: UserRole.COMPANY_OWNER,
-        status: UserStatus.PENDING,
-      },
-    ];
-    adminUsersService.getUsers.mockResolvedValue(users);
+    };
+    adminUsersService.listUsers.mockResolvedValue(response);
 
-    const result = await controller.getUsers(actor);
+    const result = await controller.getUsers(actor, query);
 
-    expect(adminUsersService.getUsers).toHaveBeenCalledWith(actor);
-    expect(result).toEqual(users);
+    expect(adminUsersService.listUsers).toHaveBeenCalledWith(actor, query);
+    expect(result).toEqual(response);
   });
 
   it('returns one safe user by id', async () => {

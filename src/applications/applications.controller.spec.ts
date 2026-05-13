@@ -25,6 +25,9 @@ describe('ApplicationsController', () => {
     attachDocument: jest.Mock;
     getDocumentCompleteness: jest.Mock;
     submit: jest.Mock;
+    assignMentor: jest.Mock;
+    createMentorshipNote: jest.Mock;
+    listMentorshipNotes: jest.Mock;
   };
   let sectionsService: {
     listSections: jest.Mock;
@@ -48,6 +51,12 @@ describe('ApplicationsController', () => {
         isComplete: true,
       }),
       submit: jest.fn().mockResolvedValue({ id: 'application-1' }),
+      assignMentor: jest.fn().mockResolvedValue({
+        applicationId: 'application-1',
+        mentorUserId: 'mentor-1',
+      }),
+      createMentorshipNote: jest.fn().mockResolvedValue({ id: 'note-1' }),
+      listMentorshipNotes: jest.fn().mockResolvedValue([{ id: 'note-1' }]),
     };
 
     sectionsService = {
@@ -169,6 +178,59 @@ describe('ApplicationsController', () => {
       user,
     );
     expect(result).toEqual({ id: 'application-1' });
+  });
+
+  it('delegates mentor assignment', async () => {
+    const user = { id: 'admin-1', email: 'admin@example.com' } as never;
+    const dto = {
+      mentorUserId: 'a6ac7036-c7dd-4726-87c0-e1b5395f44b3',
+    } as const;
+
+    const result = await controller.assignMentor(
+      'f6c90688-c973-40ca-8f3b-c55667cc6f77',
+      user,
+      dto,
+    );
+
+    expect(applicationsService.assignMentor).toHaveBeenCalledWith(
+      'f6c90688-c973-40ca-8f3b-c55667cc6f77',
+      user,
+      dto,
+    );
+    expect(result).toEqual({
+      applicationId: 'application-1',
+      mentorUserId: 'mentor-1',
+    });
+  });
+
+  it('delegates mentorship note creation', async () => {
+    const user = { id: 'mentor-1', email: 'mentor@example.com' } as never;
+    const dto = { content: 'First sync completed.' } as const;
+
+    const result = await controller.createMentorshipNote(
+      'application-1',
+      user,
+      dto,
+    );
+
+    expect(applicationsService.createMentorshipNote).toHaveBeenCalledWith(
+      'application-1',
+      user,
+      dto,
+    );
+    expect(result).toEqual({ id: 'note-1' });
+  });
+
+  it('delegates mentorship note listing', async () => {
+    const user = { id: 'mentor-1', email: 'mentor@example.com' } as never;
+
+    const result = await controller.listMentorshipNotes('application-1', user);
+
+    expect(applicationsService.listMentorshipNotes).toHaveBeenCalledWith(
+      'application-1',
+      user,
+    );
+    expect(result).toEqual([{ id: 'note-1' }]);
   });
 
   it('delegates section listing to the sections service', async () => {

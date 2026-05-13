@@ -11,16 +11,19 @@ import type { AuthenticatedUserContext } from '../../common/types/auth-user-cont
 import { AdminOrganizationsController } from './admin-organizations.controller';
 import { AdminOrganizationsService } from './admin-organizations.service';
 import { MANAGEABLE_ORG_STATUSES } from './dto/update-org-status.dto';
+import type { ListOrganizationsQueryDto } from './dto/list-organizations-query.dto';
 
 describe('AdminOrganizationsController', () => {
   let controller: AdminOrganizationsController;
   let adminOrganizationsService: {
+    listOrganizations: jest.Mock;
     updateStatus: jest.Mock;
     getOrganization: jest.Mock;
   };
 
   beforeEach(() => {
     adminOrganizationsService = {
+      listOrganizations: jest.fn(),
       updateStatus: jest.fn(),
       getOrganization: jest.fn(),
     };
@@ -28,6 +31,52 @@ describe('AdminOrganizationsController', () => {
     controller = new AdminOrganizationsController(
       adminOrganizationsService as unknown as AdminOrganizationsService,
     );
+  });
+
+  it('returns the paginated organizations list', async () => {
+    const actor: AuthenticatedUserContext = {
+      id: 'admin-1',
+      email: 'admin@example.com',
+      role: UserRole.ADMIN,
+      status: UserStatus.ACTIVE,
+      organizationId: null,
+    };
+    const query: ListOrganizationsQueryDto = {
+      page: 1,
+      limit: 20,
+      sort: 'createdAt',
+      order: 'desc',
+    };
+    const response = {
+      data: [
+        {
+          id: 'org-1',
+          name: 'Acme Labs s.r.o.',
+          ico: '12345678',
+          status: OrganizationStatus.ACTIVE,
+          sector: null,
+          membersCount: 3,
+          createdAt: new Date(),
+        },
+      ],
+      meta: {
+        page: 1,
+        limit: 20,
+        total: 1,
+        totalPages: 1,
+        sort: 'createdAt',
+        order: 'desc',
+      },
+    };
+    adminOrganizationsService.listOrganizations.mockResolvedValue(response);
+
+    const result = await controller.getOrganizations(actor, query);
+
+    expect(adminOrganizationsService.listOrganizations).toHaveBeenCalledWith(
+      actor,
+      query,
+    );
+    expect(result).toEqual(response);
   });
 
   it('returns updated organization payload', async () => {

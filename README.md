@@ -47,6 +47,7 @@ Important variables:
 | `CORS_ORIGINS` | Comma-separated list of allowed frontend origins; `*` wildcards are supported |
 | `REDIS_HOST` / `REDIS_PORT` | Redis connection used by BullMQ |
 | `SMTP_*` | Email delivery configuration for confirmation/reset/invite flows |
+| `EMAIL_LOGO_URL` | Optional absolute public URL for the logo rendered in email headers |
 | `FRONTEND_URL` | Frontend base URL used in generated links |
 | `R2_*` | Cloudflare R2 object storage configuration |
 | `FILE_UPLOAD_*` | Upload policy, presign expiry, size limit, and verification settings |

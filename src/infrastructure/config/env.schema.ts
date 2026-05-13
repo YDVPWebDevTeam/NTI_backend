@@ -21,6 +21,10 @@ export const envSchema = z.object({
   REDIS_PORT: z.coerce.number().int().positive().default(6379),
   BREVO_API_KEY: z.string().min(1, 'BREVO_API_KEY is required'),
   EMAIL_FROM: z.email('EMAIL_FROM must be a valid email address'),
+  EMAIL_LOGO_URL: z
+    .string()
+    .url('EMAIL_LOGO_URL must be a valid URL')
+    .optional(),
   FRONTEND_URL: z.string().min(1, 'FRONTEND_URL is required'),
   R2_ENDPOINT: z.string().url('R2_ENDPOINT must be a valid URL').optional(),
   R2_BUCKET_NAME: z.string().min(1, 'R2_BUCKET_NAME is required').optional(),
@@ -55,6 +59,20 @@ export const envSchema = z.object({
     .string()
     .default('image/jpeg,image/png,image/webp,application/pdf'),
   FILE_UPLOAD_VERIFY_OBJECT_ON_COMPLETE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  ORGANIZATION_DOCUMENT_MAX_SIZE_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(20 * 1024 * 1024),
+  ORGANIZATION_DOCUMENT_ALLOWED_MIME_TYPES: z
+    .string()
+    .default(
+      'application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ),
+  ORGANIZATION_DOCUMENT_VERIFY_OBJECT_ON_COMPLETE: z
     .enum(['true', 'false'])
     .default('false')
     .transform((value) => value === 'true'),

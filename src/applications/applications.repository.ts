@@ -131,12 +131,38 @@ export class ApplicationsRepository extends BaseRepository<
     });
   }
 
+  assignMentor(
+    applicationId: string,
+    mentorUserId: string,
+    mentorAssignedAt: Date,
+    mentorAssignedById: string,
+    db?: PrismaDbClient,
+  ) {
+    return (db ?? this.prisma.client).application.update({
+      where: { id: applicationId },
+      data: {
+        mentorUserId,
+        mentorAssignedAt,
+        mentorAssignedById,
+      },
+      select: {
+        id: true,
+        mentorUserId: true,
+        mentorAssignedAt: true,
+        mentorAssignedById: true,
+      },
+    });
+  }
+
   private applicationDetailSelect() {
     return {
       id: true,
       callId: true,
       teamId: true,
       createdById: true,
+      mentorUserId: true,
+      mentorAssignedAt: true,
+      mentorAssignedById: true,
       status: true,
       submittedAt: true,
       decidedAt: true,
@@ -184,6 +210,9 @@ export class ApplicationsRepository extends BaseRepository<
       callId: true,
       teamId: true,
       createdById: true,
+      mentorUserId: true,
+      mentorAssignedAt: true,
+      mentorAssignedById: true,
       status: true,
       submittedAt: true,
       decidedAt: true,

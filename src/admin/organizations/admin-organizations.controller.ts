@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
@@ -16,12 +17,15 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import {
   GetAdminOrganizationApi,
+  GetAdminOrganizationsApi,
   UpdateOrganizationStatusApi,
 } from './api-docs/admin-organizations-api-docs.decorators';
 import { AdminOrganizationsService } from './admin-organizations.service';
 import { AdminOrganizationResponseDto } from './dto/admin-organization-response.dto';
 import { OrganizationStatusResponseDto } from './dto/organization-status-response.dto';
 import { UpdateOrgStatusDto } from './dto/update-org-status.dto';
+import { ListOrganizationsQueryDto } from './dto/list-organizations-query.dto';
+import type { ListOrganizationsResponseDto } from './dto/list-organizations-response.dto';
 
 @ApiTags('Admin')
 @Controller('admin/organizations')
@@ -29,6 +33,17 @@ export class AdminOrganizationsController {
   constructor(
     private readonly adminOrganizationsService: AdminOrganizationsService,
   ) {}
+
+  @GetAdminOrganizationsApi()
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  getOrganizations(
+    @GetUserContext() actor: AuthenticatedUserContext,
+    @Query() query: ListOrganizationsQueryDto,
+  ): Promise<ListOrganizationsResponseDto> {
+    return this.adminOrganizationsService.listOrganizations(actor, query);
+  }
 
   @GetAdminOrganizationApi()
   @Get(':id')

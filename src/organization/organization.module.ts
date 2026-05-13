@@ -2,6 +2,9 @@ import { Module } from '@nestjs/common';
 import { InvitationTokenService } from 'src/common/invitations/invitation-token.service';
 import { HashingModule } from 'src/infrastructure/hashing';
 import { QueueModule } from 'src/infrastructure/queue';
+import { OrganizationDocumentsController } from './documents/organization-documents.controller';
+import { OrganizationDocumentsRepository } from './documents/organization-documents.repository';
+import { OrganizationDocumentsService } from './documents/organization-documents.service';
 import { OrganizationController } from './organization.controller';
 import { OrganizationService } from './organization.service';
 import { OrganizationRepository } from './organization.repository';
@@ -10,10 +13,12 @@ import { OrganizationInviteRepository } from './organization-invitation.reposito
 
 @Module({
   imports: [HashingModule, QueueModule],
-  controllers: [OrganizationController],
+  controllers: [OrganizationController, OrganizationDocumentsController],
   providers: [
     OrganizationService,
+    OrganizationDocumentsService,
     OrganizationRepository,
+    OrganizationDocumentsRepository,
     OrganizationInviteRepository,
     UserRepository,
     InvitationTokenService,

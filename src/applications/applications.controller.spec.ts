@@ -2,37 +2,73 @@ jest.mock('./applications.service', () => ({
   ApplicationsService: class ApplicationsService {},
 }));
 
+jest.mock('./application-sections.service', () => ({
+  ApplicationSectionsService: class ApplicationSectionsService {},
+}));
+
 jest.mock('../auth/guards/jwt-auth.guard', () => ({
   JwtAuthGuard: class JwtAuthGuard {},
 }));
 
 import { ApplicationsController } from './applications.controller';
 import { ApplicationsService } from './applications.service';
+import { ApplicationSectionsService } from './application-sections.service';
 
 describe('ApplicationsController', () => {
   let controller: ApplicationsController;
   let applicationsService: {
     createDraft: jest.Mock;
     findById: jest.Mock;
+    listPublicCalls: jest.Mock;
+    listActivePublicCalls: jest.Mock;
+    findPublicCallById: jest.Mock;
     attachDocument: jest.Mock;
     getDocumentCompleteness: jest.Mock;
     submit: jest.Mock;
+    assignMentor: jest.Mock;
+    createMentorshipNote: jest.Mock;
+    listMentorshipNotes: jest.Mock;
+  };
+  let sectionsService: {
+    listSections: jest.Mock;
+    upsertSection: jest.Mock;
+    getSectionHistory: jest.Mock;
+    setActiveVersion: jest.Mock;
   };
 
   beforeEach(() => {
     applicationsService = {
       createDraft: jest.fn().mockResolvedValue({ id: 'application-1' }),
       findById: jest.fn().mockResolvedValue({ id: 'application-1' }),
+      listPublicCalls: jest.fn().mockResolvedValue({ data: [], meta: {} }),
+      listActivePublicCalls: jest
+        .fn()
+        .mockResolvedValue({ data: [], meta: {} }),
+      findPublicCallById: jest.fn().mockResolvedValue({ id: 'call-1' }),
       attachDocument: jest.fn().mockResolvedValue({ id: 'document-1' }),
       getDocumentCompleteness: jest.fn().mockResolvedValue({
         applicationId: 'application-1',
         isComplete: true,
       }),
       submit: jest.fn().mockResolvedValue({ id: 'application-1' }),
+      assignMentor: jest.fn().mockResolvedValue({
+        applicationId: 'application-1',
+        mentorUserId: 'mentor-1',
+      }),
+      createMentorshipNote: jest.fn().mockResolvedValue({ id: 'note-1' }),
+      listMentorshipNotes: jest.fn().mockResolvedValue([{ id: 'note-1' }]),
+    };
+
+    sectionsService = {
+      listSections: jest.fn().mockResolvedValue([]),
+      upsertSection: jest.fn().mockResolvedValue({ id: 'section-1' }),
+      getSectionHistory: jest.fn().mockResolvedValue([]),
+      setActiveVersion: jest.fn().mockResolvedValue({ id: 'section-1' }),
     };
 
     controller = new ApplicationsController(
       applicationsService as unknown as ApplicationsService,
+      sectionsService as unknown as ApplicationSectionsService,
     );
   });
 
@@ -47,6 +83,43 @@ describe('ApplicationsController', () => {
 
     expect(applicationsService.createDraft).toHaveBeenCalledWith(user, dto);
     expect(result).toEqual({ id: 'application-1' });
+  });
+
+  it('delegates public call listing to the applications service', async () => {
+    const query = {
+      page: 1,
+      limit: 20,
+      sort: 'closesAt',
+      order: 'asc',
+    } as const;
+
+    await controller.listPublicCalls(query);
+
+    expect(applicationsService.listPublicCalls).toHaveBeenCalledWith(query);
+  });
+
+  it('delegates active public call listing to the applications service', async () => {
+    const query = {
+      page: 1,
+      limit: 20,
+      sort: 'closesAt',
+      order: 'asc',
+      type: 'PROGRAM_A',
+    } as const;
+
+    await controller.listActivePublicCalls(query);
+
+    expect(applicationsService.listActivePublicCalls).toHaveBeenCalledWith(
+      query,
+    );
+  });
+
+  it('delegates public call lookup by id to the applications service', async () => {
+    await controller.findPublicCallById('f6c90688-c973-40ca-8f3b-c55667cc6f77');
+
+    expect(applicationsService.findPublicCallById).toHaveBeenCalledWith(
+      'f6c90688-c973-40ca-8f3b-c55667cc6f77',
+    );
   });
 
   it('delegates lookup to the applications service with user context', async () => {
@@ -105,5 +178,127 @@ describe('ApplicationsController', () => {
       user,
     );
     expect(result).toEqual({ id: 'application-1' });
+  });
+
+  it('delegates mentor assignment', async () => {
+    const user = { id: 'admin-1', email: 'admin@example.com' } as never;
+    const dto = {
+      mentorUserId: 'a6ac7036-c7dd-4726-87c0-e1b5395f44b3',
+    } as const;
+
+    const result = await controller.assignMentor(
+      'f6c90688-c973-40ca-8f3b-c55667cc6f77',
+      user,
+      dto,
+    );
+
+    expect(applicationsService.assignMentor).toHaveBeenCalledWith(
+      'f6c90688-c973-40ca-8f3b-c55667cc6f77',
+      user,
+      dto,
+    );
+    expect(result).toEqual({
+      applicationId: 'application-1',
+      mentorUserId: 'mentor-1',
+    });
+  });
+
+  it('delegates mentorship note creation', async () => {
+    const user = { id: 'mentor-1', email: 'mentor@example.com' } as never;
+    const dto = { content: 'First sync completed.' } as const;
+
+    const result = await controller.createMentorshipNote(
+      'application-1',
+      user,
+      dto,
+    );
+
+    expect(applicationsService.createMentorshipNote).toHaveBeenCalledWith(
+      'application-1',
+      user,
+      dto,
+    );
+    expect(result).toEqual({ id: 'note-1' });
+  });
+
+  it('delegates mentorship note listing', async () => {
+    const user = { id: 'mentor-1', email: 'mentor@example.com' } as never;
+
+    const result = await controller.listMentorshipNotes('application-1', user);
+
+    expect(applicationsService.listMentorshipNotes).toHaveBeenCalledWith(
+      'application-1',
+      user,
+    );
+    expect(result).toEqual([{ id: 'note-1' }]);
+  });
+
+  it('delegates section listing to the sections service', async () => {
+    const user = { id: 'user-1', email: 'member@example.com' } as never;
+
+    const result = await controller.listSections('application-1', user);
+
+    expect(sectionsService.listSections).toHaveBeenCalledWith(
+      'application-1',
+      user,
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('delegates section upsert to the sections service', async () => {
+    const user = { id: 'user-1', email: 'lead@example.com' } as never;
+    const dto = { valueJson: { firstName: 'Jane' } } as never;
+
+    const result = await controller.upsertSection(
+      'application-1',
+      'profile',
+      dto,
+      user,
+    );
+
+    expect(sectionsService.upsertSection).toHaveBeenCalledWith(
+      'application-1',
+      'profile',
+      dto,
+      user,
+    );
+    expect(result).toEqual({ id: 'section-1' });
+  });
+
+  it('delegates section history lookup to the sections service', async () => {
+    const user = { id: 'admin-1', email: 'admin@example.com' } as never;
+
+    const result = await controller.getSectionHistory(
+      'application-1',
+      'profile',
+      user,
+    );
+
+    expect(sectionsService.getSectionHistory).toHaveBeenCalledWith(
+      'application-1',
+      'profile',
+      user,
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('delegates active version updates to the sections service', async () => {
+    const user = { id: 'admin-1', email: 'admin@example.com' } as never;
+    const dto = { version: 2 } as never;
+
+    const result = await controller.setActiveVersion(
+      'application-1',
+      'profile',
+      dto,
+      user,
+    );
+
+    expect(sectionsService.setActiveVersion).toHaveBeenCalledWith(
+      'application-1',
+      'profile',
+      dto,
+      user,
+    );
+    expect(result).toEqual({ id: 'section-1' });
   });
 });

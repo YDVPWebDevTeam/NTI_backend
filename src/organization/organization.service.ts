@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  InternalServerErrorException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -41,6 +42,9 @@ import { UpdateOrganizationMemberRoleDto } from './dto/update-organization-membe
 import { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
 import { OrganizationInviteRepository } from './organization-invitation.repository';
 import { OrganizationRepository } from './organization.repository';
+import { normalizeInviteEmail } from '../common/validation/invite-email.validation';
+import { OrganizationInviteValidationResponseDto } from './dto/organization-invite-validation-response.dto';
+import { ORGANIZATION_INVITABLE_ROLE_VALUES } from './dto/organization-role.constants';
 
 @Injectable()
 export class OrganizationService {
@@ -57,6 +61,8 @@ export class OrganizationService {
     'Only pending and non-expired invites can be revoked';
   private static readonly RESEND_INVALID_STATE_MESSAGE =
     'Only pending and non-expired invites can be resent';
+  private static readonly ORGANIZATION_NOT_ACCEPTING_INVITES_MESSAGE =
+    'Organization is not accepting invitations';
 
   private mapCreateDto(
     dto: CreateOrganizationDto,
@@ -192,6 +198,7 @@ export class OrganizationService {
       organizationId,
       user,
     );
+    this.ensureOrganizationCanAcceptInvites(organization);
 
     await assertUserEmailAvailable(this.userRepo, dto.email);
 
@@ -214,7 +221,7 @@ export class OrganizationService {
           token: this.generateToken(),
           status: InvitationStatus.PENDING,
           organizationId,
-          roleToAssign: UserRole.COMPANY_EMPLOYEE,
+          roleToAssign: dto.roleToAssign ?? UserRole.COMPANY_EMPLOYEE,
           expiresAt: this.resolveExpirationDate(),
         }),
       async (invitation) => {
@@ -260,6 +267,35 @@ export class OrganizationService {
         this.toInviteItemDto(invitation, now),
       ),
       meta: buildPaginationMeta(total, pagination.page, pagination.limit),
+    };
+  }
+
+  async validateInviteToken(
+    token: string,
+  ): Promise<OrganizationInviteValidationResponseDto> {
+    const invitation =
+      await this.organizationInviteRepository.findByToken(token);
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    const organization = await this.organizationRepository.findUnique({
+      id: invitation.organizationId,
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    this.ensureOrganizationCanAcceptInvites(organization);
+    this.assertInvitationIsAcceptable(invitation, new Date());
+    this.assertInvitationRoleIsAllowed(invitation.roleToAssign);
+
+    return {
+      email: invitation.email,
+      organizationName: organization.name,
+      roleToAssign: invitation.roleToAssign,
     };
   }
 
@@ -358,6 +394,96 @@ export class OrganizationService {
     await this.ensureOrganizationMemberAccess(organizationId, user);
 
     return this.userRepo.findOrganizationMembers(organizationId);
+  }
+
+  async acceptInvite(
+    token: string,
+    user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto> {
+    return this.organizationRepository.transaction(async (tx) => {
+      const invitation =
+        await this.organizationInviteRepository.findByTokenForUpdate(token, tx);
+      const normalizedUserEmail = normalizeInviteEmail(user.email);
+
+      if (!invitation) {
+        throw new NotFoundException('Invitation not found');
+      }
+
+      if (invitation.email !== normalizedUserEmail) {
+        throw new ForbiddenException(
+          'Invitation token does not belong to the authenticated user',
+        );
+      }
+
+      const organization = await this.organizationRepository.findUnique(
+        { id: invitation.organizationId },
+        tx,
+      );
+
+      if (!organization) {
+        throw new NotFoundException('Organization not found');
+      }
+
+      const now = new Date();
+
+      this.ensureOrganizationCanAcceptInvites(organization);
+      this.assertInvitationIsAcceptable(invitation, now);
+      this.assertInvitationRoleIsAllowed(invitation.roleToAssign);
+
+      if (user.organizationId !== null) {
+        throw new ConflictException(
+          'User is already linked to an organization',
+        );
+      }
+
+      const accepted =
+        await this.organizationInviteRepository.markAcceptedIfPending(
+          invitation.id,
+          now,
+          tx,
+        );
+
+      if (accepted.count === 0) {
+        const latestInvitation =
+          await this.organizationInviteRepository.findByIdAndOrganization(
+            invitation.id,
+            invitation.organizationId,
+            tx,
+          );
+
+        if (!latestInvitation) {
+          throw new NotFoundException('Invitation not found');
+        }
+
+        this.assertInvitationIsAcceptable(latestInvitation, now);
+        throw new ConflictException('Invitation already accepted');
+      }
+
+      const linkedUser = await this.userRepo.linkToOrganizationIfUnlinked(
+        user.id,
+        invitation.organizationId,
+        invitation.roleToAssign,
+        tx,
+      );
+
+      if (linkedUser.count === 0) {
+        throw new ConflictException(
+          'User is already linked to an organization',
+        );
+      }
+
+      const member = await this.userRepo.findOrganizationMember(
+        invitation.organizationId,
+        user.id,
+        tx,
+      );
+
+      if (!member) {
+        throw new NotFoundException('Member not found');
+      }
+
+      return member;
+    });
   }
 
   async updateMemberRole(
@@ -652,11 +778,61 @@ export class OrganizationService {
       id: invitation.id,
       email: invitation.email,
       status: this.resolveInvitationStatus(invitation, now),
+      roleToAssign: invitation.roleToAssign,
       createdAt: invitation.createdAt,
       expiresAt: invitation.expiresAt,
       acceptedAt: invitation.acceptedAt,
       revokedAt: invitation.revokedAt,
     };
+  }
+
+  private ensureOrganizationCanAcceptInvites(organization: Organization): void {
+    if (
+      organization.status === OrganizationStatus.REJECTED ||
+      organization.status === OrganizationStatus.SUSPENDED
+    ) {
+      throw new BadRequestException(
+        OrganizationService.ORGANIZATION_NOT_ACCEPTING_INVITES_MESSAGE,
+      );
+    }
+  }
+
+  private assertInvitationIsAcceptable(
+    invitation: OrgInvitation,
+    now: Date,
+  ): void {
+    if (
+      invitation.status === InvitationStatus.REVOKED ||
+      invitation.revokedAt !== null
+    ) {
+      throw new BadRequestException('Invitation has been canceled');
+    }
+
+    if (
+      invitation.status === InvitationStatus.EXPIRED ||
+      invitation.expiresAt <= now
+    ) {
+      throw new BadRequestException('Invitation has expired');
+    }
+
+    if (
+      invitation.status === InvitationStatus.ACCEPTED ||
+      invitation.acceptedAt !== null
+    ) {
+      throw new ConflictException('Invitation already accepted');
+    }
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException('Invitation is not active');
+    }
+  }
+
+  private assertInvitationRoleIsAllowed(role: UserRole): void {
+    if (!ORGANIZATION_INVITABLE_ROLE_VALUES.includes(role)) {
+      throw new InternalServerErrorException(
+        'Invitation role is not permitted for organization invites',
+      );
+    }
   }
 
   private resolveInvitationStatus(

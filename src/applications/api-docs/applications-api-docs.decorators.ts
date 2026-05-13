@@ -4,21 +4,36 @@ import {
   ApiConflictResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiQuery,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { ProgramType } from '../../../generated/prisma/enums';
+import { createPaginationQueryDecorators } from '../../common/pagination';
 import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
+import { ApplicationSectionDto } from '../dto/application-section.dto';
+import { ApplicationSectionHistoryDto } from '../dto/application-section-history.dto';
+import { ApplicationLifecycleTransitionDto } from '../dto/application-lifecycle-transition.dto';
+import { AssignMentorDto } from '../dto/assign-mentor.dto';
 import { ApplicationDetailDto } from '../dto/application-detail.dto';
 import { ApplicationDocumentDto } from '../dto/application-document.dto';
 import { AttachApplicationDocumentDto } from '../dto/attach-application-document.dto';
 import { CreateApplicationDto } from '../dto/create-application.dto';
+import { CreateMentorshipNoteDto } from '../dto/create-mentorship-note.dto';
 import { CreateNeedsInfoItemDto } from '../dto/create-needs-info-item.dto';
 import { CreateNeedsInfoReplyDto } from '../dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from '../dto/document-completeness.dto';
+import { MentorAssignmentDto } from '../dto/mentor-assignment.dto';
 import { NeedsInfoItemDto } from '../dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from '../dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from '../dto/needs-info-thread.dto';
+import { ProgramAMentorshipNoteDto } from '../dto/program-a-mentorship-note.dto';
+import { PublicCallDto } from '../dto/public-call.dto';
+import { PUBLIC_CALL_SORT_VALUES } from '../dto/public-calls-query.dto';
+import { PublicCallsResponseDto } from '../dto/public-calls-response.dto';
 import { RequiredDocumentsResponseDto } from '../dto/required-documents-response.dto';
 import { ResubmitApplicationDto } from '../dto/resubmit-application.dto';
+import { SetActiveSectionVersionDto } from '../dto/set-active-section-version.dto';
+import { UpsertApplicationSectionDto } from '../dto/upsert-application-section.dto';
 
 export const CreateApplicationApi = () =>
   createApiDecorator({
@@ -66,6 +81,86 @@ export const GetApplicationApi = () =>
       }),
       ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const GetPublicCallsApi = () =>
+  createApiDecorator({
+    summary: 'List public calls',
+    description:
+      'Returns a paginated list of publicly visible calls using only public-safe fields.',
+    successResponse: {
+      status: 200,
+      type: PublicCallsResponseDto,
+      description: 'Paginated public calls.',
+    },
+    extraDecorators: [
+      ...createPaginationQueryDecorators({
+        sortValues: PUBLIC_CALL_SORT_VALUES,
+        sortDescription: 'Sortable public call fields.',
+        defaultSort: 'closesAt',
+        defaultOrder: 'asc',
+      }),
+      ApiQuery({
+        name: 'type',
+        required: false,
+        enum: ProgramType,
+      }),
+    ],
+    errors: [
+      ApiBadRequestResponse({
+        description: 'Query parameters are invalid.',
+      }),
+    ],
+  });
+
+export const GetPublicActiveCallsApi = () =>
+  createApiDecorator({
+    summary: 'List active public calls',
+    description:
+      'Returns a paginated list of public calls that are OPEN and currently within their visibility date window.',
+    successResponse: {
+      status: 200,
+      type: PublicCallsResponseDto,
+      description: 'Paginated active public calls.',
+    },
+    extraDecorators: [
+      ...createPaginationQueryDecorators({
+        sortValues: PUBLIC_CALL_SORT_VALUES,
+        sortDescription: 'Sortable public call fields.',
+        defaultSort: 'closesAt',
+        defaultOrder: 'asc',
+      }),
+      ApiQuery({
+        name: 'type',
+        required: false,
+        enum: ProgramType,
+      }),
+    ],
+    errors: [
+      ApiBadRequestResponse({
+        description: 'Query parameters are invalid.',
+      }),
+    ],
+  });
+
+export const GetPublicCallByIdApi = () =>
+  createApiDecorator({
+    summary: 'Get public call by id',
+    description:
+      'Returns public call details when the call exists and is allowed to be exposed publicly.',
+    successResponse: {
+      status: 200,
+      type: PublicCallDto,
+      description: 'Public call details.',
+    },
+    errors: [
+      ApiBadRequestResponse({
+        description: 'Call identifier is malformed.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Public call was not found.',
+      }),
     ],
   });
 
@@ -128,9 +223,27 @@ export const GetApplicationDocumentCompletenessApi = () =>
     extraDecorators: [ApiBearerAuth('access-token')],
     errors: [
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
-      ApiBadRequestResponse({
-        description: 'Invalid application id format.',
-      }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
+      ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const ListApplicationSectionsApi = () =>
+  createApiDecorator({
+    summary: 'List application sections',
+    description:
+      'Returns all sections for an application with resolved active values.',
+    successResponse: {
+      status: 200,
+      type: ApplicationSectionDto,
+      isArray: true,
+      description: 'Application sections.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
       ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],
@@ -164,6 +277,28 @@ export const SubmitApplicationApi = () =>
     ],
   });
 
+export const UpsertApplicationSectionApi = () =>
+  createApiDecorator({
+    summary: 'Upsert application section',
+    description:
+      'Creates or updates one application section and stores its history snapshot.',
+    body: UpsertApplicationSectionDto,
+    successResponse: {
+      status: 200,
+      type: ApplicationSectionDto,
+      description: 'Application section was saved.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid identifiers or payload.' }),
+      ApiForbiddenResponse({
+        description: 'Only team lead can update sections.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
 export const CreateNeedsInfoItemApi = () =>
   createApiDecorator({
     summary: 'Request additional information for application',
@@ -187,6 +322,97 @@ export const CreateNeedsInfoItemApi = () =>
       }),
       ApiConflictResponse({
         description: 'Application status was changed concurrently.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const AssignMentorApi = () =>
+  createApiDecorator({
+    summary: 'Assign mentor to Program A application',
+    description:
+      'Assigns or reassigns the current mentor for an approved-or-later Program A application. Admin and super-admin only.',
+    body: AssignMentorDto,
+    successResponse: {
+      status: 201,
+      type: MentorAssignmentDto,
+      description: 'Mentor assignment was saved.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id, invalid mentor id, unsupported application status, or target user is not a mentor.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only administrators can assign mentors.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application does not belong to the Program A mentorship workflow.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Application or mentor user was not found.',
+      }),
+    ],
+  });
+
+export const CreateMentorshipNoteApi = () =>
+  createApiDecorator({
+    summary: 'Create Program A mentorship note',
+    description:
+      'Creates an append-only mentorship note for a Program A application. Accessible to the assigned mentor, admin, and super-admin.',
+    body: CreateMentorshipNoteDto,
+    successResponse: {
+      status: 201,
+      type: ProgramAMentorshipNoteDto,
+      description: 'Mentorship note was created.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id or the application has no assigned mentor.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only the assigned mentor or an administrator can create mentorship notes.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application does not belong to the Program A mentorship workflow.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const GetMentorshipNotesApi = () =>
+  createApiDecorator({
+    summary: 'List Program A mentorship notes',
+    description:
+      'Returns mentorship notes for a Program A application in deterministic ascending order.',
+    successResponse: {
+      status: 200,
+      type: ProgramAMentorshipNoteDto,
+      isArray: true,
+      description: 'Mentorship notes.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id or the application has no assigned mentor.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only the assigned mentor or an administrator can view mentorship notes.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application does not belong to the Program A mentorship workflow.',
       }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],
@@ -217,6 +443,26 @@ export const ReplyToNeedsInfoItemApi = () =>
       }),
       ApiNotFoundResponse({
         description: 'Application or needs-info item was not found.',
+      }),
+    ],
+  });
+
+export const GetSectionHistoryApi = () =>
+  createApiDecorator({
+    summary: 'Get section change history',
+    description: 'Returns the history snapshots for a section. Admin only.',
+    successResponse: {
+      status: 200,
+      type: ApplicationSectionHistoryDto,
+      isArray: true,
+      description: 'Section history entries.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiForbiddenResponse({ description: 'Admin access required.' }),
+      ApiNotFoundResponse({
+        description: 'Application or section was not found.',
       }),
     ],
   });
@@ -268,4 +514,102 @@ export const GetNeedsInfoThreadApi = () =>
       }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],
+  });
+
+export const SetActiveSectionVersionApi = () =>
+  createApiDecorator({
+    summary: 'Set active section version',
+    description:
+      'Pins a historical version as the active payload for a section. Admin only.',
+    body: SetActiveSectionVersionDto,
+    successResponse: {
+      status: 200,
+      type: ApplicationSectionDto,
+      description: 'Active section version was updated.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
+      ApiBadRequestResponse({
+        description:
+          'Request body validation failed, for example version must be an integer greater than or equal to 1.',
+      }),
+      ApiBadRequestResponse({ description: 'Version not found in history.' }),
+      ApiForbiddenResponse({ description: 'Admin access required.' }),
+      ApiNotFoundResponse({
+        description: 'Application or section was not found.',
+      }),
+    ],
+  });
+
+function createAdminLifecycleTransitionApi(config: {
+  summary: string;
+  description: string;
+  body?: typeof ApplicationLifecycleTransitionDto;
+}) {
+  return createApiDecorator({
+    summary: config.summary,
+    description: config.description,
+    body: config.body,
+    successResponse: {
+      status: 200,
+      type: ApplicationDetailDto,
+      description: 'Application lifecycle state was updated.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id format or request body validation failed.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only reviewer-side users may manage Program A post-approval lifecycle transitions.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application is not a Program A application, the current lifecycle state does not allow this transition, or another update changed the status concurrently.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+}
+
+export const StartApplicationOnboardingApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Start Program A onboarding',
+    description:
+      'Moves a Program A application from APPROVED to ONBOARDING. Reviewer-side users only.',
+  });
+
+export const ActivateApplicationApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Activate Program A application',
+    description:
+      'Moves a Program A application from ONBOARDING to ACTIVE_PROJECT or from PAUSED back to ACTIVE_PROJECT. Reviewer-side users only.',
+  });
+
+export const PauseApplicationApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Pause Program A application',
+    description:
+      'Moves a Program A application from ACTIVE_PROJECT to PAUSED and stores the provided reason. Reviewer-side users only.',
+    body: ApplicationLifecycleTransitionDto,
+  });
+
+export const CompleteApplicationApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Complete Program A application',
+    description:
+      'Moves a Program A application from ACTIVE_PROJECT to COMPLETED. Reviewer-side users only.',
+  });
+
+export const ArchiveApplicationApi = () =>
+  createAdminLifecycleTransitionApi({
+    summary: 'Archive Program A application',
+    description:
+      'Moves a Program A application from COMPLETED to ARCHIVED and stores the provided reason. Reviewer-side users only.',
+    body: ApplicationLifecycleTransitionDto,
   });

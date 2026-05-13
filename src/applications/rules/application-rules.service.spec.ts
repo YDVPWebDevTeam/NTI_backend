@@ -1,8 +1,8 @@
-jest.mock('./calls.repository', () => ({
+jest.mock('../calls.repository', () => ({
   CallsRepository: class CallsRepository {},
 }));
 
-jest.mock('../team/team.repository', () => ({
+jest.mock('../../team/team.repository', () => ({
   TeamRepository: class TeamRepository {},
 }));
 
@@ -12,7 +12,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { CallStatus } from '../../generated/prisma/enums';
+import { CallStatus } from '../../../generated/prisma/enums';
 import { ApplicationRulesService } from './application-rules.service';
 
 describe('ApplicationRulesService', () => {

@@ -430,7 +430,7 @@ export class ApplicationsService {
       );
     }
 
-    return this.applicationsRepository.transaction(async (db) => {
+    const result = await this.applicationsRepository.transaction(async (db) => {
       const application = await this.loadWorkflowApplicationOrThrow(
         applicationId,
         db,
@@ -483,15 +483,20 @@ export class ApplicationsService {
         db,
       );
 
-      if (application.call.type === ProgramType.PROGRAM_A) {
-        await this.enqueueNeedsInfoEmail(application);
-      }
-
-      return this.toNeedsInfoItemDto({
-        ...item,
-        replies: [],
-      });
+      return {
+        item: this.toNeedsInfoItemDto({
+          ...item,
+          replies: [],
+        }),
+        application,
+      };
     }, this.needsInfoTransactionOptions);
+
+    if (result.application.call.type === ProgramType.PROGRAM_A) {
+      await this.enqueueNeedsInfoEmail(result.application);
+    }
+
+    return result.item;
   }
 
   async replyToNeedsInfoItem(
@@ -677,7 +682,7 @@ export class ApplicationsService {
   ): Promise<MentorAssignmentDto> {
     ensureAdminRole(user.role, 'Only administrators can assign mentors');
 
-    return this.applicationsRepository.transaction(async (db) => {
+    const result = await this.applicationsRepository.transaction(async (db) => {
       const application = await this.loadWorkflowApplicationOrThrow(
         applicationId,
         db,
@@ -713,15 +718,24 @@ export class ApplicationsService {
         db,
       );
 
-      await this.enqueueMentorAssignmentEmail(application, mentor.email);
-
       return {
-        applicationId: assignment.id,
-        mentorUserId: assignment.mentorUserId ?? mentor.id,
-        assignedAt: assignment.mentorAssignedAt ?? assignedAt,
-        assignedById: assignment.mentorAssignedById ?? user.id,
+        assignment: {
+          applicationId: assignment.id,
+          mentorUserId: assignment.mentorUserId ?? mentor.id,
+          assignedAt: assignment.mentorAssignedAt ?? assignedAt,
+          assignedById: assignment.mentorAssignedById ?? user.id,
+        },
+        application,
+        mentorEmail: mentor.email,
       };
     });
+
+    await this.enqueueMentorAssignmentEmail(
+      result.application,
+      result.mentorEmail,
+    );
+
+    return result.assignment;
   }
 
   async createMentorshipNote(

@@ -119,7 +119,7 @@ export class ApplicationsRepository extends BaseRepository<
     currentStatus: ApplicationStatus,
     nextStatus: ApplicationStatus,
     db?: PrismaDbClient,
-    data?: Prisma.ApplicationUncheckedUpdateInput,
+    data?: Omit<Prisma.ApplicationUncheckedUpdateInput, 'status'>,
   ) {
     return (db ?? this.prisma.client).application.updateMany({
       where: {
@@ -127,8 +127,8 @@ export class ApplicationsRepository extends BaseRepository<
         status: currentStatus,
       },
       data: {
-        status: nextStatus,
         ...(data ?? {}),
+        status: nextStatus,
       },
     });
   }

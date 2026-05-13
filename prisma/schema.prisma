@@ -39,6 +39,11 @@ enum FileVisibility {
   PUBLIC
 }
 
+enum OrganizationDocumentVisibility {
+  INTERNAL
+  CONFIDENTIAL
+}
+
 enum ProgramType {
   PROGRAM_A
   PROGRAM_B
@@ -184,7 +189,8 @@ model User {
 
   studentProfile StudentProfile?
 
-  uploads UploadedFile[]
+  uploads                       UploadedFile[]
+  organizationDocumentsUploaded OrganizationDocument[] @relation("OrganizationDocumentUploadedBy")
 
   applicationsCreated           Application[]               @relation("ApplicationCreatedBy")
   updatedApplicationSections    ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
@@ -343,6 +349,39 @@ model BacklogItem {
   @@index([status])
   @@index([updatedAt])
   @@index([organizationId, updatedAt])
+}
+
+model OrganizationDocument {
+  id String @id @default(uuid())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name         String
+  documentType String
+  version      Int
+
+  storagePath String  @unique
+  mimeType    String
+  sizeBytes   Int
+  checksum    String?
+
+  visibility OrganizationDocumentVisibility @default(INTERNAL)
+  status     UploadStatus                   @default(PENDING)
+
+  uploadUrlExpiresAt DateTime
+  uploadedAt         DateTime?
+  failedAt           DateTime?
+
+  uploadedById String
+  uploadedBy   User   @relation("OrganizationDocumentUploadedBy", fields: [uploadedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, name, version])
+  @@index([organizationId, name, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([status, uploadUrlExpiresAt])
 }
 
 model RequiredDocumentType {
@@ -567,17 +606,18 @@ enum OrganizationStatus {
 }
 
 model Organization {
-  id           String             @id @default(uuid())
+  id           String                 @id @default(uuid())
   name         String
-  ico          String             @unique
+  ico          String                 @unique
   sector       String?
   description  String?
   website      String?
   logoUrl      String?
-  status       OrganizationStatus @default(PENDING)
+  status       OrganizationStatus     @default(PENDING)
   users        User[]
   invitations  OrgInvitation[]
   backlogItems BacklogItem[]
+  documents    OrganizationDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

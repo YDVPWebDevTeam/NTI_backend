@@ -62,6 +62,20 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((value) => value === 'true'),
+  ORGANIZATION_DOCUMENT_MAX_SIZE_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(20 * 1024 * 1024),
+  ORGANIZATION_DOCUMENT_ALLOWED_MIME_TYPES: z
+    .string()
+    .default(
+      'application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ),
+  ORGANIZATION_DOCUMENT_VERIFY_OBJECT_ON_COMPLETE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
   PUPPETEER_EXECUTABLE_PATH: z.string().min(1).optional(),
   PUPPETEER_HEADLESS: z
     .enum(['true', 'false'])

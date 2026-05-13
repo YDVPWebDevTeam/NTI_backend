@@ -89,6 +89,20 @@ export class ConfigService {
     return this.env.FILE_UPLOAD_VERIFY_OBJECT_ON_COMPLETE;
   }
 
+  get organizationDocumentMaxSizeBytes(): number {
+    return this.env.ORGANIZATION_DOCUMENT_MAX_SIZE_BYTES;
+  }
+
+  get organizationDocumentAllowedMimeTypes(): string[] {
+    return this.env.ORGANIZATION_DOCUMENT_ALLOWED_MIME_TYPES.split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
+  get organizationDocumentVerifyObjectOnComplete(): boolean {
+    return this.env.ORGANIZATION_DOCUMENT_VERIFY_OBJECT_ON_COMPLETE;
+  }
+
   get puppeteerExecutablePath(): string | undefined {
     return this.env.PUPPETEER_EXECUTABLE_PATH;
   }

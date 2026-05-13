@@ -1,9 +1,12 @@
 export {
+  AssignMentorApi,
   AttachApplicationDocumentApi,
+  CreateMentorshipNoteApi,
   CreateApplicationApi,
   CreateNeedsInfoItemApi,
   GetApplicationApi,
   GetApplicationDocumentCompletenessApi,
+  GetMentorshipNotesApi,
   GetNeedsInfoThreadApi,
   GetPublicActiveCallsApi,
   GetPublicCallByIdApi,

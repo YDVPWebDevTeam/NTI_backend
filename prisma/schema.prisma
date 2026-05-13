@@ -193,16 +193,19 @@ model User {
   organizationDocumentsUploaded OrganizationDocument[] @relation("OrganizationDocumentUploadedBy")
 
   applicationsCreated           Application[]               @relation("ApplicationCreatedBy")
+  assignedProgramAApplications  Application[]               @relation("ApplicationAssignedMentor")
+  programAMentorAssignmentsMade Application[]               @relation("ApplicationMentorAssignedBy")
   updatedApplicationSections    ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
   applicationSectionHistories   ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
   applicationDocumentsCreated   ApplicationDocument[]       @relation("ApplicationDocumentCreatedBy")
   applicationDocumentsForMember ApplicationDocument[]       @relation("ApplicationDocumentMember")
   productOwnerForBacklogItems   BacklogItem[]               @relation("BacklogItemProductOwner")
 
-  needsInfoItemsCreated          NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
-  needsInfoItemsResolved         NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
-  needsInfoRepliesCreated        NeedsInfoReply[]         @relation("NeedsInfoReplyCreatedBy")
-  applicationStatusEventsChanged ApplicationStatusEvent[] @relation("ApplicationStatusChangedBy")
+  needsInfoItemsCreated           NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
+  needsInfoItemsResolved          NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
+  needsInfoRepliesCreated         NeedsInfoReply[]         @relation("NeedsInfoReplyCreatedBy")
+  applicationStatusEventsChanged  ApplicationStatusEvent[] @relation("ApplicationStatusChangedBy")
+  programAMentorshipNotesAuthored ProgramAMentorshipNote[] @relation("ProgramAMentorshipNoteAuthor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -309,8 +312,15 @@ model Application {
   createdBy   User                  @relation("ApplicationCreatedBy", fields: [createdById], references: [id])
   documents   ApplicationDocument[]
 
-  needsInfoItems NeedsInfoItem[]
-  statusEvents   ApplicationStatusEvent[]
+  mentorUserId       String?
+  mentorUser         User?     @relation("ApplicationAssignedMentor", fields: [mentorUserId], references: [id], onDelete: SetNull)
+  mentorAssignedAt   DateTime?
+  mentorAssignedById String?
+  mentorAssignedBy   User?     @relation("ApplicationMentorAssignedBy", fields: [mentorAssignedById], references: [id], onDelete: SetNull)
+
+  needsInfoItems  NeedsInfoItem[]
+  statusEvents    ApplicationStatusEvent[]
+  mentorshipNotes ProgramAMentorshipNote[]
 
   status      ApplicationStatus @default(DRAFT)
   submittedAt DateTime?
@@ -324,6 +334,25 @@ model Application {
   @@index([callId, status])
   @@index([teamId, status])
   @@index([createdById, status])
+  @@index([mentorUserId, status])
+  @@index([mentorAssignedById])
+}
+
+model ProgramAMentorshipNote {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation("ProgramAMentorshipNoteAuthor", fields: [authorId], references: [id])
+
+  content String
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId, createdAt, id])
+  @@index([authorId, createdAt])
 }
 
 model BacklogItem {

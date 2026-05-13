@@ -16,11 +16,14 @@ import { GetUserContext } from '../auth/decorators/get-user-context.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import {
+  AssignMentorApi,
   AttachApplicationDocumentApi,
+  CreateMentorshipNoteApi,
   CreateApplicationApi,
   CreateNeedsInfoItemApi,
   GetApplicationApi,
   GetApplicationDocumentCompletenessApi,
+  GetMentorshipNotesApi,
   GetNeedsInfoThreadApi,
   GetSectionHistoryApi,
   ListApplicationSectionsApi,
@@ -35,13 +38,17 @@ import {
 } from './api-docs';
 import { ApplicationSectionDto } from './dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from './dto/application-section-history.dto';
+import { AssignMentorDto } from './dto/assign-mentor.dto';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationDocumentDto } from './dto/application-document.dto';
 import { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import { CreateMentorshipNoteDto } from './dto/create-mentorship-note.dto';
 import { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
 import { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from './dto/document-completeness.dto';
+import { MentorAssignmentDto } from './dto/mentor-assignment.dto';
+import { ProgramAMentorshipNoteDto } from './dto/program-a-mentorship-note.dto';
 import { NeedsInfoItemDto } from './dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';
@@ -181,6 +188,38 @@ export class ApplicationsController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<NeedsInfoThreadDto> {
     return this.applicationsService.getNeedsInfoThread(id, user);
+  }
+
+  @AssignMentorApi()
+  @Post(':id/assign-mentor')
+  @UseGuards(JwtAuthGuard)
+  assignMentor(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: AssignMentorDto,
+  ): Promise<MentorAssignmentDto> {
+    return this.applicationsService.assignMentor(id, user, dto);
+  }
+
+  @CreateMentorshipNoteApi()
+  @Post(':id/mentorship-notes')
+  @UseGuards(JwtAuthGuard)
+  createMentorshipNote(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: CreateMentorshipNoteDto,
+  ): Promise<ProgramAMentorshipNoteDto> {
+    return this.applicationsService.createMentorshipNote(id, user, dto);
+  }
+
+  @GetMentorshipNotesApi()
+  @Get(':id/mentorship-notes')
+  @UseGuards(JwtAuthGuard)
+  listMentorshipNotes(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ProgramAMentorshipNoteDto[]> {
+    return this.applicationsService.listMentorshipNotes(id, user);
   }
 
   @ListApplicationSectionsApi()

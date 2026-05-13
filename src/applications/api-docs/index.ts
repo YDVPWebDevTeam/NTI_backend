@@ -1,6 +1,9 @@
 export {
+  ActivateApplicationApi,
+  ArchiveApplicationApi,
   AssignMentorApi,
   AttachApplicationDocumentApi,
+  CompleteApplicationApi,
   CreateMentorshipNoteApi,
   CreateApplicationApi,
   CreateNeedsInfoItemApi,
@@ -16,7 +19,9 @@ export {
   ListApplicationSectionsApi,
   ReplyToNeedsInfoItemApi,
   ResubmitApplicationApi,
+  PauseApplicationApi,
   SetActiveSectionVersionApi,
+  StartApplicationOnboardingApi,
   SubmitApplicationApi,
   UpsertApplicationSectionApi,
 } from './applications-api-docs.decorators';

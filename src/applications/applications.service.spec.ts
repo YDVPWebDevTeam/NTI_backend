@@ -49,6 +49,7 @@ describe('ApplicationsService', () => {
     submitDraft: jest.Mock;
     transaction: jest.Mock;
     assignMentor: jest.Mock;
+    updateStatusIfCurrent: jest.Mock;
   };
   let applicationDocumentsRepository: {
     deactivateActiveBySlot: jest.Mock;
@@ -79,6 +80,17 @@ describe('ApplicationsService', () => {
   };
   let userRepository: {
     findUnique: jest.Mock;
+  };
+  let needsInfoRepository: {
+    createItem: jest.Mock;
+    findItemForApplication: jest.Mock;
+    createReply: jest.Mock;
+    markItemAnswered: jest.Mock;
+    findUnresolvedItems: jest.Mock;
+    resolveAnsweredItems: jest.Mock;
+    getThread: jest.Mock;
+    getStatusEvents: jest.Mock;
+    createStatusEvent: jest.Mock;
   };
 
   const mockCall = {
@@ -159,6 +171,7 @@ describe('ApplicationsService', () => {
       findByIdForWorkflow: jest.fn(),
       submitDraft: jest.fn(),
       assignMentor: jest.fn(),
+      updateStatusIfCurrent: jest.fn(),
       transaction: jest.fn((fn: (db: never) => Promise<unknown>) =>
         fn({ tx: 'db-client' } as never),
       ),
@@ -203,6 +216,18 @@ describe('ApplicationsService', () => {
       findUnique: jest.fn(),
     };
 
+    needsInfoRepository = {
+      createItem: jest.fn(),
+      findItemForApplication: jest.fn(),
+      createReply: jest.fn(),
+      markItemAnswered: jest.fn(),
+      findUnresolvedItems: jest.fn(),
+      resolveAnsweredItems: jest.fn(),
+      getThread: jest.fn(),
+      getStatusEvents: jest.fn(),
+      createStatusEvent: jest.fn(),
+    };
+
     service = new ApplicationsService(
       applicationsRepository as never,
       applicationDocumentsRepository as never,
@@ -210,17 +235,7 @@ describe('ApplicationsService', () => {
       callsRepository as never,
       teamRepository as never,
       filesRepository as never,
-      {
-        createItem: jest.fn(),
-        findItemForApplication: jest.fn(),
-        createReply: jest.fn(),
-        markItemAnswered: jest.fn(),
-        findUnresolvedItems: jest.fn(),
-        resolveAnsweredItems: jest.fn(),
-        getThread: jest.fn(),
-        getStatusEvents: jest.fn(),
-        createStatusEvent: jest.fn(),
-      } as never,
+      needsInfoRepository as never,
       programAMentorshipRepository as never,
       userRepository as never,
     );
@@ -902,6 +917,26 @@ describe('ApplicationsService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('rejects mentorship note creation for archived application when user is not admin', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.ARCHIVED,
+      mentorUserId: 'mentor-1',
+    });
+
+    await expect(
+      service.createMentorshipNote(
+        'application-1',
+        {
+          id: 'mentor-1',
+          email: 'mentor@example.com',
+          role: UserRole.MENTOR,
+        } as never,
+        { content: 'Trying to update archived application' },
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
   it('rejects mentorship note creation when no mentor is assigned', async () => {
     applicationsRepository.findByIdForWorkflow.mockResolvedValue({
       ...workflowApplication,
@@ -967,5 +1002,265 @@ describe('ApplicationsService', () => {
       'application-1',
     );
     expect(result.map((note) => note.id)).toEqual(['note-1', 'note-2']);
+  });
+
+  it('starts onboarding for approved Program A application', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.APPROVED,
+    });
+    applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+      count: 1,
+    });
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...detailApplication,
+      status: ApplicationStatus.ONBOARDING,
+    });
+
+    const result = await service.startOnboarding('application-1', {
+      id: 'reviewer-1',
+      email: 'reviewer@example.com',
+      role: UserRole.EVALUATOR,
+    } as never);
+
+    expect(applicationsRepository.updateStatusIfCurrent).toHaveBeenCalledWith(
+      'application-1',
+      ApplicationStatus.APPROVED,
+      ApplicationStatus.ONBOARDING,
+      { tx: 'db-client' },
+    );
+    expect(needsInfoRepository.createStatusEvent).toHaveBeenCalledWith(
+      {
+        applicationId: 'application-1',
+        fromStatus: ApplicationStatus.APPROVED,
+        toStatus: ApplicationStatus.ONBOARDING,
+        changedById: 'reviewer-1',
+        reason: undefined,
+      },
+      { tx: 'db-client' },
+    );
+    expect(result.status).toBe(ApplicationStatus.ONBOARDING);
+  });
+
+  it('activates application from onboarding', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.ONBOARDING,
+    });
+    applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+      count: 1,
+    });
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...detailApplication,
+      status: ApplicationStatus.ACTIVE_PROJECT,
+    });
+
+    const result = await service.activate('application-1', {
+      id: 'admin-1',
+      email: 'admin@example.com',
+      role: UserRole.ADMIN,
+    } as never);
+
+    expect(result.status).toBe(ApplicationStatus.ACTIVE_PROJECT);
+  });
+
+  it('reactivates application from paused state', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.PAUSED,
+    });
+    applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+      count: 1,
+    });
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...detailApplication,
+      status: ApplicationStatus.ACTIVE_PROJECT,
+    });
+
+    const result = await service.activate('application-1', {
+      id: 'admin-1',
+      email: 'admin@example.com',
+      role: UserRole.ADMIN,
+    } as never);
+
+    expect(result.status).toBe(ApplicationStatus.ACTIVE_PROJECT);
+  });
+
+  it('pauses active application and persists reason', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.ACTIVE_PROJECT,
+    });
+    applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+      count: 1,
+    });
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...detailApplication,
+      status: ApplicationStatus.PAUSED,
+    });
+
+    const result = await service.pause(
+      'application-1',
+      {
+        id: 'admin-1',
+        email: 'admin@example.com',
+        role: UserRole.ADMIN,
+      } as never,
+      'Awaiting external approval',
+    );
+
+    expect(needsInfoRepository.createStatusEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'Awaiting external approval',
+        toStatus: ApplicationStatus.PAUSED,
+      }),
+      { tx: 'db-client' },
+    );
+    expect(result.status).toBe(ApplicationStatus.PAUSED);
+  });
+
+  it('completes active application', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.ACTIVE_PROJECT,
+    });
+    applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+      count: 1,
+    });
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...detailApplication,
+      status: ApplicationStatus.COMPLETED,
+    });
+
+    const result = await service.complete('application-1', {
+      id: 'admin-1',
+      email: 'admin@example.com',
+      role: UserRole.ADMIN,
+    } as never);
+
+    expect(result.status).toBe(ApplicationStatus.COMPLETED);
+  });
+
+  it('archives completed application and persists reason', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.COMPLETED,
+    });
+    applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+      count: 1,
+    });
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...detailApplication,
+      status: ApplicationStatus.ARCHIVED,
+    });
+
+    const result = await service.archive(
+      'application-1',
+      {
+        id: 'admin-1',
+        email: 'admin@example.com',
+        role: UserRole.SUPER_ADMIN,
+      } as never,
+      'Retention period elapsed',
+    );
+
+    expect(result.status).toBe(ApplicationStatus.ARCHIVED);
+    expect(needsInfoRepository.createStatusEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'Retention period elapsed',
+        toStatus: ApplicationStatus.ARCHIVED,
+      }),
+      { tx: 'db-client' },
+    );
+  });
+
+  it('rejects lifecycle transition for non Program A application', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.APPROVED,
+      call: {
+        ...mockCall,
+        type: ProgramType.PROGRAM_B,
+      },
+    });
+
+    await expect(
+      service.startOnboarding('application-1', {
+        id: 'reviewer-1',
+        email: 'reviewer@example.com',
+        role: UserRole.EVALUATOR,
+      } as never),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects lifecycle transition from invalid current status', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.SUBMITTED,
+    });
+
+    await expect(
+      service.startOnboarding('application-1', {
+        id: 'reviewer-1',
+        email: 'reviewer@example.com',
+        role: UserRole.EVALUATOR,
+      } as never),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects pause without reason', async () => {
+    await expect(
+      service.pause(
+        'application-1',
+        {
+          id: 'admin-1',
+          email: 'admin@example.com',
+          role: UserRole.ADMIN,
+        } as never,
+        '   ',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects archive without reason', async () => {
+    await expect(
+      service.archive(
+        'application-1',
+        {
+          id: 'admin-1',
+          email: 'admin@example.com',
+          role: UserRole.ADMIN,
+        } as never,
+        '',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects lifecycle transition for team-side user', async () => {
+    await expect(
+      service.complete('application-1', {
+        id: 'user-1',
+        email: 'lead@example.com',
+        role: UserRole.STUDENT,
+      } as never),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('rejects lifecycle transition when status changes concurrently', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.ACTIVE_PROJECT,
+    });
+    applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+      count: 0,
+    });
+
+    await expect(
+      service.complete('application-1', {
+        id: 'admin-1',
+        email: 'admin@example.com',
+        role: UserRole.ADMIN,
+      } as never),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });

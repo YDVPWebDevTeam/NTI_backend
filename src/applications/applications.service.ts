@@ -67,6 +67,12 @@ type RequiredDocumentSlot = {
   memberUserId: string | null;
 };
 
+type LifecycleTransitionDefinition = {
+  from: readonly ApplicationStatus[];
+  to: ApplicationStatus;
+  reasonRequired?: boolean;
+};
+
 @Injectable()
 export class ApplicationsService {
   private readonly mentorshipAssignableStatuses: readonly ApplicationStatus[] =
@@ -674,6 +680,7 @@ export class ApplicationsService {
       this.ensureProgramAMentorshipWorkflow(application);
       this.ensureMentorAssigned(application);
       this.ensureMentorshipAccess(application, user);
+      this.ensureArchivedApplicationIsReadOnlyForNonAdmin(application, user);
 
       const note = await this.programAMentorshipRepository.createNote(
         {
@@ -706,6 +713,70 @@ export class ApplicationsService {
     return notes.map((note) => this.toProgramAMentorshipNoteDto(note));
   }
 
+  async startOnboarding(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionLifecycle(applicationId, user, {
+      from: [ApplicationStatus.APPROVED],
+      to: ApplicationStatus.ONBOARDING,
+    });
+  }
+
+  async activate(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionLifecycle(applicationId, user, {
+      from: [ApplicationStatus.ONBOARDING, ApplicationStatus.PAUSED],
+      to: ApplicationStatus.ACTIVE_PROJECT,
+    });
+  }
+
+  async pause(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    reason: string,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionLifecycle(
+      applicationId,
+      user,
+      {
+        from: [ApplicationStatus.ACTIVE_PROJECT],
+        to: ApplicationStatus.PAUSED,
+        reasonRequired: true,
+      },
+      reason,
+    );
+  }
+
+  async complete(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionLifecycle(applicationId, user, {
+      from: [ApplicationStatus.ACTIVE_PROJECT],
+      to: ApplicationStatus.COMPLETED,
+    });
+  }
+
+  async archive(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    reason: string,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionLifecycle(
+      applicationId,
+      user,
+      {
+        from: [ApplicationStatus.COMPLETED],
+        to: ApplicationStatus.ARCHIVED,
+        reasonRequired: true,
+      },
+      reason,
+    );
+  }
+
   private async loadWorkflowApplicationOrThrow(
     applicationId: string,
     db?: Parameters<ApplicationsRepository['findByIdForWorkflow']>[1],
@@ -720,6 +791,80 @@ export class ApplicationsService {
     }
 
     return application;
+  }
+
+  private async transitionLifecycle(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    transition: LifecycleTransitionDefinition,
+    reason?: string,
+  ): Promise<ApplicationDetailDto> {
+    if (!this.isReviewerSideUser(user)) {
+      throw new ForbiddenException(
+        'Only reviewer-side users can manage Program A application lifecycle',
+      );
+    }
+
+    const normalizedReason = reason?.trim();
+
+    if (transition.reasonRequired && !normalizedReason) {
+      throw new BadRequestException('Reason is required for this transition');
+    }
+
+    const updatedApplication = await this.applicationsRepository.transaction(
+      async (db) => {
+        const application = await this.loadWorkflowApplicationOrThrow(
+          applicationId,
+          db,
+        );
+
+        this.ensureProgramAApplicationLifecycle(application);
+
+        if (!transition.from.includes(application.status)) {
+          throw new ConflictException(
+            `Invalid application lifecycle transition from ${application.status} to ${transition.to}`,
+          );
+        }
+
+        const updated = await this.applicationsRepository.updateStatusIfCurrent(
+          application.id,
+          application.status,
+          transition.to,
+          db,
+        );
+
+        if (updated.count !== 1) {
+          throw new ConflictException(
+            'Application status was changed concurrently. Please retry.',
+          );
+        }
+
+        await this.needsInfoRepository.createStatusEvent(
+          {
+            applicationId: application.id,
+            fromStatus: application.status,
+            toStatus: transition.to,
+            changedById: user.id,
+            reason: normalizedReason,
+          },
+          db,
+        );
+
+        const refreshed =
+          await this.applicationsRepository.findByIdWithRelations(
+            application.id,
+            db,
+          );
+
+        if (!refreshed) {
+          throw new NotFoundException('Application not found');
+        }
+
+        return refreshed;
+      },
+    );
+
+    return this.toDetailDto(updatedApplication);
   }
 
   private isReviewerSideUser(user: AuthenticatedUserContext): boolean {
@@ -769,6 +914,16 @@ export class ApplicationsService {
     }
   }
 
+  private ensureProgramAApplicationLifecycle(
+    application: ApplicationWorkflowView,
+  ): void {
+    if (application.call.type !== ProgramType.PROGRAM_A) {
+      throw new ConflictException(
+        'Program A post-approval lifecycle is supported only for Program A applications',
+      );
+    }
+  }
+
   private ensureMentorAssigned(application: ApplicationWorkflowView): void {
     if (!application.mentorUserId) {
       throw new BadRequestException('Application has no assigned mentor');
@@ -790,6 +945,20 @@ export class ApplicationsService {
     throw new ForbiddenException(
       'Only the assigned mentor or an administrator can access mentorship notes',
     );
+  }
+
+  private ensureArchivedApplicationIsReadOnlyForNonAdmin(
+    application: ApplicationWorkflowView,
+    user: AuthenticatedUserContext,
+  ): void {
+    if (
+      application.status === ApplicationStatus.ARCHIVED &&
+      !isAdminRole(user.role)
+    ) {
+      throw new ConflictException(
+        'Archived applications are read-only for non-admin users',
+      );
+    }
   }
 
   private ensureApplicationManagedByTeamLead(

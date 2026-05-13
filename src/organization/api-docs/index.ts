@@ -1,4 +1,5 @@
 export {
+  AcceptOrganizationInviteApi,
   CreateOrganizationApi,
   CreateOrganizationInviteApi,
   GetMyOrganizationApi,
@@ -10,4 +11,5 @@ export {
   TransferOrganizationOwnerApi,
   UpdateMyOrganizationApi,
   UpdateOrganizationMemberRoleApi,
+  ValidateOrganizationInviteApi,
 } from './organization-api-docs.decorators';

@@ -76,10 +76,13 @@ export class AuthController {
   @RegisterViaInviteApi()
   @Post('register-via-invite')
   @HttpCode(HttpStatus.CREATED)
-  registerViaInvite(
+  async registerViaInvite(
     @Body() dto: RegisterViaInviteDto,
-  ): Promise<MessageResponse> {
-    return this.authService.registerViaInvite(dto);
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<AuthHttpResponse> {
+    const authResult = await this.authService.registerViaInvite(dto);
+    this.authCookieService.applyAuthTokens(reply, authResult);
+    return this.authCookieService.toHttpAuthResponse(authResult);
   }
 
   @LoginApi()

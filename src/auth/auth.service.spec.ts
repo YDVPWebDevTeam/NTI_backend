@@ -31,6 +31,9 @@ jest.mock('../invites/invites.service', () => ({
 jest.mock('./auth-registration.service', () => ({
   AuthRegistrationService: class AuthRegistrationService {},
 }));
+jest.mock('../organization/organization.repository', () => ({
+  OrganizationRepository: class OrganizationRepository {},
+}));
 
 jest.mock('../infrastructure/queue', () => ({
   EMAIL_JOBS: {
@@ -42,17 +45,26 @@ jest.mock('../infrastructure/queue', () => ({
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { PrismaDbClient } from '../infrastructure/database';
-import { UserRole, UserStatus } from '../../generated/prisma/enums';
+import {
+  OrganizationStatus,
+  UserRole,
+  UserStatus,
+} from '../../generated/prisma/enums';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { UserService } from '../user/user.service';
 import { EmailVerificationService } from './email-verification/email-verification.service';
-import { AuthService, FORCE_PASSWORD_CHANGE_PURPOSE } from './auth.service';
+import {
+  AuthService,
+  FORCE_PASSWORD_CHANGE_PURPOSE,
+  type AuthTokensResponse,
+} from './auth.service';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
 import { ResetTokenService } from './reset-token/reset-token.service';
 import { AuthRegistrationService } from './auth-registration.service';
 import { OrganizationInviteRepository } from 'src/organization/organization-invitation.repository';
+import { OrganizationRepository } from 'src/organization/organization.repository';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -84,6 +96,13 @@ describe('AuthService', () => {
     register: jest.Mock;
     registerCompanyOwner: jest.Mock;
     registerViaInvite: jest.Mock;
+  };
+  let organizationInvites: {
+    findByTokenForUpdate: jest.Mock;
+    update: jest.Mock;
+  };
+  let organizations: {
+    findUnique: jest.Mock;
   };
   let queueService: {
     addEmail: jest.Mock;
@@ -160,9 +179,12 @@ describe('AuthService', () => {
       registerCompanyOwner: jest.fn(),
       registerViaInvite: jest.fn(),
     };
-    const organizationInvites = {
+    organizationInvites = {
       findByTokenForUpdate: jest.fn(),
       update: jest.fn(),
+    };
+    organizations = {
+      findUnique: jest.fn(),
     };
     jwtService = {
       signAsync: jest
@@ -196,6 +218,7 @@ describe('AuthService', () => {
       queueService as unknown as QueueService,
       authRegistration as unknown as AuthRegistrationService,
       organizationInvites as unknown as OrganizationInviteRepository,
+      organizations as unknown as OrganizationRepository,
     );
   });
 
@@ -237,7 +260,16 @@ describe('AuthService', () => {
 
   it('registers a confirmed user via invite and accepts the invitation', async () => {
     authRegistration.registerViaInvite.mockResolvedValue({
-      message: 'Registration via invite completed successfully.',
+      id: user.id,
+      email: user.email,
+      role: UserRole.STUDENT,
+      status: UserStatus.ACTIVE,
+      organizationId: null,
+    });
+    users.findById.mockResolvedValue({
+      ...user,
+      status: UserStatus.ACTIVE,
+      organizationId: null,
     });
 
     const result = await service.registerViaInvite({
@@ -253,8 +285,17 @@ describe('AuthService', () => {
       token: 'invite-token',
       password: 'strongpass123',
     });
+    expect(users.findById).toHaveBeenCalledWith(user.id);
     expect(result).toEqual({
-      message: 'Registration via invite completed successfully.',
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      user: {
+        id: user.id,
+        email: user.email,
+        role: UserRole.STUDENT,
+        status: UserStatus.ACTIVE,
+        organizationId: null,
+      },
     });
   });
 
@@ -271,6 +312,98 @@ describe('AuthService', () => {
         password: 'strongpass123',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('accepts organization invite and creates an employee account', async () => {
+    organizationInvites.findByTokenForUpdate.mockResolvedValue({
+      id: 'org-invite-1',
+      email: 'employee@example.com',
+      token: 'org-token',
+      organizationId: 'org-1',
+      roleToAssign: UserRole.COMPANY_EMPLOYEE,
+      status: 'PENDING',
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+      acceptedAt: null,
+      revokedAt: null,
+    });
+    organizations.findUnique.mockResolvedValue({
+      id: 'org-1',
+      name: 'Acme Labs s.r.o.',
+      status: OrganizationStatus.ACTIVE,
+    });
+    users.findByEmail.mockResolvedValue(null);
+    users.create.mockResolvedValue({
+      ...user,
+      email: 'employee@example.com',
+      role: UserRole.COMPANY_EMPLOYEE,
+      status: UserStatus.ACTIVE,
+      organizationId: 'org-1',
+    });
+
+    const result: AuthTokensResponse = await service.acceptOrgInvite({
+      token: 'org-token',
+      firstName: 'Eva',
+      lastName: 'Employee',
+      password: 'StrongPass123!',
+      confirmPassword: 'StrongPass123!',
+    });
+
+    expect(organizations.findUnique).toHaveBeenCalledWith(
+      { id: 'org-1' },
+      transactionClient,
+    );
+    expect(users.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'employee@example.com',
+        role: UserRole.COMPANY_EMPLOYEE,
+        organizationId: 'org-1',
+      }),
+      transactionClient,
+    );
+    expect(organizationInvites.update).toHaveBeenCalledWith(
+      { id: 'org-invite-1' },
+      expect.objectContaining({
+        status: 'ACCEPTED',
+        acceptedAt: expect.any(Date) as Date,
+      }),
+      transactionClient,
+    );
+    expect(result.user).toEqual({
+      id: 'user-1',
+      email: 'employee@example.com',
+      role: UserRole.COMPANY_EMPLOYEE,
+      status: UserStatus.ACTIVE,
+      organizationId: 'org-1',
+    });
+  });
+
+  it('rejects organization invite for suspended or rejected organizations', async () => {
+    organizationInvites.findByTokenForUpdate.mockResolvedValue({
+      id: 'org-invite-1',
+      email: 'employee@example.com',
+      token: 'org-token',
+      organizationId: 'org-1',
+      roleToAssign: UserRole.COMPANY_EMPLOYEE,
+      status: 'PENDING',
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+      acceptedAt: null,
+      revokedAt: null,
+    });
+    organizations.findUnique.mockResolvedValue({
+      id: 'org-1',
+      name: 'Acme Labs s.r.o.',
+      status: OrganizationStatus.SUSPENDED,
+    });
+
+    await expect(
+      service.acceptOrgInvite({
+        token: 'org-token',
+        firstName: 'Eva',
+        lastName: 'Employee',
+        password: 'StrongPass123!',
+        confirmPassword: 'StrongPass123!',
+      }),
+    ).rejects.toThrow('Organization is not accepting invitations');
   });
 
   it('logs in a confirmed user and returns tokens', async () => {

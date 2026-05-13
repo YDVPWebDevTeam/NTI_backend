@@ -77,6 +77,7 @@ jest.mock(
 
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -111,6 +112,7 @@ describe('OrganizationService', () => {
     findByEmail: jest.Mock;
     findAdmins: jest.Mock;
     updateOrganizationIfNotExists: jest.Mock;
+    linkToOrganizationIfUnlinked: jest.Mock;
     findOrganizationMembers: jest.Mock;
     findOrganizationMember: jest.Mock;
     findActiveOrganizationMember: jest.Mock;
@@ -126,6 +128,9 @@ describe('OrganizationService', () => {
   let organizationInviteRepository: {
     findActivePendingByEmailAndOrganization: jest.Mock;
     findByIdAndOrganization: jest.Mock;
+    findByToken: jest.Mock;
+    findByTokenForUpdate: jest.Mock;
+    markAcceptedIfPending: jest.Mock;
     findMany: jest.Mock;
     count: jest.Mock;
     create: jest.Mock;
@@ -190,6 +195,7 @@ describe('OrganizationService', () => {
       findByEmail: jest.fn(),
       findAdmins: jest.fn(),
       updateOrganizationIfNotExists: jest.fn(),
+      linkToOrganizationIfUnlinked: jest.fn(),
       findOrganizationMembers: jest.fn(),
       findOrganizationMember: jest.fn(),
       findActiveOrganizationMember: jest.fn(),
@@ -205,6 +211,9 @@ describe('OrganizationService', () => {
     organizationInviteRepository = {
       findActivePendingByEmailAndOrganization: jest.fn(),
       findByIdAndOrganization: jest.fn(),
+      findByToken: jest.fn(),
+      findByTokenForUpdate: jest.fn(),
+      markAcceptedIfPending: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
       create: jest.fn(),
@@ -318,6 +327,45 @@ describe('OrganizationService', () => {
   });
 
   describe('organization invites', () => {
+    it('creates invitation with requested role or defaults to employee role', async () => {
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+      userRepository.findByEmail.mockResolvedValue(null);
+      organizationInviteRepository.findActivePendingByEmailAndOrganization.mockResolvedValue(
+        null,
+      );
+      hashingService.generateHexToken.mockReturnValue('generated-token');
+      organizationInviteRepository.create.mockResolvedValue({
+        id: 'invite-1',
+        email: 'employee@example.com',
+        token: 'generated-token',
+        status: InvitationStatus.PENDING,
+        organizationId: 'org-1',
+        roleToAssign: UserRole.COMPANY_EMPLOYEE,
+        revokedById: null,
+        createdAt: new Date('2026-04-28T10:00:00.000Z'),
+        updatedAt: new Date('2026-04-28T10:00:00.000Z'),
+        expiresAt: new Date('2026-05-05T10:00:00.000Z'),
+        acceptedAt: null,
+        revokedAt: null,
+      });
+
+      await service.createInvite(
+        'org-1',
+        {
+          email: 'employee@example.com',
+          roleToAssign: UserRole.COMPANY_EMPLOYEE,
+        },
+        owner,
+      );
+
+      expect(organizationInviteRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'employee@example.com',
+          roleToAssign: UserRole.COMPANY_EMPLOYEE,
+        }),
+      );
+    });
+
     it('lists invitations with computed EXPIRED status and pagination meta', async () => {
       const now = new Date('2026-04-29T10:00:00.000Z');
       jest.useFakeTimers().setSystemTime(now);
@@ -404,7 +452,7 @@ describe('OrganizationService', () => {
         revokedById: null,
         createdAt: new Date('2026-04-28T10:00:00.000Z'),
         updatedAt: new Date('2026-04-28T10:00:00.000Z'),
-        expiresAt: new Date('2026-05-02T10:00:00.000Z'),
+        expiresAt: new Date('2030-05-02T10:00:00.000Z'),
         acceptedAt: null,
         revokedAt: null,
       });
@@ -457,6 +505,60 @@ describe('OrganizationService', () => {
         service.resendInvite('org-1', 'invite-1', owner),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
+
+    it('validates active organization invitation token', async () => {
+      const now = new Date('2026-04-29T10:00:00.000Z');
+      jest.useFakeTimers().setSystemTime(now);
+
+      organizationInviteRepository.findByToken.mockResolvedValue({
+        id: 'invite-1',
+        email: 'employee@example.com',
+        token: 'token-1',
+        status: InvitationStatus.PENDING,
+        organizationId: 'org-1',
+        roleToAssign: UserRole.COMPANY_EMPLOYEE,
+        revokedById: null,
+        createdAt: new Date('2026-04-28T10:00:00.000Z'),
+        updatedAt: new Date('2026-04-28T10:00:00.000Z'),
+        expiresAt: new Date('2030-05-02T10:00:00.000Z'),
+        acceptedAt: null,
+        revokedAt: null,
+      });
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      const result = await service.validateInviteToken('token-1');
+
+      expect(result).toEqual({
+        email: 'employee@example.com',
+        organizationName: existingOrganization.name,
+        roleToAssign: UserRole.COMPANY_EMPLOYEE,
+      });
+    });
+
+    it('rejects validation for suspended organizations', async () => {
+      organizationInviteRepository.findByToken.mockResolvedValue({
+        id: 'invite-1',
+        email: 'employee@example.com',
+        token: 'token-1',
+        status: InvitationStatus.PENDING,
+        organizationId: 'org-1',
+        roleToAssign: UserRole.COMPANY_EMPLOYEE,
+        revokedById: null,
+        createdAt: new Date('2026-04-28T10:00:00.000Z'),
+        updatedAt: new Date('2026-04-28T10:00:00.000Z'),
+        expiresAt: new Date('2030-05-02T10:00:00.000Z'),
+        acceptedAt: null,
+        revokedAt: null,
+      });
+      organizationRepository.findUnique.mockResolvedValue({
+        ...existingOrganization,
+        status: OrganizationStatus.SUSPENDED,
+      });
+
+      await expect(service.validateInviteToken('token-1')).rejects.toThrow(
+        'Organization is not accepting invitations',
+      );
+    });
   });
 
   describe('organization members', () => {
@@ -490,6 +592,84 @@ describe('OrganizationService', () => {
         'org-1',
       );
       expect(result).toHaveLength(2);
+    });
+
+    it('accepts organization invite for an existing authenticated user', async () => {
+      organizationRepository.transaction.mockImplementation(runTransaction);
+      organizationInviteRepository.findByTokenForUpdate.mockResolvedValue({
+        id: 'invite-1',
+        email: 'candidate@example.com',
+        token: 'token-1',
+        status: InvitationStatus.PENDING,
+        organizationId: 'org-1',
+        roleToAssign: UserRole.COMPANY_EMPLOYEE,
+        revokedById: null,
+        createdAt: new Date('2026-04-28T10:00:00.000Z'),
+        updatedAt: new Date('2026-04-28T10:00:00.000Z'),
+        expiresAt: new Date('2030-05-02T10:00:00.000Z'),
+        acceptedAt: null,
+        revokedAt: null,
+      });
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+      organizationInviteRepository.markAcceptedIfPending.mockResolvedValue({
+        count: 1,
+      });
+      userRepository.linkToOrganizationIfUnlinked.mockResolvedValue({
+        count: 1,
+      });
+      userRepository.findOrganizationMember.mockResolvedValue({
+        id: 'user-2',
+        firstName: 'Eva',
+        lastName: 'Employee',
+        email: 'candidate@example.com',
+        role: UserRole.COMPANY_EMPLOYEE,
+        status: UserStatus.ACTIVE,
+        organizationId: 'org-1',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      });
+
+      const result = await service.acceptInvite('token-1', {
+        id: 'user-2',
+        email: 'candidate@example.com',
+        role: UserRole.STUDENT,
+        status: UserStatus.ACTIVE,
+        organizationId: null,
+      });
+
+      expect(
+        organizationInviteRepository.markAcceptedIfPending,
+      ).toHaveBeenCalledWith('invite-1', expect.any(Date), expect.anything());
+      expect(userRepository.linkToOrganizationIfUnlinked).toHaveBeenCalledWith(
+        'user-2',
+        'org-1',
+        UserRole.COMPANY_EMPLOYEE,
+        expect.anything(),
+      );
+      expect(result.organizationId).toBe('org-1');
+    });
+
+    it('rejects existing user org invite acceptance when user already belongs to an organization', async () => {
+      organizationRepository.transaction.mockImplementation(runTransaction);
+      organizationInviteRepository.findByTokenForUpdate.mockResolvedValue({
+        id: 'invite-1',
+        email: 'employee@example.com',
+        token: 'token-1',
+        status: InvitationStatus.PENDING,
+        organizationId: 'org-1',
+        roleToAssign: UserRole.COMPANY_EMPLOYEE,
+        revokedById: null,
+        createdAt: new Date('2026-04-28T10:00:00.000Z'),
+        updatedAt: new Date('2026-04-28T10:00:00.000Z'),
+        expiresAt: new Date('2030-05-02T10:00:00.000Z'),
+        acceptedAt: null,
+        revokedAt: null,
+      });
+      organizationRepository.findUnique.mockResolvedValue(existingOrganization);
+
+      await expect(
+        service.acceptInvite('token-1', employee),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('blocks cross-org member listing', async () => {

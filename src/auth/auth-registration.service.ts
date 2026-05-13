@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { UserRole } from '../../generated/prisma/enums';
-import { assertUserEmailAvailable } from '../common/users/user-guards.utils';
+import { UserRole, UserStatus } from '../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import { assertUserEmailAvailable } from '../common/users/user-guards.utils';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { UserService } from '../user/user.service';
 import { toAuthenticatedUserContext } from '../user/user.mapper';
@@ -12,9 +12,6 @@ import { EmailVerificationService } from './email-verification/email-verificatio
 import { HashingService } from '../infrastructure/hashing';
 import { InvitesService } from '../invites/invites.service';
 import { getConfirmationPathByRole } from './confirmation-paths';
-
-const REGISTER_VIA_INVITE_SUCCESS_MESSAGE =
-  'Registration via invite completed successfully.';
 
 @Injectable()
 export class AuthRegistrationService {
@@ -50,8 +47,8 @@ export class AuthRegistrationService {
 
   async registerViaInvite(
     dto: RegisterViaInviteDto,
-  ): Promise<{ message: string }> {
-    await this.usersService.transaction(async (transaction) => {
+  ): Promise<AuthenticatedUserContext> {
+    const user = await this.usersService.transaction(async (transaction) => {
       const invitation = await this.invitesService.validateTokenOrThrow(
         dto.token,
         transaction,
@@ -69,7 +66,9 @@ export class AuthRegistrationService {
           firstName: dto.firstName,
           lastName: dto.lastName,
           passwordHash,
+          status: UserStatus.ACTIVE,
           isEmailConfirmed: true,
+          isAdminConfirmed: true,
         },
         transaction,
       );
@@ -82,9 +81,11 @@ export class AuthRegistrationService {
         },
         transaction,
       );
+
+      return user;
     });
 
-    return { message: REGISTER_VIA_INVITE_SUCCESS_MESSAGE };
+    return toAuthenticatedUserContext(user);
   }
 
   private async registerWithEmailVerification(input: {

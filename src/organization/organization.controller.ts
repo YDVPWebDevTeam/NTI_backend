@@ -19,6 +19,7 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import type { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
 import { OrganizationService } from './organization.service';
 import {
+  AcceptOrganizationInviteApi,
   CreateOrganizationApi,
   CreateOrganizationInviteApi,
   GetMyOrganizationApi,
@@ -30,6 +31,7 @@ import {
   TransferOrganizationOwnerApi,
   UpdateMyOrganizationApi,
   UpdateOrganizationMemberRoleApi,
+  ValidateOrganizationInviteApi,
 } from './api-docs';
 import { CreateOrganizationInviteDto } from './dto/create-organization-invite.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
@@ -43,6 +45,8 @@ import { UpdateOrganizationProfileDto } from './dto/update-organization-profile.
 import { OrganizationMemberResponseDto } from './dto/organization-member-response.dto';
 import { TransferOrganizationOwnerDto } from './dto/transfer-organization-owner.dto';
 import { UpdateOrganizationMemberRoleDto } from './dto/update-organization-member-role.dto';
+import { ValidateOrganizationInviteDto } from './dto/validate-organization-invite.dto';
+import { OrganizationInviteValidationResponseDto } from './dto/organization-invite-validation-response.dto';
 
 @ApiTags('Organizations')
 @Controller('/organizations')
@@ -79,6 +83,24 @@ export class OrganizationController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<OrganizationResponseDto> {
     return this.service.create(dto, user);
+  }
+
+  @Post('invites/validate')
+  @ValidateOrganizationInviteApi()
+  async validateInvite(
+    @Body() dto: ValidateOrganizationInviteDto,
+  ): Promise<OrganizationInviteValidationResponseDto> {
+    return this.service.validateInviteToken(dto.token);
+  }
+
+  @Post('invites/accept')
+  @AcceptOrganizationInviteApi()
+  @UseGuards(JwtAuthGuard)
+  async acceptInvite(
+    @Body() dto: ValidateOrganizationInviteDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<OrganizationMemberResponseDto> {
+    return this.service.acceptInvite(dto.token, user);
   }
 
   @Post(':id/invites')

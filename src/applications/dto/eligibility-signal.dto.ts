@@ -17,8 +17,8 @@ export class EligibilitySignalDto {
   })
   reason: string | null;
 
-  @ApiProperty()
-  createdAt: Date;
+  @ApiProperty({ nullable: true })
+  createdAt: Date | null;
 }
 
 export class EligibilitySignalsResponseDto {

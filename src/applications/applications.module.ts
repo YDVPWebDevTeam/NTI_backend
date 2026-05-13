@@ -1,4 +1,4 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { FilesModule } from '../files';
 import { TeamModule } from '../team/team.module';
@@ -19,12 +19,7 @@ import { ApplicationSectionsRulesService } from './rules/application-sections-ru
 import { ApplicationSectionsService } from './application-sections.service';
 
 @Module({
-  imports: [
-    forwardRef(() => AuthModule),
-    forwardRef(() => TeamModule),
-    FilesModule,
-    EligibilitySignalsModule,
-  ],
+  imports: [AuthModule, TeamModule, FilesModule, EligibilitySignalsModule],
   controllers: [
     ApplicationsController,
     AdminApplicationsController,

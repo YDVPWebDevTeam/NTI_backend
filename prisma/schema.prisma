@@ -367,6 +367,7 @@ model EligibilitySignal {
   passed    Boolean
   reason    String?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([applicationId, code])
   @@index([applicationId])

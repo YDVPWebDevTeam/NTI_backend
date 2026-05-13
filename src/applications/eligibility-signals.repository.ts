@@ -39,7 +39,6 @@ export class EligibilitySignalsRepository {
       update: {
         passed,
         reason,
-        createdAt: new Date(),
       },
     });
   }

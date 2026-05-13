@@ -54,7 +54,26 @@ export class EligibilitySignalsService {
       this.computeAcademicEvidencePresent(application),
     ];
 
+    const existingSignals =
+      await this.eligibilitySignalsRepository.findSignalsByApplicationId(
+        application.id,
+        db,
+      );
+    const existingSignalByCode = new Map(
+      existingSignals.map((signal) => [signal.code, signal]),
+    );
+
     for (const result of results) {
+      const existing = existingSignalByCode.get(result.code);
+
+      if (
+        existing &&
+        existing.passed === result.passed &&
+        existing.reason === result.reason
+      ) {
+        continue;
+      }
+
       await this.eligibilitySignalsRepository.upsertSignal(
         application.id,
         result.code,
@@ -115,7 +134,7 @@ export class EligibilitySignalsService {
           code,
           passed: false,
           reason: 'Signal has not been computed yet.',
-          createdAt: new Date(),
+          createdAt: null,
         };
       }
 
@@ -139,7 +158,14 @@ export class EligibilitySignalsService {
     }
 
     const config = configByCode.get('TEAM_SIZE_MIN');
-    const requiredMinimum = config?.threshold ? Number(config.threshold) : 2;
+    const defaultRequiredMinimum = 2;
+    const parsedRequiredMinimum =
+      config?.threshold != null && config.threshold.trim() !== ''
+        ? Number(config.threshold)
+        : defaultRequiredMinimum;
+    const requiredMinimum = Number.isFinite(parsedRequiredMinimum)
+      ? parsedRequiredMinimum
+      : defaultRequiredMinimum;
 
     const actualCount = application.team.members.length;
     const passed = actualCount >= requiredMinimum;

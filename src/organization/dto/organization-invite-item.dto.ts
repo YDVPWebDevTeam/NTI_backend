@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { InvitationStatus } from 'generated/prisma/enums';
+import { InvitationStatus, UserRole } from 'generated/prisma/enums';
 
 export class OrganizationInviteItemDto {
   @ApiProperty({
@@ -21,6 +21,13 @@ export class OrganizationInviteItemDto {
     example: InvitationStatus.PENDING,
   })
   status!: InvitationStatus;
+
+  @ApiProperty({
+    description: 'Role assigned after successful invitation acceptance.',
+    enum: UserRole,
+    example: UserRole.COMPANY_EMPLOYEE,
+  })
+  roleToAssign!: UserRole;
 
   @ApiProperty({
     description: 'When the invitation was created.',

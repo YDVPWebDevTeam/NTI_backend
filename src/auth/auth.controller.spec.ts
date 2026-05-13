@@ -17,6 +17,7 @@ describe('AuthController', () => {
   let controller: AuthController;
   let authService: {
     registerViaInvite: jest.Mock;
+    acceptOrgInvite: jest.Mock;
     login: jest.Mock;
     adminLogin: jest.Mock;
     forceChangePassword: jest.Mock;
@@ -26,6 +27,7 @@ describe('AuthController', () => {
   beforeEach(() => {
     authService = {
       registerViaInvite: jest.fn(),
+      acceptOrgInvite: jest.fn(),
       login: jest.fn(),
       adminLogin: jest.fn(),
       forceChangePassword: jest.fn(),
@@ -106,15 +108,32 @@ describe('AuthController', () => {
 
   it('delegates invite-based registration to the auth service', async () => {
     authService.registerViaInvite.mockResolvedValue({
-      message: 'Registration via invite completed successfully.',
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      user: {
+        id: 'user-1',
+        email: 'invited@example.com',
+        role: 'STUDENT',
+        status: 'ACTIVE',
+        organizationId: null,
+      },
     });
 
-    const result = await controller.registerViaInvite({
-      firstName: 'Jan',
-      lastName: 'Novak',
-      token: 'invite-token',
-      password: 'StrongPass123!',
-    });
+    const replyMock = {
+      setCookie: jest.fn(),
+      clearCookie: jest.fn(),
+    };
+    const reply = replyMock as unknown as FastifyReply;
+
+    const result = await controller.registerViaInvite(
+      {
+        firstName: 'Jan',
+        lastName: 'Novak',
+        token: 'invite-token',
+        password: 'StrongPass123!',
+      },
+      reply,
+    );
 
     expect(authService.registerViaInvite).toHaveBeenCalledWith({
       firstName: 'Jan',
@@ -122,8 +141,83 @@ describe('AuthController', () => {
       token: 'invite-token',
       password: 'StrongPass123!',
     });
+    expect(replyMock.setCookie).toHaveBeenCalledWith(
+      'accessToken',
+      'access-token',
+      expect.objectContaining({
+        httpOnly: true,
+      }),
+    );
+    expect(replyMock.setCookie).toHaveBeenCalledWith(
+      'refreshToken',
+      'refresh-token',
+      expect.objectContaining({
+        httpOnly: true,
+      }),
+    );
     expect(result).toEqual({
-      message: 'Registration via invite completed successfully.',
+      user: {
+        id: 'user-1',
+        email: 'invited@example.com',
+        role: 'STUDENT',
+        status: 'ACTIVE',
+        organizationId: null,
+      },
+    });
+  });
+
+  it('sets cookies when joining company via organization invite', async () => {
+    authService.acceptOrgInvite.mockResolvedValue({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      user: {
+        id: 'user-2',
+        email: 'employee@example.com',
+        role: 'COMPANY_EMPLOYEE',
+        status: 'ACTIVE',
+        organizationId: 'org-1',
+      },
+    });
+
+    const replyMock = {
+      setCookie: jest.fn(),
+      clearCookie: jest.fn(),
+    };
+    const reply = replyMock as unknown as FastifyReply;
+
+    const result = await controller.joinCompany(
+      {
+        firstName: 'Eva',
+        lastName: 'Employee',
+        token: 'org-token',
+        password: 'StrongPass123!',
+        confirmPassword: 'StrongPass123!',
+      },
+      reply,
+    );
+
+    expect(authService.acceptOrgInvite).toHaveBeenCalledWith({
+      firstName: 'Eva',
+      lastName: 'Employee',
+      token: 'org-token',
+      password: 'StrongPass123!',
+      confirmPassword: 'StrongPass123!',
+    });
+    expect(replyMock.setCookie).toHaveBeenCalledWith(
+      'accessToken',
+      'access-token',
+      expect.objectContaining({
+        httpOnly: true,
+      }),
+    );
+    expect(result).toEqual({
+      user: {
+        id: 'user-2',
+        email: 'employee@example.com',
+        role: 'COMPANY_EMPLOYEE',
+        status: 'ACTIVE',
+        organizationId: 'org-1',
+      },
     });
   });
 

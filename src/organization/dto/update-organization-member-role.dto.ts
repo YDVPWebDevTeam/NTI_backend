@@ -1,13 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum } from 'class-validator';
-import { UserRole } from 'generated/prisma/enums';
-
-export const ORGANIZATION_MEMBER_ROLES = {
-  COMPANY_EMPLOYEE: UserRole.COMPANY_EMPLOYEE,
-} as const;
-
-export type OrganizationMemberRole =
-  (typeof ORGANIZATION_MEMBER_ROLES)[keyof typeof ORGANIZATION_MEMBER_ROLES];
+import {
+  ORGANIZATION_MEMBER_ROLES,
+  type OrganizationMemberRole,
+} from './organization-role.constants';
 
 export class UpdateOrganizationMemberRoleDto {
   @ApiProperty({

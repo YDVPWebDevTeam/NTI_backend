@@ -102,6 +102,9 @@ describe('OrganizationDocumentsService', () => {
   let configService: {
     fileUploadPresignExpiresSeconds: number;
     fileDownloadPresignExpiresSeconds: number;
+    organizationDocumentMaxSizeBytes: number;
+    organizationDocumentAllowedMimeTypes: string[];
+    organizationDocumentVerifyObjectOnComplete: boolean;
   };
 
   let storageService: {
@@ -168,6 +171,12 @@ describe('OrganizationDocumentsService', () => {
     configService = {
       fileUploadPresignExpiresSeconds: 300,
       fileDownloadPresignExpiresSeconds: 300,
+      organizationDocumentMaxSizeBytes: 20 * 1024 * 1024,
+      organizationDocumentAllowedMimeTypes: [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ],
+      organizationDocumentVerifyObjectOnComplete: false,
     };
 
     storageService = {
@@ -299,8 +308,33 @@ describe('OrganizationDocumentsService', () => {
     ).rejects.toBeInstanceOf(PayloadTooLargeException);
   });
 
+  it('skips storage HEAD verification when disabled in config', async () => {
+    organizationRepository.findUnique.mockResolvedValue(organization);
+    documentsRepository.findByIdAndOrganization.mockResolvedValue(
+      pendingDocument,
+    );
+    documentsRepository.update.mockResolvedValue({
+      ...pendingDocument,
+      status: UploadStatus.UPLOADED,
+      uploadedAt: new Date('2026-05-13T10:02:00.000Z'),
+    });
+
+    const result = await service.completeUpload(
+      'org-1',
+      'doc-1',
+      {
+        sizeBytes: 1024,
+      },
+      owner as never,
+    );
+
+    expect(result.status).toBe(UploadStatus.UPLOADED);
+    expect(storageService.headObjectOrThrow).not.toHaveBeenCalled();
+  });
+
   it('marks a pending upload as uploaded on complete', async () => {
     organizationRepository.findUnique.mockResolvedValue(organization);
+    configService.organizationDocumentVerifyObjectOnComplete = true;
     documentsRepository.findByIdAndOrganization.mockResolvedValue(
       pendingDocument,
     );
@@ -332,6 +366,9 @@ describe('OrganizationDocumentsService', () => {
         status: UploadStatus.UPLOADED,
         checksum: 'sha256:abcd',
       }),
+    );
+    expect(storageService.headObjectOrThrow).toHaveBeenCalledWith(
+      pendingDocument.storagePath,
     );
   });
 

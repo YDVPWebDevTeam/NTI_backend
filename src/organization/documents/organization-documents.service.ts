@@ -34,12 +34,6 @@ import { OrganizationDocumentDto } from './dto/organization-document.dto';
 import { OrganizationDocumentUploadDto } from './dto/organization-document-upload.dto';
 import { OrganizationDocumentsRepository } from './organization-documents.repository';
 
-const ALLOWED_MIME_TYPES = [
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-] as const;
-
-const MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024;
 const VERSION_RETRY_LIMIT = 2;
 const MIME_EXTENSION_MAP: Record<string, string> = {
   'application/pdf': 'pdf',
@@ -170,26 +164,28 @@ export class OrganizationDocumentsService {
       throw new ConflictException('Upload URL has expired');
     }
 
-    const objectInfo = await this.storageService.headObjectOrThrow(
-      document.storagePath,
-    );
-
-    if (
-      objectInfo.ContentType &&
-      objectInfo.ContentType !== document.mimeType
-    ) {
-      throw new BadRequestException(
-        'Uploaded object type does not match request',
+    if (this.configService.organizationDocumentVerifyObjectOnComplete) {
+      const objectInfo = await this.storageService.headObjectOrThrow(
+        document.storagePath,
       );
-    }
 
-    if (
-      objectInfo.ContentLength &&
-      objectInfo.ContentLength !== document.sizeBytes
-    ) {
-      throw new BadRequestException(
-        'Uploaded object size does not match request',
-      );
+      if (
+        objectInfo.ContentType &&
+        objectInfo.ContentType !== document.mimeType
+      ) {
+        throw new BadRequestException(
+          'Uploaded object type does not match request',
+        );
+      }
+
+      if (
+        objectInfo.ContentLength &&
+        objectInfo.ContentLength !== document.sizeBytes
+      ) {
+        throw new BadRequestException(
+          'Uploaded object size does not match request',
+        );
+      }
     }
 
     if (dto.sizeBytes && dto.sizeBytes !== document.sizeBytes) {
@@ -303,15 +299,14 @@ export class OrganizationDocumentsService {
   }
 
   private validateUploadPolicy(dto: CreateOrganizationDocumentUploadDto): void {
-    if (dto.sizeBytes > MAX_DOCUMENT_SIZE_BYTES) {
+    if (dto.sizeBytes > this.configService.organizationDocumentMaxSizeBytes) {
       throw new PayloadTooLargeException('File is too large');
     }
 
-    if (
-      !ALLOWED_MIME_TYPES.includes(
-        dto.mimeType as (typeof ALLOWED_MIME_TYPES)[number],
-      )
-    ) {
+    const allowedMimeTypes =
+      this.configService.organizationDocumentAllowedMimeTypes;
+
+    if (!allowedMimeTypes.includes(dto.mimeType)) {
       throw new BadRequestException('File type is not allowed');
     }
   }

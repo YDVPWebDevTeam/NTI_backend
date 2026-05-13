@@ -142,6 +142,70 @@ describe('AdminUsersService', () => {
 
       expect(userRepository.findManyPaginated).not.toHaveBeenCalled();
     });
+
+    it('passes q search as OR filter on email, firstName, lastName', async () => {
+      userRepository.findManyPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      });
+
+      await service.listUsers(actorAdmin, { ...defaultQuery, q: 'alice' });
+
+      expect(userRepository.findManyPaginated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            OR: [
+              { email: { contains: 'alice', mode: 'insensitive' } },
+              { firstName: { contains: 'alice', mode: 'insensitive' } },
+              { lastName: { contains: 'alice', mode: 'insensitive' } },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('passes role, status, organizationId as exact filters', async () => {
+      userRepository.findManyPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      });
+
+      await service.listUsers(actorAdmin, {
+        ...defaultQuery,
+        role: UserRole.STUDENT,
+        status: UserStatus.ACTIVE,
+        organizationId: 'org-1',
+      });
+
+      expect(userRepository.findManyPaginated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            role: UserRole.STUDENT,
+            status: UserStatus.ACTIVE,
+            organizationId: 'org-1',
+          },
+        }),
+      );
+    });
+
+    it('maps sort=name to firstName then lastName orderBy', async () => {
+      userRepository.findManyPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      });
+
+      await service.listUsers(actorAdmin, {
+        ...defaultQuery,
+        sort: 'name',
+        order: 'asc',
+      });
+
+      expect(userRepository.findManyPaginated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }, { id: 'asc' }],
+        }),
+      );
+    });
   });
 
   it('throws when target user does not exist', async () => {

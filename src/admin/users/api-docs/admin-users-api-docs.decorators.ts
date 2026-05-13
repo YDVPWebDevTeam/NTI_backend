@@ -3,8 +3,10 @@ import {
   ApiBearerAuth,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiQuery,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { UserRole, UserStatus } from '../../../../generated/prisma/enums';
 import { createApiDecorator } from '../../../infrastructure/api-docs/api-docs-factory';
 import { createPaginationQueryDecorators } from '../../../common/pagination';
 import { AuthenticatedUserDto } from '../../../auth/dto/authenticated-user.dto';
@@ -29,8 +31,36 @@ export const GetUsersAdminApi = () =>
         defaultSort: 'createdAt',
         defaultOrder: 'desc',
       }),
+      ApiQuery({
+        name: 'q',
+        required: false,
+        type: String,
+        description: 'Search by email, first name, or last name.',
+      }),
+      ApiQuery({
+        name: 'role',
+        required: false,
+        enum: UserRole,
+        description: 'Filter by user role.',
+      }),
+      ApiQuery({
+        name: 'status',
+        required: false,
+        enum: UserStatus,
+        description: 'Filter by user status.',
+      }),
+      ApiQuery({
+        name: 'organizationId',
+        required: false,
+        type: String,
+        format: 'uuid',
+        description: 'Filter by organization membership.',
+      }),
     ],
     errors: [
+      ApiBadRequestResponse({
+        description: 'Query parameters are invalid.',
+      }),
       ApiUnauthorizedResponse({
         description: 'Bearer token is missing or invalid.',
       }),

@@ -3,8 +3,10 @@ import {
   ApiBearerAuth,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiQuery,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { OrganizationStatus } from '../../../../generated/prisma/enums';
 import { createApiDecorator } from '../../../infrastructure/api-docs/api-docs-factory';
 import { createPaginationQueryDecorators } from '../../../common/pagination';
 import { AdminOrganizationResponseDto } from '../dto/admin-organization-response.dto';
@@ -30,8 +32,29 @@ export const GetAdminOrganizationsApi = () =>
         defaultSort: 'createdAt',
         defaultOrder: 'desc',
       }),
+      ApiQuery({
+        name: 'q',
+        required: false,
+        type: String,
+        description: 'Search by organization name or ICO.',
+      }),
+      ApiQuery({
+        name: 'status',
+        required: false,
+        enum: OrganizationStatus,
+        description: 'Filter by organization status.',
+      }),
+      ApiQuery({
+        name: 'sector',
+        required: false,
+        type: String,
+        description: 'Filter by sector (partial, case-insensitive match).',
+      }),
     ],
     errors: [
+      ApiBadRequestResponse({
+        description: 'Query parameters are invalid.',
+      }),
       ApiUnauthorizedResponse({
         description: 'Bearer token is missing or invalid.',
       }),

@@ -141,6 +141,76 @@ describe('AdminOrganizationsService', () => {
         organizationRepository.findManyForAdminPaginated,
       ).not.toHaveBeenCalled();
     });
+
+    it('passes q search as OR filter on name and ico', async () => {
+      organizationRepository.findManyForAdminPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      });
+
+      await service.listOrganizations(actorAdmin, {
+        ...defaultQuery,
+        q: 'acme',
+      });
+
+      expect(
+        organizationRepository.findManyForAdminPaginated,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            OR: [
+              { name: { contains: 'acme', mode: 'insensitive' } },
+              { ico: { contains: 'acme', mode: 'insensitive' } },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('passes status and sector as exact/contains filters', async () => {
+      organizationRepository.findManyForAdminPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      });
+
+      await service.listOrganizations(actorAdmin, {
+        ...defaultQuery,
+        status: OrganizationStatus.ACTIVE,
+        sector: 'IT',
+      });
+
+      expect(
+        organizationRepository.findManyForAdminPaginated,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            status: OrganizationStatus.ACTIVE,
+            sector: { contains: 'IT', mode: 'insensitive' },
+          },
+        }),
+      );
+    });
+
+    it('passes sort and order to repository as orderBy', async () => {
+      organizationRepository.findManyForAdminPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      });
+
+      await service.listOrganizations(actorAdmin, {
+        ...defaultQuery,
+        sort: 'name',
+        order: 'asc',
+      });
+
+      expect(
+        organizationRepository.findManyForAdminPaginated,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        }),
+      );
+    });
   });
 
   it('throws when actor is not an administrator', async () => {

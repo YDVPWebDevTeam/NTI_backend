@@ -360,12 +360,99 @@ describe('InvitationService', () => {
       }),
       undefined,
     );
-    expect(queueService.addEmail).toHaveBeenCalledWith('team-invitation', {
-      email: 'a@example.com',
-      teamName: 'Alpha Team',
-      token: 'token-1',
-    });
-    expect(result.expiresAt).toBe(expiresAt);
+    expect(queueService.addEmail).toHaveBeenCalledWith(
+      'team-invitation',
+      {
+        email: 'a@example.com',
+        teamName: 'Alpha Team',
+        token: 'token-1',
+      },
+      {
+        jobId: 'team-invitation:invite-1:token-1',
+      },
+    );
+    expect(result.expiresAt).toEqual(expiresAt);
+  });
+
+  it('retries resend when token unique collision happens', async () => {
+    invitationRepository.update
+      .mockRejectedValueOnce({
+        code: 'P2002',
+        meta: { target: 'token' },
+      })
+      .mockResolvedValueOnce({
+        id: 'invite-1',
+        email: 'a@example.com',
+        teamId: 'team-1',
+        token: 'token-2',
+        status: 'PENDING',
+        createdAt: new Date('2026-05-10T10:00:00.000Z'),
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      });
+
+    const result = await service.resend(
+      {
+        id: 'team-1',
+        name: 'Alpha Team',
+        lockedAt: null,
+      },
+      'invite-1',
+    );
+
+    expect(invitationRepository.update).toHaveBeenCalledTimes(2);
+    expect(invitationRepository.update).toHaveBeenNthCalledWith(
+      1,
+      { id: 'invite-1' },
+      expect.objectContaining({
+        token: 'token-1',
+        status: 'PENDING',
+      }),
+      undefined,
+    );
+    expect(invitationRepository.update).toHaveBeenNthCalledWith(
+      2,
+      { id: 'invite-1' },
+      expect.objectContaining({
+        token: 'token-2',
+        status: 'PENDING',
+      }),
+      undefined,
+    );
+    expect(queueService.addEmail).toHaveBeenCalledWith(
+      'team-invitation',
+      {
+        email: 'a@example.com',
+        teamName: 'Alpha Team',
+        token: 'token-2',
+      },
+      { jobId: 'team-invitation:invite-1:token-2' },
+    );
+    expect(result.token).toBe('token-2');
+  });
+
+  it('does not retry resend token collisions inside a caller transaction', async () => {
+    const uniqueError = {
+      code: 'P2002',
+      meta: { target: 'token' },
+    };
+
+    invitationRepository.update.mockRejectedValueOnce(uniqueError);
+
+    await expect(
+      service.resend(
+        {
+          id: 'team-1',
+          name: 'Alpha Team',
+          lockedAt: null,
+        },
+        'invite-1',
+        transactionClient,
+      ),
+    ).rejects.toMatchObject({ code: 'P2002' });
+
+    expect(invitationRepository.update).toHaveBeenCalledTimes(1);
+    expect(queueService.addEmail).not.toHaveBeenCalled();
   });
 
   it('restores the previous token when resend email enqueue fails', async () => {

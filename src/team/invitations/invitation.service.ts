@@ -215,26 +215,23 @@ export class InvitationService {
 
     const previousToken = invitation.token;
     const previousExpiresAt = invitation.expiresAt;
-    const token = this.invitationTokenService.generateToken();
-    const expiresAt =
-      this.invitationTokenService.resolveTeamInvitationExpirationDate();
-
-    const updated = await this.invitationRepository.update(
-      { id: invitation.id },
-      {
-        token,
-        status: InvitationStatus.PENDING,
-        expiresAt,
-      },
+    const updated = await this.updateInvitationForResend(
+      invitation.id,
+      previousToken,
       db,
     );
+    const jobId = `team-invitation:${updated.id}:${updated.token}`;
 
     try {
-      await this.queueService.addEmail(EMAIL_JOBS.TEAM_INVITATION, {
-        email: updated.email,
-        teamName: team.name,
-        token,
-      });
+      await this.queueService.addEmail(
+        EMAIL_JOBS.TEAM_INVITATION,
+        {
+          email: updated.email,
+          teamName: team.name,
+          token: updated.token,
+        },
+        { jobId },
+      );
     } catch (error) {
       await this.invitationRepository.update(
         { id: invitation.id },
@@ -248,6 +245,44 @@ export class InvitationService {
     }
 
     return updated;
+  }
+
+  private async updateInvitationForResend(
+    invitationId: string,
+    previousToken: string,
+    db?: PrismaDbClient,
+  ): Promise<Invitation> {
+    for (
+      let attempt = 0;
+      attempt < INVITATION_TOKEN_MAX_RETRIES;
+      attempt += 1
+    ) {
+      const token = this.generateResendToken(previousToken);
+      const expiresAt =
+        this.invitationTokenService.resolveTeamInvitationExpirationDate();
+
+      try {
+        return await this.invitationRepository.update(
+          { id: invitationId },
+          {
+            token,
+            status: InvitationStatus.PENDING,
+            expiresAt,
+          },
+          db,
+        );
+      } catch (error: unknown) {
+        if (
+          db ||
+          !this.isTokenUniqueConstraintError(error) ||
+          attempt === INVITATION_TOKEN_MAX_RETRIES - 1
+        ) {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error('Failed to resend invitation');
   }
 
   async accept(
@@ -432,11 +467,7 @@ export class InvitationService {
     const generatedTokens = new Set<string>();
 
     return emails.map((email) => {
-      let token = this.invitationTokenService.generateToken();
-
-      while (generatedTokens.has(token)) {
-        token = this.invitationTokenService.generateToken();
-      }
+      const token = this.generateUniqueToken(generatedTokens);
 
       generatedTokens.add(token);
 
@@ -448,6 +479,22 @@ export class InvitationService {
         expiresAt,
       };
     });
+  }
+
+  private generateResendToken(previousToken: string): string {
+    const reservedTokens = new Set([previousToken]);
+
+    return this.generateUniqueToken(reservedTokens);
+  }
+
+  private generateUniqueToken(reservedTokens: Set<string>): string {
+    let token = this.invitationTokenService.generateToken();
+
+    while (reservedTokens.has(token)) {
+      token = this.invitationTokenService.generateToken();
+    }
+
+    return token;
   }
 
   private isTokenUniqueConstraintError(

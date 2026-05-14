@@ -13,7 +13,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { InvitationStatus, type Team } from '../../../generated/prisma/client';
+import type { Team } from '../../../generated/prisma/client';
+import { InvitationStatus } from '../../../generated/prisma/enums';
 import { GetUserContext } from '../../auth/decorators/get-user-context.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { TeamLeadGuard } from '../../auth/guards/team-lead.guard';

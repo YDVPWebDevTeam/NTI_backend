@@ -91,3 +91,59 @@ export class ProgramBTeamApplicationResponseDto {
   })
   cvAttachments!: CvAttachmentDto[];
 }
+
+type ApplicationRaw = {
+  id: string;
+  backlogItemId: string;
+  teamId: string;
+  createdById: string;
+  motivation: string;
+  proposalText: string | null;
+  proposalFileId: string | null;
+  status: ProgramBTeamApplicationStatus;
+  submittedAt: Date;
+  withdrawnAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  cvAttachments: Array<{
+    id: string;
+    teamMemberUserId: string;
+    uploadedFileId: string;
+    uploadedFile: {
+      id: string;
+      originalName: string;
+      mimeType: string;
+      size: number;
+    };
+  }>;
+};
+
+export function toProgramBTeamApplicationResponseDto(
+  application: ApplicationRaw,
+): ProgramBTeamApplicationResponseDto {
+  return {
+    id: application.id,
+    backlogItemId: application.backlogItemId,
+    teamId: application.teamId,
+    createdById: application.createdById,
+    motivation: application.motivation,
+    proposalText: application.proposalText ?? undefined,
+    proposalFileId: application.proposalFileId ?? undefined,
+    status: application.status,
+    submittedAt: application.submittedAt,
+    withdrawnAt: application.withdrawnAt ?? undefined,
+    createdAt: application.createdAt,
+    updatedAt: application.updatedAt,
+    cvAttachments: application.cvAttachments.map((cv) => ({
+      id: cv.id,
+      teamMemberUserId: cv.teamMemberUserId,
+      uploadedFileId: cv.uploadedFileId,
+      file: {
+        id: cv.uploadedFile.id,
+        originalName: cv.uploadedFile.originalName,
+        mimeType: cv.uploadedFile.mimeType,
+        size: cv.uploadedFile.size,
+      },
+    })),
+  };
+}

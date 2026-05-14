@@ -5,6 +5,9 @@ import {
   IsOptional,
   IsArray,
   ArrayMinSize,
+  IsString,
+  MinLength,
+  MaxLength,
 } from 'class-validator';
 
 export class CreateTeamApplicationDto {
@@ -21,6 +24,9 @@ export class CreateTeamApplicationDto {
     description: 'Motivation statement for the application.',
     example: 'Our team is excited to work on this project because...',
   })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
   @IsNotEmpty()
   motivation!: string;
 
@@ -28,6 +34,9 @@ export class CreateTeamApplicationDto {
     description: 'Proposal text. Required if proposalFileId is not provided.',
     example: 'We propose to implement the solution using...',
   })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(10000)
   @IsOptional()
   proposalText?: string;
 

@@ -63,6 +63,14 @@ export class InvitationRepository extends BaseRepository<
     return this.findUnique({ id }, db);
   }
 
+  findByIdAndTeam(
+    id: string,
+    teamId: string,
+    db?: PrismaDbClient,
+  ): Promise<Invitation | null> {
+    return this.findFirst({ id, teamId }, db);
+  }
+
   findByToken(token: string, db?: PrismaDbClient): Promise<Invitation | null> {
     return this.findUnique({ token }, db);
   }

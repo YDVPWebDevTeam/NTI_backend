@@ -57,6 +57,7 @@ describe('TeamService', () => {
   let teamRepository: {
     transaction: jest.Mock;
     create: jest.Mock;
+    findActiveByUserId: jest.Mock;
     findById: jest.Mock;
     findPublicById: jest.Mock;
     findUnique: jest.Mock;
@@ -92,6 +93,18 @@ describe('TeamService', () => {
         name: 'Alpha Team',
         leaderId: 'user-1',
       }),
+      findActiveByUserId: jest.fn().mockResolvedValue([
+        {
+          id: 'team-1',
+          name: 'Alpha Team',
+          leaderId: 'user-1',
+          updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+          lockedAt: null,
+          archivedAt: null,
+          members: [],
+          leader: { id: 'user-1' },
+        },
+      ]),
       findById: jest.fn().mockResolvedValue({
         id: 'team-1',
         name: 'Alpha Team',
@@ -214,6 +227,57 @@ describe('TeamService', () => {
       name: 'Alpha Team',
       leaderId: 'user-1',
     });
+  });
+
+  it('returns the current active team for the authenticated user', async () => {
+    const user = {
+      id: 'user-1',
+      email: 'a@example.com',
+      role: 'STUDENT',
+      status: 'ACTIVE',
+    } as AuthenticatedUserContext;
+
+    const result = await service.findCurrentForUser(user);
+
+    expect(teamRepository.findActiveByUserId).toHaveBeenCalledWith('user-1');
+    expect(result).toMatchObject({
+      id: 'team-1',
+      leaderId: 'user-1',
+    });
+  });
+
+  it('throws when multiple active teams are associated with the user', async () => {
+    teamRepository.findActiveByUserId.mockResolvedValueOnce([
+      {
+        id: 'team-1',
+        name: 'Alpha Team',
+        leaderId: 'leader-1',
+        updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+        lockedAt: null,
+        archivedAt: null,
+        members: [],
+        leader: { id: 'leader-1' },
+      },
+      {
+        id: 'team-2',
+        name: 'Beta Team',
+        leaderId: 'leader-2',
+        updatedAt: new Date('2026-04-21T10:00:00.000Z'),
+        lockedAt: null,
+        archivedAt: null,
+        members: [],
+        leader: { id: 'leader-2' },
+      },
+    ]);
+
+    await expect(
+      service.findCurrentForUser({
+        id: 'user-1',
+        email: 'a@example.com',
+        role: 'STUDENT',
+        status: 'ACTIVE',
+      } as AuthenticatedUserContext),
+    ).rejects.toThrow('Multiple active teams found for current user');
   });
 
   it('revokes created invitations when initial invite email enqueue fails', async () => {

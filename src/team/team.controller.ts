@@ -21,6 +21,7 @@ import type { AuthenticatedUserContext } from '../common/types/auth-user-context
 import {
   CreateTeamApi,
   DeleteTeamApi,
+  GetMyTeamApi,
   GetTeamApi,
   LeaveTeamApi,
   RemoveTeamMemberApi,
@@ -50,6 +51,15 @@ export class TeamController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<TeamDetailDto> {
     return this.teamService.create(user, dto);
+  }
+
+  @GetMyTeamApi()
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  findCurrentForUser(
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<TeamDetailDto> {
+    return this.teamService.findCurrentForUser(user);
   }
 
   @GetTeamApi()

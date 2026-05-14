@@ -104,6 +104,24 @@ export class TeamService {
     return team;
   }
 
+  async findCurrentForUser(
+    user: AuthenticatedUserContext,
+  ): Promise<TeamWithRelations> {
+    const teams = await this.teamRepository.findActiveByUserId(user.id);
+
+    if (teams.length === 0) {
+      throw new NotFoundException('Current team not found');
+    }
+
+    if (teams.length > 1) {
+      throw new ConflictException(
+        'Multiple active teams found for current user',
+      );
+    }
+
+    return teams[0];
+  }
+
   async update(
     teamId: string,
     requesterId: string,

@@ -75,6 +75,24 @@ export class TeamRepository extends BaseRepository<
     });
   }
 
+  findActiveByUserId(
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<TeamWithRelations[]> {
+    return (db ?? this.prisma.client).team.findMany({
+      where: {
+        archivedAt: null,
+        members: {
+          some: {
+            userId,
+          },
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      select: this.teamRelationsSelect(),
+    });
+  }
+
   update(
     where: Prisma.TeamWhereUniqueInput,
     data: Prisma.TeamUncheckedUpdateInput,

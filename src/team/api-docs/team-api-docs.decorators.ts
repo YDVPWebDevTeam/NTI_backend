@@ -74,6 +74,31 @@ export const GetTeamApi = () =>
     ],
   });
 
+export const GetMyTeamApi = () =>
+  createApiDecorator({
+    summary: 'Get current team',
+    description:
+      'Returns the current active team for the authenticated user. Archived teams are ignored.',
+    successResponse: {
+      status: 200,
+      type: TeamDetailDto,
+      description: 'Current active team data with leader and members.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Current team not found.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Multiple active teams are associated with the current user.',
+      }),
+    ],
+  });
+
 export const UpdateTeamApi = () =>
   createApiDecorator({
     summary: 'Update team',

@@ -3,6 +3,7 @@ export { CreateTeamApi } from './team-api-docs.decorators';
 export { CreateTeamInvitesApi } from './team-api-docs.decorators';
 export { DeleteTeamApi } from './team-api-docs.decorators';
 export { GetTeamInvitationsApi } from './team-api-docs.decorators';
+export { GetMyTeamApi } from './team-api-docs.decorators';
 export { GetTeamApi } from './team-api-docs.decorators';
 export { LeaveTeamApi } from './team-membership-api-docs.decorators';
 export { RemoveTeamMemberApi } from './team-membership-api-docs.decorators';

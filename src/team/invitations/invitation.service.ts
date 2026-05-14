@@ -5,22 +5,37 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Invitation, TeamMember } from '../../../generated/prisma/client';
+import type {
+  Invitation,
+  Team,
+  TeamMember,
+} from '../../../generated/prisma/client';
 import { Prisma } from '../../../generated/prisma/client';
 import { InvitationStatus } from '../../../generated/prisma/enums';
 import { EligibilitySignalsService } from '../../applications/eligibility-signals.service';
+import {
+  buildOrderBy,
+  buildPaginationMeta,
+  resolvePagination,
+} from '../../common/pagination';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { InvitationTokenService } from '../../common/invitations/invitation-token.service';
 import { isUniqueConstraintOnFields } from '../../common/prisma/prisma-error.utils';
 import { normalizeInviteEmail } from '../../common/validation/invite-email.validation';
 import type { PrismaDbClient } from '../../infrastructure/database';
+import { EMAIL_JOBS, QueueService } from '../../infrastructure/queue';
 import { TeamRepository } from '../team.repository';
+import { GetTeamInvitesQueryDto } from './dto/get-team-invites-query.dto';
+import { GetTeamInvitesResponseDto } from './dto/get-team-invites-response.dto';
+import { TeamInviteItemDto } from './dto/team-invite-item.dto';
 import {
   InvitationRepository,
   type InvitationWithTeam,
 } from './invitation.repository';
 
 const INVITATION_TOKEN_MAX_RETRIES = 5;
+const RESEND_INVALID_STATE_MESSAGE =
+  'Only pending and non-expired invites can be resent';
 
 @Injectable()
 export class InvitationService {
@@ -29,6 +44,7 @@ export class InvitationService {
     private readonly teamRepository: TeamRepository,
     private readonly invitationTokenService: InvitationTokenService,
     private readonly eligibilitySignalsService: EligibilitySignalsService,
+    private readonly queueService: QueueService,
   ) {}
 
   async createInvites(
@@ -137,6 +153,101 @@ export class InvitationService {
     }
 
     return revokedInvitation;
+  }
+
+  async list(
+    teamId: string,
+    query: GetTeamInvitesQueryDto,
+    db?: PrismaDbClient,
+  ): Promise<GetTeamInvitesResponseDto> {
+    const now = new Date();
+    const where = this.buildInvitationListWhere(teamId, query, now);
+    const pagination = resolvePagination(query);
+
+    const [invitations, total] = await Promise.all([
+      this.invitationRepository.findMany(
+        {
+          where,
+          orderBy: buildOrderBy(query.sort, query.order, [{ id: 'asc' }]),
+          skip: pagination.skip,
+          take: pagination.take,
+        },
+        db,
+      ),
+      this.invitationRepository.count(where, db),
+    ]);
+
+    return {
+      data: invitations.map((invitation) =>
+        this.toInviteItemDto(invitation, now),
+      ),
+      meta: buildPaginationMeta(total, pagination.page, pagination.limit),
+    };
+  }
+
+  async resend(
+    team: Pick<Team, 'id' | 'name' | 'lockedAt'>,
+    invitationId: string,
+    db?: PrismaDbClient,
+  ): Promise<Invitation> {
+    const invitation = await this.invitationRepository.findByIdAndTeam(
+      invitationId,
+      team.id,
+      db,
+    );
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (team.lockedAt) {
+      throw new ConflictException('Team is locked');
+    }
+
+    const now = new Date();
+    if (
+      invitation.status !== InvitationStatus.PENDING ||
+      invitation.revokedAt !== null ||
+      invitation.expiresAt <= now
+    ) {
+      throw new BadRequestException(RESEND_INVALID_STATE_MESSAGE);
+    }
+
+    const previousToken = invitation.token;
+    const previousExpiresAt = invitation.expiresAt;
+    const token = this.invitationTokenService.generateToken();
+    const expiresAt =
+      this.invitationTokenService.resolveTeamInvitationExpirationDate();
+
+    const updated = await this.invitationRepository.update(
+      { id: invitation.id },
+      {
+        token,
+        status: InvitationStatus.PENDING,
+        expiresAt,
+      },
+      db,
+    );
+
+    try {
+      await this.queueService.addEmail(EMAIL_JOBS.TEAM_INVITATION, {
+        email: updated.email,
+        teamName: team.name,
+        token,
+      });
+    } catch (error) {
+      await this.invitationRepository.update(
+        { id: invitation.id },
+        {
+          token: previousToken,
+          expiresAt: previousExpiresAt,
+        },
+        db,
+      );
+      throw error;
+    }
+
+    return updated;
   }
 
   async accept(
@@ -346,5 +457,97 @@ export class InvitationService {
       return false;
     }
     return isUniqueConstraintOnFields(error, ['token']);
+  }
+
+  private buildInvitationListWhere(
+    teamId: string,
+    query: GetTeamInvitesQueryDto,
+    now: Date,
+  ): Prisma.InvitationWhereInput {
+    const and: Prisma.InvitationWhereInput[] = [{ teamId }];
+    const normalizedQuery = query.q?.trim();
+
+    if (normalizedQuery) {
+      and.push({
+        email: {
+          contains: normalizedQuery,
+          mode: 'insensitive',
+        },
+      });
+    }
+
+    if (query.status) {
+      and.push(this.buildStatusWhere(query.status, now));
+    }
+
+    return and.length === 1 ? and[0] : { AND: and };
+  }
+
+  private buildStatusWhere(
+    status: InvitationStatus,
+    now: Date,
+  ): Prisma.InvitationWhereInput {
+    switch (status) {
+      case InvitationStatus.PENDING:
+        return {
+          status: InvitationStatus.PENDING,
+          revokedAt: null,
+          expiresAt: { gt: now },
+        };
+      case InvitationStatus.EXPIRED:
+        return {
+          OR: [
+            { status: InvitationStatus.EXPIRED },
+            {
+              status: InvitationStatus.PENDING,
+              revokedAt: null,
+              expiresAt: { lte: now },
+            },
+          ],
+        };
+      case InvitationStatus.ACCEPTED:
+        return {
+          status: InvitationStatus.ACCEPTED,
+        };
+      case InvitationStatus.REVOKED:
+        return {
+          OR: [
+            { status: InvitationStatus.REVOKED },
+            { revokedAt: { not: null } },
+          ],
+        };
+    }
+  }
+
+  private toInviteItemDto(
+    invitation: Invitation,
+    now: Date,
+  ): TeamInviteItemDto {
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      status: this.resolveInvitationStatus(invitation, now),
+      createdAt: invitation.createdAt,
+      expiresAt: invitation.expiresAt,
+      revokedAt: invitation.revokedAt,
+    };
+  }
+
+  private resolveInvitationStatus(
+    invitation: Invitation,
+    now: Date,
+  ): InvitationStatus {
+    if (invitation.revokedAt !== null) {
+      return InvitationStatus.REVOKED;
+    }
+
+    if (
+      invitation.status === InvitationStatus.PENDING &&
+      invitation.expiresAt <= now
+    ) {
+      return InvitationStatus.EXPIRED;
+    }
+
+    return invitation.status;
   }
 }

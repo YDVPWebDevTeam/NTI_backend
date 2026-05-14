@@ -6,8 +6,11 @@ import {
   ApiGoneResponse,
   ApiNotFoundResponse,
   ApiParam,
+  ApiQuery,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { InvitationStatus } from '../../../generated/prisma/enums';
+import { createPaginationQueryDecorators } from '../../common/pagination';
 import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
 import { CreateTeamWithInvitesDto } from '../dto/create-team-with-invites.dto';
 import { TeamDetailDto } from '../dto/team-detail.dto';
@@ -16,6 +19,9 @@ import { UpdateTeamDto } from '../dto/update-team.dto';
 import { AcceptInvitationDto } from '../invitations/dto/accept-invitation.dto';
 import { CreateTeamInvitesResponseDto } from '../invitations/dto/create-team-invites-response.dto';
 import { CreateTeamInvitesDto } from '../invitations/dto/create-team-invites.dto';
+import { GetTeamInvitesResponseDto } from '../invitations/dto/get-team-invites-response.dto';
+import { ResendTeamInvitationResponseDto } from '../invitations/dto/resend-team-invitation-response.dto';
+import { TEAM_INVITE_SORT_VALUES } from '../invitations/dto/get-team-invites-query.dto';
 import { RevokedInvitationDto } from '../invitations/dto/revoked-invitation.dto';
 import { TeamMemberDto } from '../invitations/dto/team-member.dto';
 
@@ -197,6 +203,91 @@ export const RevokeTeamInvitationApi = () =>
       }),
       ApiConflictResponse({
         description: 'Invitation is not active.',
+      }),
+    ],
+  });
+
+export const GetTeamInvitationsApi = () =>
+  createApiDecorator({
+    summary: 'List team invitations',
+    description:
+      'Returns invitations for the requested team with optional filtering, pagination, and sorting. Only the current team leader may access this endpoint.',
+    successResponse: {
+      status: 200,
+      type: GetTeamInvitesResponseDto,
+      description: 'Team invitations were retrieved successfully.',
+    },
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ApiParam({ name: 'teamId', description: 'Team identifier.' }),
+      ApiQuery({
+        name: 'status',
+        required: false,
+        enum: InvitationStatus,
+      }),
+      ApiQuery({
+        name: 'q',
+        required: false,
+        description: 'Case-insensitive email substring filter.',
+      }),
+      ...createPaginationQueryDecorators({
+        sortValues: TEAM_INVITE_SORT_VALUES,
+        sortDescription: 'Sortable invite fields.',
+        defaultSort: 'createdAt',
+        defaultOrder: 'desc',
+      }),
+    ],
+    errors: [
+      ApiBadRequestResponse({
+        description:
+          'Query parameters are invalid or the team identifier is malformed.',
+      }),
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only the team leader may view invitations.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Team not found.',
+      }),
+    ],
+  });
+
+export const ResendTeamInvitationApi = () =>
+  createApiDecorator({
+    summary: 'Resend team invitation',
+    description:
+      'Generates a new token and expiration date for a pending, non-expired team invitation and enqueues a new invitation email.',
+    successResponse: {
+      status: 200,
+      type: ResendTeamInvitationResponseDto,
+      description: 'Team invitation was resent successfully.',
+    },
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ApiParam({ name: 'teamId', description: 'Team identifier.' }),
+      ApiParam({
+        name: 'invitationId',
+        description: 'Invitation identifier.',
+      }),
+    ],
+    errors: [
+      ApiBadRequestResponse({
+        description:
+          'Team or invitation identifier is malformed, or the invitation state does not allow resending.',
+      }),
+      ApiUnauthorizedResponse({
+        description: 'Bearer token is missing or invalid.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only the team leader may resend invitations.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Team or invitation not found.',
+      }),
+      ApiConflictResponse({
+        description: 'Team is locked.',
       }),
     ],
   });

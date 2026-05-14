@@ -19,10 +19,18 @@ jest.mock('../../applications/eligibility-signals.service', () => ({
   EligibilitySignalsService: class EligibilitySignalsService {},
 }));
 
+jest.mock('../../infrastructure/queue', () => ({
+  EMAIL_JOBS: {
+    TEAM_INVITATION: 'team-invitation',
+  },
+  QueueService: class QueueService {},
+}));
+
 import { EligibilitySignalsService } from '../../applications/eligibility-signals.service';
-import type { PrismaDbClient } from '../../infrastructure/database';
 import { InvitationTokenService } from '../../common/invitations/invitation-token.service';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import type { PrismaDbClient } from '../../infrastructure/database';
+import { QueueService } from '../../infrastructure/queue';
 import { TeamRepository } from '../team.repository';
 import { InvitationRepository } from './invitation.repository';
 import { InvitationService } from './invitation.service';
@@ -36,7 +44,12 @@ describe('InvitationService', () => {
     findActiveInvitationEmails: jest.Mock;
     findExistingMemberEmails: jest.Mock;
     findById: jest.Mock;
+    findByIdAndTeam: jest.Mock;
     findByToken: jest.Mock;
+    findByTokenWithTeam: jest.Mock;
+    findMany: jest.Mock;
+    count: jest.Mock;
+    update: jest.Mock;
     revokePendingById: jest.Mock;
     markAcceptedIfPending: jest.Mock;
     revokeInvitations: jest.Mock;
@@ -53,6 +66,9 @@ describe('InvitationService', () => {
   };
   let eligibilitySignalsService: {
     recomputeForTeamApplications: jest.Mock;
+  };
+  let queueService: {
+    addEmail: jest.Mock;
   };
   let tokenCounter: number;
 
@@ -73,6 +89,7 @@ describe('InvitationService', () => {
             token,
             teamId: 'team-1',
             status: 'PENDING',
+            createdAt: new Date('2026-05-10T10:00:00.000Z'),
             revokedAt: null,
             expiresAt: new Date(Date.now() + 60_000),
           })),
@@ -85,6 +102,17 @@ describe('InvitationService', () => {
         email: 'a@example.com',
         teamId: 'team-1',
         status: 'PENDING',
+        createdAt: new Date('2026-05-10T10:00:00.000Z'),
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
+      findByIdAndTeam: jest.fn().mockResolvedValue({
+        id: 'invite-1',
+        email: 'a@example.com',
+        teamId: 'team-1',
+        token: 'token-0',
+        status: 'PENDING',
+        createdAt: new Date('2026-05-10T10:00:00.000Z'),
         revokedAt: null,
         expiresAt: new Date(Date.now() + 60_000),
       }),
@@ -93,8 +121,22 @@ describe('InvitationService', () => {
         email: 'a@example.com',
         teamId: 'team-1',
         status: 'PENDING',
+        createdAt: new Date('2026-05-10T10:00:00.000Z'),
         revokedAt: null,
         expiresAt: new Date(Date.now() + 60_000),
+      }),
+      findByTokenWithTeam: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+      update: jest.fn().mockResolvedValue({
+        id: 'invite-1',
+        email: 'a@example.com',
+        teamId: 'team-1',
+        token: 'token-1',
+        status: 'PENDING',
+        createdAt: new Date('2026-05-10T10:00:00.000Z'),
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       }),
       revokePendingById: jest.fn().mockResolvedValue({ count: 1 }),
       markAcceptedIfPending: jest.fn().mockResolvedValue({ count: 1 }),
@@ -127,11 +169,16 @@ describe('InvitationService', () => {
       recomputeForTeamApplications: jest.fn().mockResolvedValue(undefined),
     };
 
+    queueService = {
+      addEmail: jest.fn().mockResolvedValue(undefined),
+    };
+
     service = new InvitationService(
       invitationRepository as unknown as InvitationRepository,
       teamRepository as unknown as TeamRepository,
       invitationTokenService as unknown as InvitationTokenService,
       eligibilitySignalsService as unknown as EligibilitySignalsService,
+      queueService as unknown as QueueService,
     );
   });
 
@@ -199,6 +246,7 @@ describe('InvitationService', () => {
         email: 'a@example.com',
         teamId: 'team-1',
         status: 'PENDING',
+        createdAt: new Date('2026-05-10T10:00:00.000Z'),
         revokedAt: null,
         expiresAt: new Date(Date.now() + 60_000),
       })
@@ -207,6 +255,7 @@ describe('InvitationService', () => {
         email: 'a@example.com',
         teamId: 'team-1',
         status: 'REVOKED',
+        createdAt: new Date('2026-05-10T10:00:00.000Z'),
         revokedAt: new Date(),
         expiresAt: new Date(Date.now() + 60_000),
       });
@@ -223,6 +272,124 @@ describe('InvitationService', () => {
       undefined,
     );
     expect(result.status).toBe('REVOKED');
+  });
+
+  it('lists invitations with pagination metadata', async () => {
+    const expiresAt = new Date(Date.now() + 60_000);
+    invitationRepository.findMany.mockResolvedValue([
+      {
+        id: 'invite-1',
+        email: 'a@example.com',
+        teamId: 'team-1',
+        token: 'token-1',
+        status: 'PENDING',
+        createdAt: new Date('2026-05-10T10:00:00.000Z'),
+        revokedAt: null,
+        expiresAt,
+      },
+    ]);
+    invitationRepository.count.mockResolvedValue(1);
+
+    const result = await service.list('team-1', {
+      page: 1,
+      limit: 20,
+      sort: 'createdAt',
+      order: 'desc',
+    });
+
+    expect(invitationRepository.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { teamId: 'team-1' },
+        skip: 0,
+        take: 20,
+      }),
+      undefined,
+    );
+    expect(result).toEqual({
+      data: [
+        {
+          id: 'invite-1',
+          email: 'a@example.com',
+          status: 'PENDING',
+          createdAt: new Date('2026-05-10T10:00:00.000Z'),
+          expiresAt,
+          revokedAt: null,
+        },
+      ],
+      meta: {
+        page: 1,
+        limit: 20,
+        total: 1,
+        totalPages: 1,
+      },
+    });
+  });
+
+  it('resends an active invitation and queues a new email', async () => {
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    invitationRepository.update.mockResolvedValue({
+      id: 'invite-1',
+      email: 'a@example.com',
+      teamId: 'team-1',
+      token: 'token-1',
+      status: 'PENDING',
+      createdAt: new Date('2026-05-10T10:00:00.000Z'),
+      revokedAt: null,
+      expiresAt,
+    });
+
+    const result = await service.resend(
+      {
+        id: 'team-1',
+        name: 'Alpha Team',
+        lockedAt: null,
+      },
+      'invite-1',
+    );
+
+    expect(invitationRepository.findByIdAndTeam).toHaveBeenCalledWith(
+      'invite-1',
+      'team-1',
+      undefined,
+    );
+    expect(invitationRepository.update).toHaveBeenCalledWith(
+      { id: 'invite-1' },
+      expect.objectContaining({
+        token: 'token-1',
+        status: 'PENDING',
+      }),
+      undefined,
+    );
+    expect(queueService.addEmail).toHaveBeenCalledWith('team-invitation', {
+      email: 'a@example.com',
+      teamName: 'Alpha Team',
+      token: 'token-1',
+    });
+    expect(result.expiresAt).toBe(expiresAt);
+  });
+
+  it('restores the previous token when resend email enqueue fails', async () => {
+    queueService.addEmail.mockRejectedValueOnce(new Error('queue unavailable'));
+
+    await expect(
+      service.resend(
+        {
+          id: 'team-1',
+          name: 'Alpha Team',
+          lockedAt: null,
+        },
+        'invite-1',
+      ),
+    ).rejects.toThrow('queue unavailable');
+
+    expect(invitationRepository.update).toHaveBeenNthCalledWith(
+      2,
+      { id: 'invite-1' },
+      expect.objectContaining({
+        token: 'token-0',
+      }),
+      undefined,
+    );
   });
 
   it('accepts an invitation and adds the user to the team', async () => {

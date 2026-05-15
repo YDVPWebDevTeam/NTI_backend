@@ -31,7 +31,8 @@ export class TeamRepository extends BaseRepository<
 > {
   private readonly safeUserSelect = {
     id: true,
-    name: true,
+    firstName: true,
+    lastName: true,
     email: true,
     role: true,
     status: true,
@@ -72,6 +73,24 @@ export class TeamRepository extends BaseRepository<
         lockedAt: true,
         archivedAt: true,
       },
+    });
+  }
+
+  findActiveByUserId(
+    userId: string,
+    db?: PrismaDbClient,
+  ): Promise<TeamWithRelations[]> {
+    return (db ?? this.prisma.client).team.findMany({
+      where: {
+        archivedAt: null,
+        members: {
+          some: {
+            userId,
+          },
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      select: this.teamRelationsSelect(),
     });
   }
 

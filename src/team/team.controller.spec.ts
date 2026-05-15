@@ -17,6 +17,7 @@ describe('TeamController', () => {
   let controller: TeamController;
   let teamService: {
     create: jest.Mock;
+    findCurrentForUser: jest.Mock;
     findPublicById: jest.Mock;
     update: jest.Mock;
     remove: jest.Mock;
@@ -28,6 +29,7 @@ describe('TeamController', () => {
   beforeEach(() => {
     teamService = {
       create: jest.fn().mockResolvedValue({ id: 'team-1' }),
+      findCurrentForUser: jest.fn().mockResolvedValue({ id: 'team-1' }),
       findPublicById: jest.fn().mockResolvedValue({ id: 'team-1' }),
       update: jest.fn().mockResolvedValue({ id: 'team-1' }),
       remove: jest.fn().mockResolvedValue({ id: 'team-1' }),
@@ -71,6 +73,19 @@ describe('TeamController', () => {
     const result = await controller.findById('team-1');
 
     expect(teamService.findPublicById).toHaveBeenCalledWith('team-1');
+    expect(result).toEqual({ id: 'team-1' });
+  });
+
+  it('delegates current team lookup to the team service', async () => {
+    const result = await controller.findCurrentForUser({
+      id: 'user-1',
+      email: 'a@example.com',
+    } as never);
+
+    expect(teamService.findCurrentForUser).toHaveBeenCalledWith({
+      id: 'user-1',
+      email: 'a@example.com',
+    });
     expect(result).toEqual({ id: 'team-1' });
   });
 

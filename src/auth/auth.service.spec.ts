@@ -622,6 +622,11 @@ describe('AuthService', () => {
   });
 
   it('confirms email and returns tokens', async () => {
+    const confirmedStudent = {
+      ...user,
+      status: UserStatus.ACTIVE,
+    };
+
     emailVerification.validateTokenOrThrow.mockResolvedValue({
       id: 'verification-1',
       userId: user.id,
@@ -630,15 +635,19 @@ describe('AuthService', () => {
       acceptedAt: null,
     });
     users.findById.mockResolvedValue(unconfirmedUser);
-    users.markEmailConfirmed.mockResolvedValue(user);
+    users.update.mockResolvedValue(confirmedStudent);
 
     const result = await service.confirmEmail('verification-token');
 
     expect(emailVerification.validateTokenOrThrow).toHaveBeenCalledWith(
       'verification-token',
     );
-    expect(users.markEmailConfirmed).toHaveBeenCalledWith(
+    expect(users.update).toHaveBeenCalledWith(
       user.id,
+      {
+        isEmailConfirmed: true,
+        status: UserStatus.ACTIVE,
+      },
       transactionClient,
     );
     expect(emailVerification.markAccepted).toHaveBeenCalledWith(
@@ -648,8 +657,42 @@ describe('AuthService', () => {
     expect(result).toEqual({
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
-      user: safeUser,
+      user: {
+        ...safeUser,
+        status: UserStatus.ACTIVE,
+      },
     });
+  });
+
+  it('confirms company owner email without auto-activating the account', async () => {
+    const unconfirmedCompanyOwner = {
+      ...unconfirmedUser,
+      role: UserRole.COMPANY_OWNER,
+    };
+
+    emailVerification.validateTokenOrThrow.mockResolvedValue({
+      id: 'verification-owner-1',
+      userId: user.id,
+      token: 'verification-token',
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+      acceptedAt: null,
+    });
+    users.findById.mockResolvedValue(unconfirmedCompanyOwner);
+    users.update.mockResolvedValue({
+      ...unconfirmedCompanyOwner,
+      isEmailConfirmed: true,
+    });
+
+    await service.confirmEmail('verification-token');
+
+    expect(users.update).toHaveBeenCalledWith(
+      user.id,
+      {
+        isEmailConfirmed: true,
+        status: UserStatus.PENDING,
+      },
+      transactionClient,
+    );
   });
 
   it('resends confirmation email for an unconfirmed user', async () => {

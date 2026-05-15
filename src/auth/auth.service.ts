@@ -253,8 +253,13 @@ export class AuthService {
 
     const confirmedUser = await this.usersService.transaction(
       async (transaction) => {
-        const updatedUser = await this.usersService.markEmailConfirmed(
+        const updatedUser = await this.usersService.update(
           user.id,
+          {
+            isEmailConfirmed: true,
+            status:
+              user.role === UserRole.STUDENT ? UserStatus.ACTIVE : user.status,
+          },
           transaction,
         );
         await this.emailVerificationService.markAccepted(

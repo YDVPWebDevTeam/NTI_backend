@@ -95,6 +95,53 @@ export class TeamService {
     return this.toTeamDetail(team);
   }
 
+  async ensurePersonalTeamForUser(
+    user: AuthenticatedUserContext,
+    teamName: string,
+  ): Promise<TeamDetailDto> {
+    const ensuredTeam = await this.runMembershipLifecycleTransaction(
+      async (db) => {
+        const existingTeams = await this.teamRepository.findActiveByUserId(
+          user.id,
+          db,
+        );
+
+        if (existingTeams.length === 1) {
+          return existingTeams[0];
+        }
+
+        if (existingTeams.length > 1) {
+          throw new ConflictException(
+            'Multiple active teams found for current user',
+          );
+        }
+
+        const createdTeam = await this.teamRepository.create(
+          {
+            name: teamName,
+            leaderId: user.id,
+          },
+          db,
+        );
+
+        await this.teamRepository.addMember(createdTeam.id, user.id, db);
+
+        const loadedTeam = await this.teamRepository.findById(
+          createdTeam.id,
+          db,
+        );
+
+        if (!loadedTeam) {
+          throw new InternalServerErrorException('Failed to load created team');
+        }
+
+        return loadedTeam;
+      },
+    );
+
+    return this.toTeamDetail(ensuredTeam);
+  }
+
   async findPublicById(id: string): Promise<TeamPublicView> {
     const team = await this.teamRepository.findPublicById(id);
 

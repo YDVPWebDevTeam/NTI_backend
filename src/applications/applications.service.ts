@@ -1697,7 +1697,8 @@ export class ApplicationsService {
     return {
       id: author.id,
       email: author.email,
-      name: `${author.firstName} ${author.lastName}`.trim(),
+      firstName: author.firstName,
+      lastName: author.lastName,
     };
   }
 

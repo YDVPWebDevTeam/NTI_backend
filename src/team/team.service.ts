@@ -17,6 +17,7 @@ import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { CreateTeamWithInvitesDto } from './dto/create-team-with-invites.dto';
 import { LeaveTeamResponseDto } from './dto/leave-team-response.dto';
 import { RemoveTeamMemberResponseDto } from './dto/remove-team-member-response.dto';
+import { TeamDetailDto } from './dto/team-detail.dto';
 import { TeamSummaryResponseDto } from './dto/team-summary-response.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { CreatedInvitationDto } from './invitations/dto/created-invitation.dto';
@@ -46,7 +47,7 @@ export class TeamService {
   async create(
     user: AuthenticatedUserContext,
     dto: CreateTeamWithInvitesDto,
-  ): Promise<TeamWithRelations> {
+  ): Promise<TeamDetailDto> {
     const minimumCreatedCount = 2;
 
     const { team, invitations } = await this.teamRepository.transaction(
@@ -91,7 +92,7 @@ export class TeamService {
 
     await this.enqueueInvitationEmailsOrRevoke(team, invitations);
 
-    return team;
+    return this.toTeamDetail(team);
   }
 
   async findPublicById(id: string): Promise<TeamPublicView> {
@@ -106,7 +107,7 @@ export class TeamService {
 
   async findCurrentForUser(
     user: AuthenticatedUserContext,
-  ): Promise<TeamWithRelations> {
+  ): Promise<TeamDetailDto> {
     const teams = await this.teamRepository.findActiveByUserId(user.id);
 
     if (teams.length === 0) {
@@ -119,24 +120,26 @@ export class TeamService {
       );
     }
 
-    return teams[0];
+    return this.toTeamDetail(teams[0]);
   }
 
   async update(
     teamId: string,
     requesterId: string,
     dto: UpdateTeamDto,
-  ): Promise<TeamWithRelations> {
+  ): Promise<TeamDetailDto> {
     const team = await this.findByIdOrThrow(teamId);
 
     this.ensureTeamLeader(team, requesterId);
     this.ensureTeamIsUnlocked(team);
 
     if (Object.keys(dto).length === 0) {
-      return team;
+      return this.toTeamDetail(team);
     }
 
-    return this.teamRepository.update({ id: teamId }, dto);
+    return this.toTeamDetail(
+      await this.teamRepository.update({ id: teamId }, dto),
+    );
   }
 
   async remove(teamId: string): Promise<Team> {
@@ -364,6 +367,48 @@ export class TeamService {
     }
 
     return team;
+  }
+
+  private toTeamDetail(team: TeamWithRelations): TeamDetailDto {
+    return {
+      id: team.id,
+      name: team.name,
+      leaderId: team.leaderId,
+      createdAt: team.createdAt,
+      updatedAt: team.updatedAt,
+      lockedAt: team.lockedAt,
+      archivedAt: team.archivedAt,
+      leader: {
+        id: team.leader.id,
+        firstName: team.leader.firstName,
+        lastName: team.leader.lastName,
+        email: team.leader.email,
+        role: team.leader.role,
+        status: team.leader.status,
+        isEmailConfirmed: team.leader.isEmailConfirmed,
+        isAdminConfirmed: team.leader.isAdminConfirmed,
+        organizationId: team.leader.organizationId,
+        createdAt: team.leader.createdAt,
+        updatedAt: team.leader.updatedAt,
+      },
+      members: team.members.map((member) => ({
+        userId: member.userId,
+        teamId: member.teamId,
+        user: {
+          id: member.user.id,
+          firstName: member.user.firstName,
+          lastName: member.user.lastName,
+          email: member.user.email,
+          role: member.user.role,
+          status: member.user.status,
+          isEmailConfirmed: member.user.isEmailConfirmed,
+          isAdminConfirmed: member.user.isAdminConfirmed,
+          organizationId: member.user.organizationId,
+          createdAt: member.user.createdAt,
+          updatedAt: member.user.updatedAt,
+        },
+      })),
+    };
   }
 
   private async getTeamOrThrow(

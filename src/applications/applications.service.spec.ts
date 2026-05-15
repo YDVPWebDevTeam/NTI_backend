@@ -948,7 +948,8 @@ describe('ApplicationsService', () => {
     expect(result.author).toEqual({
       id: 'mentor-1',
       email: 'mentor@example.com',
-      name: 'Mina Tor',
+      firstName: 'Mina',
+      lastName: 'Tor',
     });
   });
 
@@ -982,7 +983,8 @@ describe('ApplicationsService', () => {
       { content: 'Admin follow-up' },
     );
 
-    expect(result.author.name).toBe('Ada Min');
+    expect(result.author.firstName).toBe('Ada');
+    expect(result.author.lastName).toBe('Min');
   });
 
   it('forbids unassigned mentor from creating mentorship note', async () => {

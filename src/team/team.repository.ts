@@ -31,7 +31,8 @@ export class TeamRepository extends BaseRepository<
 > {
   private readonly safeUserSelect = {
     id: true,
-    name: true,
+    firstName: true,
+    lastName: true,
     email: true,
     role: true,
     status: true,

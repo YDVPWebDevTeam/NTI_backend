@@ -8,5 +8,8 @@ export class MentorshipNoteAuthorDto {
   email!: string;
 
   @ApiProperty()
-  name!: string;
+  firstName!: string;
+
+  @ApiProperty()
+  lastName!: string;
 }

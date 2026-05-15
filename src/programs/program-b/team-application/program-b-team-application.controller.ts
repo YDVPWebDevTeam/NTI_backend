@@ -12,7 +12,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { ProgramBTeamApplicationService } from './program-b-team-application.service';
 import { CreateTeamApplicationDto } from './dto/create-team-application.dto';
 import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../../../auth/decorators/current-user.decorator';
+import { GetUserContext } from '../../../auth/decorators/get-user-context.decorator';
 import {
   ProgramBTeamApplicationResponseDto,
   toProgramBTeamApplicationResponseDto,
@@ -32,7 +32,7 @@ export class ProgramBTeamApplicationController {
   @SubmitTeamApplicationApi()
   async submit(
     @Param('backlogItemId', ParseUUIDPipe) backlogItemId: string,
-    @CurrentUser() user: { id: string },
+    @GetUserContext() user: { id: string },
     @Body() dto: CreateTeamApplicationDto,
   ): Promise<ProgramBTeamApplicationResponseDto> {
     const application = await this.applicationService.submitApplication(
@@ -48,7 +48,7 @@ export class ProgramBTeamApplicationController {
   async getMy(
     @Param('backlogItemId', ParseUUIDPipe) backlogItemId: string,
     @Query('teamId', ParseUUIDPipe) teamId: string,
-    @CurrentUser() user: { id: string },
+    @GetUserContext() user: { id: string },
   ): Promise<ProgramBTeamApplicationResponseDto> {
     const application = await this.applicationService.getMyApplication(
       user.id,

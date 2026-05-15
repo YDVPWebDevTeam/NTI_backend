@@ -8,7 +8,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { ProgramBTeamApplicationService } from './program-b-team-application.service';
 import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../../../auth/decorators/current-user.decorator';
+import { GetUserContext } from '../../../auth/decorators/get-user-context.decorator';
 import {
   ProgramBTeamApplicationResponseDto,
   toProgramBTeamApplicationResponseDto,
@@ -25,7 +25,7 @@ export class ProgramBTeamApplicationWithdrawalController {
   @WithdrawTeamApplicationApi()
   async withdraw(
     @Param('applicationId', ParseUUIDPipe) applicationId: string,
-    @CurrentUser() user: { id: string },
+    @GetUserContext() user: { id: string },
   ): Promise<ProgramBTeamApplicationResponseDto> {
     const application = await this.applicationService.withdrawApplication(
       user.id,

@@ -18,6 +18,7 @@ import { UserModule } from './user/user.module';
 import { FilesModule } from './files';
 import { OrganizationModule } from './organization/organization.module';
 import { ProgramBBacklogModule } from './programs/program-b/backlog/program-b-backlog.module';
+import { ProgramBProjectsModule } from './programs/program-b/projects/program-b-projects.module';
 import { StudentProfileModule } from './student-profile';
 import { ApplicationsModule } from './applications';
 
@@ -40,6 +41,7 @@ const queueProcessorProviders =
     StorageModule,
     OrganizationModule,
     ProgramBBacklogModule,
+    ProgramBProjectsModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

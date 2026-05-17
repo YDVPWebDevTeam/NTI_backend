@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { UserRole } from '../../generated/prisma/enums';
-import { assertUserEmailAvailable } from '../common/users/user-guards.utils';
+import { UserRole, UserStatus } from '../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import { assertUserEmailAvailable } from '../common/users/user-guards.utils';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { UserService } from '../user/user.service';
 import { toAuthenticatedUserContext } from '../user/user.mapper';
@@ -11,9 +11,7 @@ import { RegisterViaInviteDto } from './dto/register-via-invite.dto';
 import { EmailVerificationService } from './email-verification/email-verification.service';
 import { HashingService } from '../infrastructure/hashing';
 import { InvitesService } from '../invites/invites.service';
-
-const REGISTER_VIA_INVITE_SUCCESS_MESSAGE =
-  'Registration via invite completed successfully.';
+import { getConfirmationPathByRole } from './confirmation-paths';
 
 @Injectable()
 export class AuthRegistrationService {
@@ -49,8 +47,8 @@ export class AuthRegistrationService {
 
   async registerViaInvite(
     dto: RegisterViaInviteDto,
-  ): Promise<{ message: string }> {
-    await this.usersService.transaction(async (transaction) => {
+  ): Promise<AuthenticatedUserContext> {
+    const user = await this.usersService.transaction(async (transaction) => {
       const invitation = await this.invitesService.validateTokenOrThrow(
         dto.token,
         transaction,
@@ -68,7 +66,9 @@ export class AuthRegistrationService {
           firstName: dto.firstName,
           lastName: dto.lastName,
           passwordHash,
+          status: UserStatus.ACTIVE,
           isEmailConfirmed: true,
+          isAdminConfirmed: true,
         },
         transaction,
       );
@@ -81,9 +81,11 @@ export class AuthRegistrationService {
         },
         transaction,
       );
+
+      return user;
     });
 
-    return { message: REGISTER_VIA_INVITE_SUCCESS_MESSAGE };
+    return toAuthenticatedUserContext(user);
   }
 
   private async registerWithEmailVerification(input: {
@@ -125,6 +127,7 @@ export class AuthRegistrationService {
     await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
       email: user.email,
       token: verificationToken.token,
+      confirmationPath: getConfirmationPathByRole(input.role),
     });
 
     return toAuthenticatedUserContext(user);

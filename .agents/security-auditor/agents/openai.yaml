@@ -1,0 +1,4 @@
+interface:
+  display_name: "Security Auditor"
+  short_description: "Audit code for vulnerabilities and draft security PR comments"
+  default_prompt: "Use $security-auditor to review the current branch or requested files for security vulnerabilities, compare against the right baseline, and provide findings plus PR-ready inline comments with exact placement and concrete remediations."

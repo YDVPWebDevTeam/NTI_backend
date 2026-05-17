@@ -1,5 +1,6 @@
 import { InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '../config';
+import { EmailTemplateRegistryService } from './email-template-registry.service';
 import { MailerService } from './mailer.service';
 
 describe('MailerService', () => {
@@ -7,6 +8,9 @@ describe('MailerService', () => {
     brevoApiKey: 'brevo-api-key',
     emailFrom: 'noreply@example.com',
   } as ConfigService;
+  const emailTemplateRegistryService = {
+    render: jest.fn(),
+  } as unknown as EmailTemplateRegistryService;
 
   const originalFetch = global.fetch;
 
@@ -21,9 +25,17 @@ describe('MailerService', () => {
     });
     global.fetch = fetchMock;
 
-    const service = new MailerService(configService);
+    const service = new MailerService(
+      configService,
+      emailTemplateRegistryService,
+    );
 
-    await service.sendEmail('user@example.com', 'Subject', '<p>Hello</p>');
+    await service.sendEmail(
+      'user@example.com',
+      'Subject',
+      '<p>Hello</p>',
+      'Hello',
+    );
 
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.brevo.com/v3/smtp/email',
@@ -39,6 +51,7 @@ describe('MailerService', () => {
           to: [{ email: 'user@example.com' }],
           subject: 'Subject',
           htmlContent: '<p>Hello</p>',
+          textContent: 'Hello',
         }),
       },
     );
@@ -52,7 +65,10 @@ describe('MailerService', () => {
     });
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    const service = new MailerService(configService);
+    const service = new MailerService(
+      configService,
+      emailTemplateRegistryService,
+    );
 
     await expect(
       service.sendEmail('user@example.com', 'Subject', '<p>Hello</p>'),

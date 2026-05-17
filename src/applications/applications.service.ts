@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
+import type { Call } from '../../generated/prisma/client';
 import {
   ApplicationDocumentScope,
   ApplicationStatus,
@@ -15,23 +16,39 @@ import {
   UploadStatus,
   UserRole,
 } from '../../generated/prisma/enums';
+import { ensureAdminRole, isAdminRole } from '../auth/admin-role.helper';
+import {
+  buildOrderBy,
+  buildPaginationMeta,
+  resolvePagination,
+} from '../common/pagination';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { FilesRepository } from '../files/files.repository';
 import { TeamRepository } from '../team/team.repository';
+import { UserRepository } from '../user/user.repository';
+import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { ApplicationDocumentsRepository } from './application-documents.repository';
-import { ApplicationRulesService } from './application-rules.service';
+import { ApplicationRulesService } from './rules/application-rules.service';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationDocumentDto } from './dto/application-document.dto';
 import { ApplicationStatusEventDto } from './dto/application-status-event.dto';
+import { AssignMentorDto } from './dto/assign-mentor.dto';
 import { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import { CreateMentorshipNoteDto } from './dto/create-mentorship-note.dto';
 import { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
 import { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from './dto/document-completeness.dto';
 import { EligibilitySignalsResponseDto } from './dto/eligibility-signal.dto';
+import { MentorAssignmentDto } from './dto/mentor-assignment.dto';
+import { MentorshipNoteAuthorDto } from './dto/mentorship-note-author.dto';
 import { NeedsInfoItemDto } from './dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';
+import { PublicCallDto } from './dto/public-call.dto';
+import { PublicCallsQueryDto } from './dto/public-calls-query.dto';
+import { ProgramAMentorshipNoteDto } from './dto/program-a-mentorship-note.dto';
+import { PublicCallsResponseDto } from './dto/public-calls-response.dto';
 import { RequiredDocumentsResponseDto } from './dto/required-documents-response.dto';
 import { ResubmitApplicationDto } from './dto/resubmit-application.dto';
 import {
@@ -42,6 +59,10 @@ import {
 import { CallsRepository } from './calls.repository';
 import { EligibilitySignalsService } from './eligibility-signals.service';
 import { NeedsInfoRepository } from './needs-info.repository';
+import {
+  ProgramAMentorshipNoteWithAuthor,
+  ProgramAMentorshipRepository,
+} from './program-a-mentorship.repository';
 
 type RequiredDocumentSlot = {
   documentType: DocumentType;
@@ -49,8 +70,23 @@ type RequiredDocumentSlot = {
   memberUserId: string | null;
 };
 
+type LifecycleTransitionDefinition = {
+  from: readonly ApplicationStatus[];
+  to: ApplicationStatus;
+  reasonRequired?: boolean;
+};
+
 @Injectable()
 export class ApplicationsService {
+  private readonly mentorshipAssignableStatuses: readonly ApplicationStatus[] =
+    [
+      ApplicationStatus.APPROVED,
+      ApplicationStatus.ONBOARDING,
+      ApplicationStatus.ACTIVE_PROJECT,
+      ApplicationStatus.PAUSED,
+      ApplicationStatus.COMPLETED,
+    ];
+
   private readonly applicationDocumentAttachTransactionOptions = {
     isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
   } as const;
@@ -68,6 +104,9 @@ export class ApplicationsService {
     private readonly filesRepository: FilesRepository,
     private readonly needsInfoRepository: NeedsInfoRepository,
     private readonly eligibilitySignalsService: EligibilitySignalsService,
+    private readonly programAMentorshipRepository: ProgramAMentorshipRepository,
+    private readonly userRepository: UserRepository,
+    private readonly queueService: QueueService,
   ) {}
 
   async createDraft(
@@ -131,6 +170,34 @@ export class ApplicationsService {
     this.validateApplicationAccess(application, requestingUser);
 
     return this.toDetailDto(application);
+  }
+
+  async listPublicCalls(
+    query: PublicCallsQueryDto,
+  ): Promise<PublicCallsResponseDto> {
+    return this.listCalls({
+      query,
+      activeOnly: false,
+    });
+  }
+
+  async listActivePublicCalls(
+    query: PublicCallsQueryDto,
+  ): Promise<PublicCallsResponseDto> {
+    return this.listCalls({
+      query,
+      activeOnly: true,
+    });
+  }
+
+  async findPublicCallById(id: string): Promise<PublicCallDto> {
+    const call = await this.callsRepository.findPublicById(id);
+
+    if (!call) {
+      throw new NotFoundException('Public call not found');
+    }
+
+    return this.toPublicCallDto(call);
   }
 
   async getRequiredDocumentsForCall(
@@ -305,6 +372,15 @@ export class ApplicationsService {
 
         const now = new Date();
         await this.applicationsRepository.submitDraft(application.id, now, db);
+        await this.needsInfoRepository.createStatusEvent(
+          {
+            applicationId: application.id,
+            fromStatus: ApplicationStatus.DRAFT,
+            toStatus: ApplicationStatus.SUBMITTED,
+            changedById: user.id,
+          },
+          db,
+        );
 
         await this.eligibilitySignalsService.recomputeForApplication(
           application.id,
@@ -333,6 +409,13 @@ export class ApplicationsService {
       },
     );
 
+    if (submitted.call.type === ProgramType.PROGRAM_A) {
+      await this.sendProgramAApplicationEmail(
+        submitted,
+        EMAIL_JOBS.APPLICATION_SUBMITTED,
+      );
+    }
+
     return this.toDetailDto(submitted);
   }
 
@@ -347,7 +430,7 @@ export class ApplicationsService {
       );
     }
 
-    return this.applicationsRepository.transaction(async (db) => {
+    const result = await this.applicationsRepository.transaction(async (db) => {
       const application = await this.loadWorkflowApplicationOrThrow(
         applicationId,
         db,
@@ -400,11 +483,20 @@ export class ApplicationsService {
         db,
       );
 
-      return this.toNeedsInfoItemDto({
-        ...item,
-        replies: [],
-      });
+      return {
+        item: this.toNeedsInfoItemDto({
+          ...item,
+          replies: [],
+        }),
+        application,
+      };
     }, this.needsInfoTransactionOptions);
+
+    if (result.application.call.type === ProgramType.PROGRAM_A) {
+      await this.enqueueNeedsInfoEmail(result.application);
+    }
+
+    return result.item;
   }
 
   async replyToNeedsInfoItem(
@@ -583,6 +675,254 @@ export class ApplicationsService {
     };
   }
 
+  async assignMentor(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    dto: AssignMentorDto,
+  ): Promise<MentorAssignmentDto> {
+    ensureAdminRole(user.role, 'Only administrators can assign mentors');
+
+    const result = await this.applicationsRepository.transaction(async (db) => {
+      const application = await this.loadWorkflowApplicationOrThrow(
+        applicationId,
+        db,
+      );
+
+      this.ensureProgramAMentorshipWorkflow(application);
+
+      if (!this.mentorshipAssignableStatuses.includes(application.status)) {
+        throw new BadRequestException(
+          `Mentor assignment is not allowed for application status ${application.status}`,
+        );
+      }
+
+      const mentor = await this.userRepository.findUnique(
+        { id: dto.mentorUserId },
+        db,
+      );
+
+      if (!mentor) {
+        throw new NotFoundException('Mentor user not found');
+      }
+
+      if (mentor.role !== UserRole.MENTOR) {
+        throw new BadRequestException('Target user must have mentor role');
+      }
+
+      const assignedAt = new Date();
+      const assignment = await this.applicationsRepository.assignMentor(
+        application.id,
+        mentor.id,
+        assignedAt,
+        user.id,
+        db,
+      );
+
+      return {
+        assignment: {
+          applicationId: assignment.id,
+          mentorUserId: assignment.mentorUserId ?? mentor.id,
+          assignedAt: assignment.mentorAssignedAt ?? assignedAt,
+          assignedById: assignment.mentorAssignedById ?? user.id,
+        },
+        application,
+        mentorEmail: mentor.email,
+      };
+    });
+
+    await this.enqueueMentorAssignmentEmail(
+      result.application,
+      result.mentorEmail,
+    );
+
+    return result.assignment;
+  }
+
+  async createMentorshipNote(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    dto: CreateMentorshipNoteDto,
+  ): Promise<ProgramAMentorshipNoteDto> {
+    return this.applicationsRepository.transaction(async (db) => {
+      const application = await this.loadWorkflowApplicationOrThrow(
+        applicationId,
+        db,
+      );
+
+      this.ensureProgramAMentorshipWorkflow(application);
+      this.ensureMentorAssigned(application);
+      this.ensureMentorshipAccess(application, user);
+      this.ensureArchivedApplicationIsReadOnlyForNonAdmin(application, user);
+
+      const note = await this.programAMentorshipRepository.createNote(
+        {
+          applicationId: application.id,
+          authorId: user.id,
+          content: dto.content,
+        },
+        db,
+      );
+
+      return this.toProgramAMentorshipNoteDto(note);
+    });
+  }
+
+  async listMentorshipNotes(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramAMentorshipNoteDto[]> {
+    const application =
+      await this.loadWorkflowApplicationOrThrow(applicationId);
+
+    this.ensureProgramAMentorshipWorkflow(application);
+    this.ensureMentorAssigned(application);
+    this.ensureMentorshipAccess(application, user);
+
+    const notes = await this.programAMentorshipRepository.listNotes(
+      application.id,
+    );
+
+    return notes.map((note) => this.toProgramAMentorshipNoteDto(note));
+  }
+
+  async startOnboarding(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionLifecycle(applicationId, user, {
+      from: [ApplicationStatus.APPROVED],
+      to: ApplicationStatus.ONBOARDING,
+    });
+  }
+
+  async formalVerify(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    reason?: string,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionReviewState(
+      applicationId,
+      user,
+      {
+        from: [ApplicationStatus.SUBMITTED],
+        to: ApplicationStatus.FORMALLY_VERIFIED,
+      },
+      reason,
+    );
+  }
+
+  async startEvaluation(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    reason?: string,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionReviewState(
+      applicationId,
+      user,
+      {
+        from: [ApplicationStatus.FORMALLY_VERIFIED],
+        to: ApplicationStatus.EVALUATING,
+      },
+      reason,
+    );
+  }
+
+  async approve(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    reason?: string,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionReviewState(
+      applicationId,
+      user,
+      {
+        from: [ApplicationStatus.EVALUATING],
+        to: ApplicationStatus.APPROVED,
+        setDecidedAt: true,
+        notificationJob: EMAIL_JOBS.APPLICATION_APPROVED,
+      },
+      reason,
+    );
+  }
+
+  async reject(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    reason: string,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionReviewState(
+      applicationId,
+      user,
+      {
+        from: [
+          ApplicationStatus.SUBMITTED,
+          ApplicationStatus.FORMALLY_VERIFIED,
+          ApplicationStatus.EVALUATING,
+          ApplicationStatus.NEEDS_INFO,
+        ],
+        to: ApplicationStatus.REJECTED,
+        reasonRequired: true,
+        setDecidedAt: true,
+        notificationJob: EMAIL_JOBS.APPLICATION_REJECTED,
+      },
+      reason,
+    );
+  }
+
+  async activate(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionLifecycle(applicationId, user, {
+      from: [ApplicationStatus.ONBOARDING, ApplicationStatus.PAUSED],
+      to: ApplicationStatus.ACTIVE_PROJECT,
+    });
+  }
+
+  async pause(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    reason: string,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionLifecycle(
+      applicationId,
+      user,
+      {
+        from: [ApplicationStatus.ACTIVE_PROJECT],
+        to: ApplicationStatus.PAUSED,
+        reasonRequired: true,
+      },
+      reason,
+    );
+  }
+
+  async complete(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionLifecycle(applicationId, user, {
+      from: [ApplicationStatus.ACTIVE_PROJECT],
+      to: ApplicationStatus.COMPLETED,
+    });
+  }
+
+  async archive(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    reason: string,
+  ): Promise<ApplicationDetailDto> {
+    return this.transitionLifecycle(
+      applicationId,
+      user,
+      {
+        from: [ApplicationStatus.COMPLETED],
+        to: ApplicationStatus.ARCHIVED,
+        reasonRequired: true,
+      },
+      reason,
+    );
+  }
+
   private async loadWorkflowApplicationOrThrow(
     applicationId: string,
     db?: Parameters<ApplicationsRepository['findByIdForWorkflow']>[1],
@@ -597,6 +937,168 @@ export class ApplicationsService {
     }
 
     return application;
+  }
+
+  private async transitionLifecycle(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    transition: LifecycleTransitionDefinition,
+    reason?: string,
+  ): Promise<ApplicationDetailDto> {
+    if (!this.isReviewerSideUser(user)) {
+      throw new ForbiddenException(
+        'Only reviewer-side users can manage Program A application lifecycle',
+      );
+    }
+
+    const normalizedReason = reason?.trim();
+
+    if (transition.reasonRequired && !normalizedReason) {
+      throw new BadRequestException('Reason is required for this transition');
+    }
+
+    const updatedApplication = await this.applicationsRepository.transaction(
+      async (db) => {
+        const application = await this.loadWorkflowApplicationOrThrow(
+          applicationId,
+          db,
+        );
+
+        this.ensureProgramAApplicationLifecycle(application);
+
+        if (!transition.from.includes(application.status)) {
+          throw new ConflictException(
+            `Invalid application lifecycle transition from ${application.status} to ${transition.to}`,
+          );
+        }
+
+        const updated = await this.applicationsRepository.updateStatusIfCurrent(
+          application.id,
+          application.status,
+          transition.to,
+          db,
+        );
+
+        if (updated.count !== 1) {
+          throw new ConflictException(
+            'Application status was changed concurrently. Please retry.',
+          );
+        }
+
+        await this.needsInfoRepository.createStatusEvent(
+          {
+            applicationId: application.id,
+            fromStatus: application.status,
+            toStatus: transition.to,
+            changedById: user.id,
+            reason: normalizedReason,
+          },
+          db,
+        );
+
+        const refreshed =
+          await this.applicationsRepository.findByIdWithRelations(
+            application.id,
+            db,
+          );
+
+        if (!refreshed) {
+          throw new NotFoundException('Application not found');
+        }
+
+        return refreshed;
+      },
+    );
+
+    return this.toDetailDto(updatedApplication);
+  }
+
+  private async transitionReviewState(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    transition: LifecycleTransitionDefinition & {
+      setDecidedAt?: boolean;
+      notificationJob?:
+        | typeof EMAIL_JOBS.APPLICATION_APPROVED
+        | typeof EMAIL_JOBS.APPLICATION_REJECTED;
+    },
+    reason?: string,
+  ): Promise<ApplicationDetailDto> {
+    if (!this.isReviewerSideUser(user)) {
+      throw new ForbiddenException(
+        'Only reviewer-side users can manage Program A review transitions',
+      );
+    }
+
+    const normalizedReason = reason?.trim();
+
+    if (transition.reasonRequired && !normalizedReason) {
+      throw new BadRequestException('Reason is required for this transition');
+    }
+
+    const updatedApplication = await this.applicationsRepository.transaction(
+      async (db) => {
+        const application = await this.loadWorkflowApplicationOrThrow(
+          applicationId,
+          db,
+        );
+
+        this.ensureProgramAApplicationLifecycle(application);
+
+        if (!transition.from.includes(application.status)) {
+          throw new ConflictException(
+            `Invalid application lifecycle transition from ${application.status} to ${transition.to}`,
+          );
+        }
+
+        const updated = await this.applicationsRepository.updateStatusIfCurrent(
+          application.id,
+          application.status,
+          transition.to,
+          db,
+          transition.setDecidedAt ? { decidedAt: new Date() } : undefined,
+        );
+
+        if (updated.count !== 1) {
+          throw new ConflictException(
+            'Application status was changed concurrently. Please retry.',
+          );
+        }
+
+        await this.needsInfoRepository.createStatusEvent(
+          {
+            applicationId: application.id,
+            fromStatus: application.status,
+            toStatus: transition.to,
+            changedById: user.id,
+            reason: normalizedReason,
+          },
+          db,
+        );
+
+        const refreshed =
+          await this.applicationsRepository.findByIdWithRelations(
+            application.id,
+            db,
+          );
+
+        if (!refreshed) {
+          throw new NotFoundException('Application not found');
+        }
+
+        return refreshed;
+      },
+    );
+
+    if (transition.notificationJob) {
+      await this.sendProgramAApplicationEmail(
+        updatedApplication,
+        transition.notificationJob,
+        normalizedReason,
+      );
+    }
+
+    return this.toDetailDto(updatedApplication);
   }
 
   private isReviewerSideUser(user: AuthenticatedUserContext): boolean {
@@ -657,6 +1159,63 @@ export class ApplicationsService {
     if (application.call.type !== ProgramType.PROGRAM_A) {
       throw new ConflictException(
         'Application document pack is supported only for Program A applications',
+      );
+    }
+  }
+
+  private ensureProgramAMentorshipWorkflow(
+    application: ApplicationWorkflowView,
+  ): void {
+    if (application.call.type !== ProgramType.PROGRAM_A) {
+      throw new ConflictException(
+        'Program A mentorship is supported only for Program A applications',
+      );
+    }
+  }
+
+  private ensureProgramAApplicationLifecycle(
+    application: ApplicationWorkflowView,
+  ): void {
+    if (application.call.type !== ProgramType.PROGRAM_A) {
+      throw new ConflictException(
+        'Program A post-approval lifecycle is supported only for Program A applications',
+      );
+    }
+  }
+
+  private ensureMentorAssigned(application: ApplicationWorkflowView): void {
+    if (!application.mentorUserId) {
+      throw new BadRequestException('Application has no assigned mentor');
+    }
+  }
+
+  private ensureMentorshipAccess(
+    application: ApplicationWorkflowView,
+    user: AuthenticatedUserContext,
+  ): void {
+    if (isAdminRole(user.role)) {
+      return;
+    }
+
+    if (user.role === UserRole.MENTOR && application.mentorUserId === user.id) {
+      return;
+    }
+
+    throw new ForbiddenException(
+      'Only the assigned mentor or an administrator can access mentorship notes',
+    );
+  }
+
+  private ensureArchivedApplicationIsReadOnlyForNonAdmin(
+    application: ApplicationWorkflowView,
+    user: AuthenticatedUserContext,
+  ): void {
+    if (
+      application.status === ApplicationStatus.ARCHIVED &&
+      !isAdminRole(user.role)
+    ) {
+      throw new ConflictException(
+        'Archived applications are read-only for non-admin users',
       );
     }
   }
@@ -857,6 +1416,141 @@ export class ApplicationsService {
     }
   }
 
+  private async listCalls(input: {
+    query: PublicCallsQueryDto;
+    activeOnly: boolean;
+  }): Promise<PublicCallsResponseDto> {
+    const pagination = resolvePagination(input.query);
+    const orderBy = buildOrderBy(input.query.sort, input.query.order, [
+      { createdAt: input.query.order },
+      { id: 'asc' },
+    ]);
+    const now = new Date();
+
+    const [calls, total] = input.activeOnly
+      ? await Promise.all([
+          this.callsRepository.findPublicVisibleMany({
+            now,
+            programType: input.query.type,
+            skip: pagination.skip,
+            take: pagination.take,
+            orderBy,
+          }),
+          this.callsRepository.countPublicVisible({
+            now,
+            programType: input.query.type,
+          }),
+        ])
+      : await Promise.all([
+          this.callsRepository.findPublicMany({
+            programType: input.query.type,
+            skip: pagination.skip,
+            take: pagination.take,
+            orderBy,
+          }),
+          this.callsRepository.countPublic({
+            programType: input.query.type,
+          }),
+        ]);
+
+    return {
+      data: calls.map((call) => this.toPublicCallDto(call)),
+      meta: buildPaginationMeta(total, pagination.page, pagination.limit),
+    };
+  }
+
+  private async enqueueNeedsInfoEmail(
+    application: ApplicationWorkflowView,
+  ): Promise<void> {
+    const recipientEmails = this.getApplicationRecipientEmails(application);
+
+    if (recipientEmails.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      recipientEmails.map((email) =>
+        this.queueService.addEmail(
+          EMAIL_JOBS.APPLICATION_NEEDS_INFO_REQUESTED,
+          {
+            email,
+            applicationId: application.id,
+            applicationTitle: application.call.title,
+          },
+        ),
+      ),
+    );
+  }
+
+  private async enqueueMentorAssignmentEmail(
+    application: ApplicationWorkflowView,
+    mentorEmail: string,
+  ): Promise<void> {
+    const recipientEmails = [
+      ...new Set([
+        mentorEmail,
+        ...this.getApplicationRecipientEmails(application),
+      ]),
+    ];
+
+    if (recipientEmails.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      recipientEmails.map((email) =>
+        this.queueService.addEmail(EMAIL_JOBS.APPLICATION_MENTOR_ASSIGNED, {
+          email,
+          applicationId: application.id,
+          applicationTitle: application.call.title,
+        }),
+      ),
+    );
+  }
+
+  private async sendProgramAApplicationEmail(
+    application: ApplicationWithRelations,
+    jobName:
+      | typeof EMAIL_JOBS.APPLICATION_SUBMITTED
+      | typeof EMAIL_JOBS.APPLICATION_APPROVED
+      | typeof EMAIL_JOBS.APPLICATION_REJECTED,
+    reason?: string,
+  ): Promise<void> {
+    const recipientEmails = this.getApplicationRecipientEmails(application);
+
+    if (recipientEmails.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      recipientEmails.map((email) =>
+        this.queueService.addEmail(jobName, {
+          email,
+          applicationId: application.id,
+          applicationTitle: application.call.title,
+          ...(jobName === EMAIL_JOBS.APPLICATION_REJECTED
+            ? { reason: reason ?? 'No reason provided' }
+            : {}),
+        } as never),
+      ),
+    );
+  }
+
+  private getApplicationRecipientEmails(
+    application: ApplicationWithRelations | ApplicationWorkflowView,
+  ): string[] {
+    const members = application.team.members as Array<{
+      user?: { email?: string | null } | null;
+    }>;
+    return [
+      ...new Set(
+        members
+          .map((member) => member.user?.email)
+          .filter((email): email is string => Boolean(email)),
+      ),
+    ];
+  }
+
   private toDetailDto(
     application: ApplicationWithRelations,
   ): ApplicationDetailDto {
@@ -870,6 +1564,19 @@ export class ApplicationsService {
       decidedAt: application.decidedAt,
       createdAt: application.createdAt,
       updatedAt: application.updatedAt,
+    };
+  }
+
+  private toPublicCallDto(call: Call): PublicCallDto {
+    return {
+      id: call.id,
+      title: call.title,
+      type: call.type,
+      status: call.status,
+      opensAt: call.opensAt,
+      closesAt: call.closesAt,
+      createdAt: call.createdAt,
+      updatedAt: call.updatedAt,
     };
   }
 
@@ -966,6 +1673,32 @@ export class ApplicationsService {
       reason: event.reason,
       needsInfoItemId: event.needsInfoItemId,
       createdAt: event.createdAt,
+    };
+  }
+
+  private toProgramAMentorshipNoteDto(
+    note: ProgramAMentorshipNoteWithAuthor,
+  ): ProgramAMentorshipNoteDto {
+    return {
+      id: note.id,
+      applicationId: note.applicationId,
+      content: note.content,
+      createdAt: note.createdAt,
+      author: this.toMentorshipNoteAuthorDto(note.author),
+    };
+  }
+
+  private toMentorshipNoteAuthorDto(author: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  }): MentorshipNoteAuthorDto {
+    return {
+      id: author.id,
+      email: author.email,
+      firstName: author.firstName,
+      lastName: author.lastName,
     };
   }
 

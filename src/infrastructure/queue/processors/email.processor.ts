@@ -30,7 +30,11 @@ export class EmailProcessor extends WorkerHost {
 
   private readonly handlers: EmailJobHandlers = {
     [EMAIL_JOBS.USER_CONFIRMATION]: async (data) => {
-      await this.mailerService.sendConfirmationEmail(data.email, data.token);
+      await this.mailerService.sendConfirmationEmail(
+        data.email,
+        data.token,
+        data.confirmationPath,
+      );
     },
     [EMAIL_JOBS.TEAM_INVITATION]: this.handleTeamInviteEmail,
     [EMAIL_JOBS.SYSTEM_INVITE_SENT]: async (data) => {
@@ -104,6 +108,42 @@ export class EmailProcessor extends WorkerHost {
         data.email,
         data.token,
         data.organizationName,
+      );
+    },
+    [EMAIL_JOBS.APPLICATION_SUBMITTED]: async (data) => {
+      await this.mailerService.sendApplicationSubmittedEmail(
+        data.email,
+        data.applicationId,
+        data.applicationTitle,
+      );
+    },
+    [EMAIL_JOBS.APPLICATION_NEEDS_INFO_REQUESTED]: async (data) => {
+      await this.mailerService.sendApplicationNeedsInfoEmail(
+        data.email,
+        data.applicationId,
+        data.applicationTitle,
+      );
+    },
+    [EMAIL_JOBS.APPLICATION_APPROVED]: async (data) => {
+      await this.mailerService.sendApplicationApprovedEmail(
+        data.email,
+        data.applicationId,
+        data.applicationTitle,
+      );
+    },
+    [EMAIL_JOBS.APPLICATION_REJECTED]: async (data) => {
+      await this.mailerService.sendApplicationRejectedEmail(
+        data.email,
+        data.applicationId,
+        data.applicationTitle,
+        data.reason,
+      );
+    },
+    [EMAIL_JOBS.APPLICATION_MENTOR_ASSIGNED]: async (data) => {
+      await this.mailerService.sendApplicationMentorAssignedEmail(
+        data.email,
+        data.applicationId,
+        data.applicationTitle,
       );
     },
   };

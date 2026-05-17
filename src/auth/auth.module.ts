@@ -20,6 +20,7 @@ import { InvitesModule } from '../invites/invites.module';
 import { RolesGuard } from './guards/roles.guard';
 import { AuthRegistrationService } from './auth-registration.service';
 import { OrganizationInviteRepository } from 'src/organization/organization-invitation.repository';
+import { OrganizationRepository } from 'src/organization/organization.repository';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { OrganizationInviteRepository } from 'src/organization/organization-invi
     JwtAuthStrategy,
     RefreshJwtStrategy,
     OrganizationInviteRepository,
+    OrganizationRepository,
   ],
   exports: [
     AuthService,

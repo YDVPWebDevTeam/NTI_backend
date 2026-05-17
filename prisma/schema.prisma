@@ -39,6 +39,11 @@ enum FileVisibility {
   PUBLIC
 }
 
+enum OrganizationDocumentVisibility {
+  INTERNAL
+  CONFIDENTIAL
+}
+
 enum ProgramType {
   PROGRAM_A
   PROGRAM_B
@@ -203,20 +208,26 @@ model User {
 
   studentProfile StudentProfile?
 
-  uploads UploadedFile[]
+  uploads                       UploadedFile[]
+  organizationDocumentsUploaded OrganizationDocument[] @relation("OrganizationDocumentUploadedBy")
 
-  applicationsCreated             Application[]           @relation("ApplicationCreatedBy")
-  applicationDocumentsCreated     ApplicationDocument[]   @relation("ApplicationDocumentCreatedBy")
-  applicationDocumentsForMember   ApplicationDocument[]   @relation("ApplicationDocumentMember")
-  productOwnerForBacklogItems     BacklogItem[]           @relation("BacklogItemProductOwner")
-  productOwnerForProgramBProjects ProgramBProject[]       @relation("ProgramBProjectProductOwner")
-  programBMentoringNotesAuthored  ProgramBMentoringNote[] @relation("ProgramBMentoringNoteAuthor")
-  programBPoReviewsAuthored       ProgramBPoReview[]      @relation("ProgramBPoReviewAuthor")
+  applicationsCreated             Application[]               @relation("ApplicationCreatedBy")
+  assignedProgramAApplications    Application[]               @relation("ApplicationAssignedMentor")
+  programAMentorAssignmentsMade   Application[]               @relation("ApplicationMentorAssignedBy")
+  updatedApplicationSections      ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
+  applicationSectionHistories     ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
+  applicationDocumentsCreated     ApplicationDocument[]       @relation("ApplicationDocumentCreatedBy")
+  applicationDocumentsForMember   ApplicationDocument[]       @relation("ApplicationDocumentMember")
+  productOwnerForBacklogItems     BacklogItem[]               @relation("BacklogItemProductOwner")
+  productOwnerForProgramBProjects ProgramBProject[]           @relation("ProgramBProjectProductOwner")
+  programBMentoringNotesAuthored  ProgramBMentoringNote[]     @relation("ProgramBMentoringNoteAuthor")
+  programBPoReviewsAuthored       ProgramBPoReview[]          @relation("ProgramBPoReviewAuthor")
 
-  needsInfoItemsCreated          NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
-  needsInfoItemsResolved         NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
-  needsInfoRepliesCreated        NeedsInfoReply[]         @relation("NeedsInfoReplyCreatedBy")
-  applicationStatusEventsChanged ApplicationStatusEvent[] @relation("ApplicationStatusChangedBy")
+  needsInfoItemsCreated           NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
+  needsInfoItemsResolved          NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
+  needsInfoRepliesCreated         NeedsInfoReply[]         @relation("NeedsInfoReplyCreatedBy")
+  applicationStatusEventsChanged  ApplicationStatusEvent[] @relation("ApplicationStatusChangedBy")
+  programAMentorshipNotesAuthored ProgramAMentorshipNote[] @relation("ProgramAMentorshipNoteAuthor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -328,11 +339,20 @@ model Application {
   needsInfoItems     NeedsInfoItem[]
   statusEvents       ApplicationStatusEvent[]
   eligibilitySignals EligibilitySignal[]
-  programBProjects   ProgramBProject[]
+  mentorUserId       String?
+  mentorUser         User?                    @relation("ApplicationAssignedMentor", fields: [mentorUserId], references: [id], onDelete: SetNull)
+  mentorAssignedAt   DateTime?
+  mentorAssignedById String?
+  mentorAssignedBy   User?                    @relation("ApplicationMentorAssignedBy", fields: [mentorAssignedById], references: [id], onDelete: SetNull)
+
+  mentorshipNotes  ProgramAMentorshipNote[]
+  programBProjects ProgramBProject[]
 
   status      ApplicationStatus @default(DRAFT)
   submittedAt DateTime?
   decidedAt   DateTime?
+
+  sections ApplicationSection[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -340,6 +360,25 @@ model Application {
   @@index([callId, status])
   @@index([teamId, status])
   @@index([createdById, status])
+  @@index([mentorUserId, status])
+  @@index([mentorAssignedById])
+}
+
+model ProgramAMentorshipNote {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation("ProgramAMentorshipNoteAuthor", fields: [authorId], references: [id])
+
+  content String
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId, createdAt, id])
+  @@index([authorId, createdAt])
 }
 
 model EligibilitySignal {
@@ -352,6 +391,7 @@ model EligibilitySignal {
   passed    Boolean
   reason    String?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([applicationId, code])
   @@index([applicationId])
@@ -397,6 +437,39 @@ model BacklogItem {
   @@index([organizationId, updatedAt])
 }
 
+model OrganizationDocument {
+  id String @id @default(uuid())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name         String
+  documentType String
+  version      Int
+
+  storagePath String  @unique
+  mimeType    String
+  sizeBytes   Int
+  checksum    String?
+
+  visibility OrganizationDocumentVisibility @default(INTERNAL)
+  status     UploadStatus                   @default(PENDING)
+
+  uploadUrlExpiresAt DateTime
+  uploadedAt         DateTime?
+  failedAt           DateTime?
+
+  uploadedById String
+  uploadedBy   User   @relation("OrganizationDocumentUploadedBy", fields: [uploadedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, name, version])
+  @@index([organizationId, name, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([status, uploadUrlExpiresAt])
+}
+
 model RequiredDocumentType {
   id String @id @default(uuid())
 
@@ -440,6 +513,39 @@ model ApplicationDocument {
   @@index([applicationId, documentScope, isActive])
   @@index([applicationId, memberUserId, documentType, isActive])
   @@index([uploadedFileId])
+}
+
+model ApplicationSection {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  key           String
+  valueJson     Json
+  version       Int                         @default(1)
+  activeVersion Int?
+  history       ApplicationSectionHistory[]
+
+  updatedById String
+  updatedBy   User   @relation("ApplicationSectionUpdatedBy", fields: [updatedById], references: [id])
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([applicationId, key])
+}
+
+model ApplicationSectionHistory {
+  id        String             @id @default(uuid())
+  sectionId String
+  section   ApplicationSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  version   Int
+  valueJson Json
+  savedById String
+  savedBy   User               @relation("SectionHistorySavedBy", fields: [savedById], references: [id])
+  createdAt DateTime           @default(now())
+
+  @@unique([sectionId, version])
 }
 
 model NeedsInfoItem {
@@ -671,17 +777,18 @@ enum OrganizationStatus {
 }
 
 model Organization {
-  id           String             @id @default(uuid())
+  id           String                 @id @default(uuid())
   name         String
-  ico          String             @unique
+  ico          String                 @unique
   sector       String?
   description  String?
   website      String?
   logoUrl      String?
-  status       OrganizationStatus @default(PENDING)
+  status       OrganizationStatus     @default(PENDING)
   users        User[]
   invitations  OrgInvitation[]
   backlogItems BacklogItem[]
+  documents    OrganizationDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

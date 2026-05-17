@@ -5,11 +5,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Call } from '../../generated/prisma/client';
-import { CallStatus } from '../../generated/prisma/enums';
-import type { PrismaDbClient } from '../infrastructure/database';
-import { TeamRepository } from '../team/team.repository';
-import { CallsRepository } from './calls.repository';
+import type { Call } from '../../../generated/prisma/client';
+import { CallStatus } from '../../../generated/prisma/enums';
+import type { PrismaDbClient } from '../../infrastructure/database';
+import { TeamRepository } from '../../team/team.repository';
+import { CallsRepository } from '../calls.repository';
 
 @Injectable()
 export class ApplicationRulesService {

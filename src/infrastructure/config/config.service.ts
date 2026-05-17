@@ -35,6 +35,10 @@ export class ConfigService {
     return this.env.EMAIL_FROM;
   }
 
+  get emailLogoUrl(): string | undefined {
+    return this.env.EMAIL_LOGO_URL;
+  }
+
   get frontUrl(): string {
     return this.env.FRONTEND_URL;
   }
@@ -83,6 +87,20 @@ export class ConfigService {
 
   get fileUploadVerifyObjectOnComplete(): boolean {
     return this.env.FILE_UPLOAD_VERIFY_OBJECT_ON_COMPLETE;
+  }
+
+  get organizationDocumentMaxSizeBytes(): number {
+    return this.env.ORGANIZATION_DOCUMENT_MAX_SIZE_BYTES;
+  }
+
+  get organizationDocumentAllowedMimeTypes(): string[] {
+    return this.env.ORGANIZATION_DOCUMENT_ALLOWED_MIME_TYPES.split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
+  get organizationDocumentVerifyObjectOnComplete(): boolean {
+    return this.env.ORGANIZATION_DOCUMENT_VERIFY_OBJECT_ON_COMPLETE;
   }
 
   get puppeteerExecutablePath(): string | undefined {

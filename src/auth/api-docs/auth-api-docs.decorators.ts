@@ -21,7 +21,6 @@ import { ResetPasswordDto } from '../dto/reset-password.dto';
 import { ResendEmailDto } from '../dto/resend-email.dto';
 import { RegisterCompanyOwnerDto } from '../dto/register-company-owner.dto';
 import { RegisterViaInviteDto } from '../dto/register-via-invite.dto';
-import { RegisterViaInviteResponseDto } from '../dto/register-via-invite-response.dto';
 import { AcceptInviteOrgDto } from '../dto/accept-invite-org.dto';
 
 export const RegisterApi = () =>
@@ -66,12 +65,13 @@ export const RegisterViaInviteApi = () =>
   createApiDecorator({
     summary: 'Register via invite',
     description:
-      'Creates a confirmed user account from a valid invitation token, joins the invited team, and marks the invitation as accepted.',
+      'Creates an active user account from a valid team invitation token, joins the invited team, marks the invitation as accepted, and issues auth cookies.',
     body: RegisterViaInviteDto,
     successResponse: {
       status: 201,
-      type: RegisterViaInviteResponseDto,
-      description: 'Invited user was registered successfully.',
+      type: AuthResponseDto,
+      description:
+        'Invited user was registered successfully. Access and refresh tokens are returned via `accessToken` and `refreshToken` cookies.',
     },
     errors: [
       ApiNotFoundResponse({

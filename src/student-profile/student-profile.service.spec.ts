@@ -6,6 +6,10 @@ jest.mock('../applications/eligibility-signals.service', () => ({
   EligibilitySignalsService: class EligibilitySignalsService {},
 }));
 
+jest.mock('../team/team.service', () => ({
+  TeamService: class TeamService {},
+}));
+
 import {
   BadRequestException,
   NotFoundException,
@@ -20,6 +24,7 @@ import {
 } from '../../generated/prisma/enums';
 import { EligibilitySignalsService } from '../applications/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import { TeamService } from '../team/team.service';
 import { ProfileNotFoundError } from './student-profile.errors';
 import { StudentProfileService } from './student-profile.service';
 
@@ -39,6 +44,9 @@ describe('StudentProfileService', () => {
   };
   let eligibilitySignalsService: {
     recomputeForStudentApplications: jest.Mock;
+  };
+  let teamService: {
+    ensurePersonalTeamForUser: jest.Mock;
   };
 
   const authUser: AuthenticatedUserContext = {
@@ -135,9 +143,16 @@ describe('StudentProfileService', () => {
       recomputeForStudentApplications: jest.fn().mockResolvedValue(undefined),
     };
 
+    teamService = {
+      ensurePersonalTeamForUser: jest.fn().mockResolvedValue({
+        id: 'team-1',
+      }),
+    };
+
     service = new StudentProfileService(
       repository as never,
       eligibilitySignalsService as unknown as EligibilitySignalsService,
+      teamService as unknown as TeamService,
     );
   });
 
@@ -230,6 +245,26 @@ describe('StudentProfileService', () => {
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
+  it('bootstraps a personal team after standalone professional skills completion', async () => {
+    await service.updateProfessionalSkills(authUser, {
+      cvFileId: 'file-1',
+      focusAreas: [StudentFocusArea.SOFTWARE_DEVELOPMENT],
+      preferredRoles: [StudentPreferredRole.BACKEND],
+      skills: [
+        {
+          name: 'TypeScript',
+          level: StudentSkillLevel.INTERMEDIATE,
+          isPrimary: true,
+        },
+      ],
+    });
+
+    expect(teamService.ensurePersonalTeamForUser).toHaveBeenCalledWith(
+      authUser,
+      'Test Student Team',
+    );
+  });
+
   it('rejects completion when required professional fields are missing', async () => {
     repository.findByUserIdWithRelations.mockResolvedValueOnce({
       ...baseProfile(),
@@ -242,6 +277,8 @@ describe('StudentProfileService', () => {
     await expect(service.completeProfile(authUser)).rejects.toBeInstanceOf(
       UnprocessableEntityException,
     );
+
+    expect(teamService.ensurePersonalTeamForUser).not.toHaveBeenCalled();
   });
 
   it('rejects professional update when cv file is not uploaded', async () => {

@@ -23,5 +23,6 @@ describe('envSchema', () => {
     expect(parsed.DEV_EMAIL_VERIFICATION_BYPASS_TOKEN).toBeUndefined();
     expect(parsed.R2_ENDPOINT).toBeUndefined();
     expect(parsed.R2_BUCKET_NAME).toBeUndefined();
+    expect(parsed.EMAIL_LOGO_URL).toBeUndefined();
   });
 });

@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
@@ -21,6 +22,8 @@ import {
 } from './api-docs/admin-users-api-docs.decorators';
 import { AdminUsersService } from './admin-users.service';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import { ListUsersQueryDto } from './dto/list-users-query.dto';
+import type { ListUsersResponseDto } from './dto/list-users-response.dto';
 
 @ApiTags('Admin')
 @Controller('admin/users')
@@ -33,8 +36,9 @@ export class AdminUsersController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   getUsers(
     @GetUserContext() actor: AuthenticatedUserContext,
-  ): Promise<AuthenticatedUserContext[]> {
-    return this.adminUsersService.getUsers(actor);
+    @Query() query: ListUsersQueryDto,
+  ): Promise<ListUsersResponseDto> {
+    return this.adminUsersService.listUsers(actor, query);
   }
 
   @GetUserByIdAdminApi()

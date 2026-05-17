@@ -1,6 +1,7 @@
 import type { PdfTemplateRenderOptions } from '../pdf/pdf.types';
 
 import { UserRole } from '../../../generated/prisma/enums';
+import type { ConfirmationPath } from '../../auth/confirmation-paths';
 
 export const EMAIL_JOBS = {
   PASSWORD_RESET: 'password-reset',
@@ -11,13 +12,22 @@ export const EMAIL_JOBS = {
   ORG_REJECTED: 'org-rejected',
   ORG_INVITE: 'org-invite',
   TEAM_INVITATION: 'team-invitation',
+  APPLICATION_SUBMITTED: 'application-submitted',
+  APPLICATION_NEEDS_INFO_REQUESTED: 'application-needs-info-requested',
+  APPLICATION_APPROVED: 'application-approved',
+  APPLICATION_REJECTED: 'application-rejected',
+  APPLICATION_MENTOR_ASSIGNED: 'application-mentor-assigned',
 } as const;
 
 export type EmailJobName = (typeof EMAIL_JOBS)[keyof typeof EMAIL_JOBS];
 export interface EmailJobData {
   [EMAIL_JOBS.PASSWORD_RESET]: { userId: string; email: string; token: string };
 
-  [EMAIL_JOBS.USER_CONFIRMATION]: { email: string; token: string };
+  [EMAIL_JOBS.USER_CONFIRMATION]: {
+    email: string;
+    token: string;
+    confirmationPath: ConfirmationPath;
+  };
 
   [EMAIL_JOBS.SYSTEM_INVITE_SENT]: {
     email: string;
@@ -53,6 +63,37 @@ export interface EmailJobData {
     email: string;
     token: string;
     organizationName: string;
+  };
+
+  [EMAIL_JOBS.APPLICATION_SUBMITTED]: {
+    email: string;
+    applicationId: string;
+    applicationTitle: string;
+  };
+
+  [EMAIL_JOBS.APPLICATION_NEEDS_INFO_REQUESTED]: {
+    email: string;
+    applicationId: string;
+    applicationTitle: string;
+  };
+
+  [EMAIL_JOBS.APPLICATION_APPROVED]: {
+    email: string;
+    applicationId: string;
+    applicationTitle: string;
+  };
+
+  [EMAIL_JOBS.APPLICATION_REJECTED]: {
+    email: string;
+    applicationId: string;
+    applicationTitle: string;
+    reason: string;
+  };
+
+  [EMAIL_JOBS.APPLICATION_MENTOR_ASSIGNED]: {
+    email: string;
+    applicationId: string;
+    applicationTitle: string;
   };
 }
 

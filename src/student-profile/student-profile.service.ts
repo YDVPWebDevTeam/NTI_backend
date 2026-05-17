@@ -7,6 +7,7 @@ import {
 import { UploadStatus } from '../../generated/prisma/enums';
 import { EligibilitySignalsService } from '../applications/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import { TeamService } from '../team/team.service';
 import { GetMyStudentProfileResponseDto } from './dto/student-profile.dto';
 import { UpdateAcademicInformationDto } from './dto/update-academic-information.dto';
 import { UpdateProfessionalSkillsDto } from './dto/update-professional-skills.dto';
@@ -21,6 +22,7 @@ export class StudentProfileService {
   constructor(
     private readonly repository: StudentProfileRepository,
     private readonly eligibilitySignalsService: EligibilitySignalsService,
+    private readonly teamService: TeamService,
   ) {}
 
   async getMyProfile(
@@ -114,6 +116,8 @@ export class StudentProfileService {
       }
     });
 
+    await this.ensureStandaloneStudentTeam(authUser, profile);
+
     return this.toMyProfileResponse(profile);
   }
 
@@ -137,7 +141,26 @@ export class StudentProfileService {
 
     const completedProfile = await this.repository.markCompleted(authUser.id);
 
+    await this.ensureStandaloneStudentTeam(authUser, completedProfile);
+
     return this.toMyProfileResponse(completedProfile);
+  }
+
+  private async ensureStandaloneStudentTeam(
+    authUser: AuthenticatedUserContext,
+    profile: StudentProfileWithRelations,
+  ): Promise<void> {
+    if (
+      !this.isAcademicCompleted(profile) ||
+      !this.isProfessionalCompleted(profile)
+    ) {
+      return;
+    }
+
+    await this.teamService.ensurePersonalTeamForUser(
+      authUser,
+      this.buildDefaultTeamName(profile.user.firstName, profile.user.lastName),
+    );
   }
 
   private async validateAcademicHierarchy(
@@ -289,5 +312,9 @@ export class StudentProfileService {
 
   private isProfileNotFoundError(error: unknown): boolean {
     return error instanceof ProfileNotFoundError;
+  }
+
+  private buildDefaultTeamName(firstName: string, lastName: string): string {
+    return `${firstName} ${lastName} Team`;
   }
 }

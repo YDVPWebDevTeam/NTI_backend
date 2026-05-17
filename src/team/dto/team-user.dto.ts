@@ -9,10 +9,16 @@ export class TeamUserDto {
   id!: string;
 
   @ApiProperty({
-    description: 'Display name.',
-    example: 'Jan Novak',
+    description: 'User first name.',
+    example: 'Jan',
   })
-  name!: string;
+  firstName!: string;
+
+  @ApiProperty({
+    description: 'User last name.',
+    example: 'Novak',
+  })
+  lastName!: string;
 
   @ApiProperty({
     description: 'Email address.',

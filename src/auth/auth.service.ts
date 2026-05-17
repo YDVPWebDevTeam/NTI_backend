@@ -1,14 +1,19 @@
 import {
   BadRequestException,
   ConflictException,
+  InternalServerErrorException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import type { StringValue } from 'ms';
-import { InvitationStatus, User } from '../../generated/prisma/client';
-import { UserRole, UserStatus } from '../../generated/prisma/enums';
+import { OrgInvitation, User } from '../../generated/prisma/client';
+import {
+  InvitationStatus,
+  UserRole,
+  UserStatus,
+} from '../../generated/prisma/enums';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
@@ -28,6 +33,9 @@ import { toAuthenticatedUserContext } from '../user/user.mapper';
 import { AuthRegistrationService } from './auth-registration.service';
 import { OrganizationInviteRepository } from '../organization/organization-invitation.repository';
 import { AcceptInviteOrgDto } from './dto/accept-invite-org.dto';
+import { getConfirmationPathByRole } from './confirmation-paths';
+import { OrganizationRepository } from '../organization/organization.repository';
+import { OrganizationStatus } from '../../generated/prisma/enums';
 
 export type AuthTokensResponse = {
   accessToken: string;
@@ -75,6 +83,7 @@ export class AuthService {
     private readonly queueService: QueueService,
     private readonly authRegistrationService: AuthRegistrationService,
     private readonly organizationInviteRepository: OrganizationInviteRepository,
+    private readonly organizationRepository: OrganizationRepository,
   ) {
     this.refreshTokenValidityDays = parseInt(
       this.configService.jwtRefreshExpirationDays,
@@ -91,8 +100,20 @@ export class AuthService {
     return this.authRegistrationService.registerCompanyOwner(dto);
   }
 
-  async registerViaInvite(dto: RegisterViaInviteDto): Promise<MessageResponse> {
-    return this.authRegistrationService.registerViaInvite(dto);
+  async registerViaInvite(
+    dto: RegisterViaInviteDto,
+  ): Promise<AuthTokensResponse> {
+    const registeredUser =
+      await this.authRegistrationService.registerViaInvite(dto);
+    const user = await this.usersService.findById(registeredUser.id);
+
+    if (!user) {
+      throw new InternalServerErrorException(
+        'Registered user could not be loaded',
+      );
+    }
+
+    return this.issueAuthTokens(user);
   }
 
   async acceptOrgInvite(dto: AcceptInviteOrgDto): Promise<AuthTokensResponse> {
@@ -109,18 +130,25 @@ export class AuthService {
         throw new BadRequestException('Invitation was not found');
       }
 
-      if (invitation.status !== InvitationStatus.PENDING) {
-        throw new BadRequestException('Invitation has already been accepted');
-      }
-
       const now = new Date();
+      this.assertOrganizationInvitationIsAcceptable(invitation, now);
 
-      if (invitation.expiresAt <= now) {
-        throw new BadRequestException('Invitation has expired');
+      const organization = await this.organizationRepository.findUnique(
+        { id: invitation.organizationId },
+        transaction,
+      );
+
+      if (!organization) {
+        throw new BadRequestException('Organization was not found');
       }
 
-      if (invitation.revokedAt !== null) {
-        throw new BadRequestException('Invitation has been canceled');
+      if (
+        organization.status === OrganizationStatus.REJECTED ||
+        organization.status === OrganizationStatus.SUSPENDED
+      ) {
+        throw new BadRequestException(
+          'Organization is not accepting invitations',
+        );
       }
 
       const existingUser = await this.usersService.findByEmail(
@@ -138,7 +166,7 @@ export class AuthService {
           firstName: dto.firstName,
           lastName: dto.lastName,
           passwordHash,
-          role: UserRole.COMPANY_EMPLOYEE,
+          role: invitation.roleToAssign,
           organizationId: invitation.organizationId,
           isEmailConfirmed: true,
           status: UserStatus.ACTIVE,
@@ -225,8 +253,13 @@ export class AuthService {
 
     const confirmedUser = await this.usersService.transaction(
       async (transaction) => {
-        const updatedUser = await this.usersService.markEmailConfirmed(
+        const updatedUser = await this.usersService.update(
           user.id,
+          {
+            isEmailConfirmed: true,
+            status:
+              user.role === UserRole.STUDENT ? UserStatus.ACTIVE : user.status,
+          },
           transaction,
         );
         await this.emailVerificationService.markAccepted(
@@ -255,6 +288,7 @@ export class AuthService {
     await this.queueService.addEmail(EMAIL_JOBS.USER_CONFIRMATION, {
       email: user.email,
       token: verificationToken.token,
+      confirmationPath: getConfirmationPathByRole(user.role),
     });
   }
 
@@ -397,6 +431,39 @@ export class AuthService {
       refreshToken,
       user: safeUser,
     };
+  }
+
+  private assertOrganizationInvitationIsAcceptable(
+    invitation: Pick<
+      OrgInvitation,
+      'status' | 'acceptedAt' | 'revokedAt' | 'expiresAt'
+    >,
+    now: Date,
+  ): void {
+    if (
+      invitation.status === InvitationStatus.REVOKED ||
+      invitation.revokedAt !== null
+    ) {
+      throw new BadRequestException('Invitation has been canceled');
+    }
+
+    if (
+      invitation.status === InvitationStatus.EXPIRED ||
+      invitation.expiresAt <= now
+    ) {
+      throw new BadRequestException('Invitation has expired');
+    }
+
+    if (
+      invitation.status === InvitationStatus.ACCEPTED ||
+      invitation.acceptedAt !== null
+    ) {
+      throw new ConflictException('Invitation has already been accepted');
+    }
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException('Invitation is not active');
+    }
   }
 
   private async authenticateByCredentials(dto: LoginDto): Promise<User> {

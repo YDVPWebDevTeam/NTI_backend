@@ -119,6 +119,7 @@ export class ApplicationsRepository extends BaseRepository<
     currentStatus: ApplicationStatus,
     nextStatus: ApplicationStatus,
     db?: PrismaDbClient,
+    data?: Omit<Prisma.ApplicationUncheckedUpdateInput, 'status'>,
   ) {
     return (db ?? this.prisma.client).application.updateMany({
       where: {
@@ -126,7 +127,31 @@ export class ApplicationsRepository extends BaseRepository<
         status: currentStatus,
       },
       data: {
+        ...(data ?? {}),
         status: nextStatus,
+      },
+    });
+  }
+
+  assignMentor(
+    applicationId: string,
+    mentorUserId: string,
+    mentorAssignedAt: Date,
+    mentorAssignedById: string,
+    db?: PrismaDbClient,
+  ) {
+    return (db ?? this.prisma.client).application.update({
+      where: { id: applicationId },
+      data: {
+        mentorUserId,
+        mentorAssignedAt,
+        mentorAssignedById,
+      },
+      select: {
+        id: true,
+        mentorUserId: true,
+        mentorAssignedAt: true,
+        mentorAssignedById: true,
       },
     });
   }
@@ -137,6 +162,9 @@ export class ApplicationsRepository extends BaseRepository<
       callId: true,
       teamId: true,
       createdById: true,
+      mentorUserId: true,
+      mentorAssignedAt: true,
+      mentorAssignedById: true,
       status: true,
       submittedAt: true,
       decidedAt: true,
@@ -161,6 +189,11 @@ export class ApplicationsRepository extends BaseRepository<
           members: {
             select: {
               userId: true,
+              user: {
+                select: {
+                  email: true,
+                },
+              },
             },
           },
         },
@@ -184,6 +217,9 @@ export class ApplicationsRepository extends BaseRepository<
       callId: true,
       teamId: true,
       createdById: true,
+      mentorUserId: true,
+      mentorAssignedAt: true,
+      mentorAssignedById: true,
       status: true,
       submittedAt: true,
       decidedAt: true,
@@ -222,6 +258,20 @@ export class ApplicationsRepository extends BaseRepository<
           members: {
             select: {
               userId: true,
+              user: {
+                select: {
+                  email: true,
+                  studentProfile: {
+                    select: {
+                      academicDeclarationAcceptedAt: true,
+                      academicEvidenceFileId: true,
+                      hasTransferredSubjects: true,
+                      transferredSubjectsCount: true,
+                      profileSubjectsAverage: true,
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -264,6 +314,9 @@ export class ApplicationsRepository extends BaseRepository<
                     select: {
                       academicDeclarationAcceptedAt: true,
                       academicEvidenceFileId: true,
+                      hasTransferredSubjects: true,
+                      transferredSubjectsCount: true,
+                      profileSubjectsAverage: true,
                     },
                   },
                 },

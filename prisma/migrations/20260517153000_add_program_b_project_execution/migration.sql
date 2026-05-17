@@ -76,6 +76,9 @@ CREATE INDEX "ProgramBProject_productOwnerUserId_idx" ON "ProgramBProject"("prod
 CREATE INDEX "ProgramBProject_status_idx" ON "ProgramBProject"("status");
 
 -- CreateIndex
+-- Enforces at most one non-CLOSED Program B execution project per application.
+-- This is a PostgreSQL partial unique index and cannot be represented directly
+-- in Prisma schema.prisma, so keep this invariant in sync manually.
 CREATE UNIQUE INDEX "ProgramBProject_active_applicationId_key" ON "ProgramBProject"("applicationId") WHERE "status" <> 'CLOSED';
 
 -- CreateIndex

@@ -2,6 +2,10 @@ jest.mock('./program-b-projects.repository', () => ({
   ProgramBProjectsRepository: class ProgramBProjectsRepository {},
 }));
 
+jest.mock('../../../team/team.repository', () => ({
+  TeamRepository: class TeamRepository {},
+}));
+
 jest.mock(
   'generated/prisma/client',
   () => ({
@@ -13,7 +17,9 @@ jest.mock(
   }),
   { virtual: true },
 );
+
 jest.mock('@prisma/client', () => ({}), { virtual: true });
+
 jest.mock(
   'generated/prisma/enums',
   () => ({
@@ -51,7 +57,11 @@ jest.mock(
   { virtual: true },
 );
 
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import {
   ProgramBMilestoneStatus,
   ProgramBPoDecision,
@@ -64,6 +74,7 @@ import { ProgramBProjectsService } from './program-b-projects.service';
 
 describe('ProgramBProjectsService', () => {
   let service: ProgramBProjectsService;
+
   let projectsRepository: {
     transaction: jest.Mock;
     findProjectForExecution: jest.Mock;
@@ -75,14 +86,27 @@ describe('ProgramBProjectsService', () => {
     acceptProjectByCompany: jest.Mock;
     acceptProjectByNti: jest.Mock;
   };
+
   let userRepository: {
     findActiveOrganizationMember: jest.Mock;
+  };
+
+  let teamRepository: {
+    findMember: jest.Mock;
   };
 
   const companyUser = {
     id: 'company-user-1',
     email: 'company@example.com',
     role: UserRole.COMPANY_EMPLOYEE,
+    status: UserStatus.ACTIVE,
+    organizationId: 'org-1',
+  } as const;
+
+  const companyOwner = {
+    id: 'company-owner-1',
+    email: 'owner@example.com',
+    role: UserRole.COMPANY_OWNER,
     status: UserStatus.ACTIVE,
     organizationId: 'org-1',
   } as const;
@@ -124,6 +148,13 @@ describe('ProgramBProjectsService', () => {
     },
   };
 
+  const closedProject = {
+    ...activeProject,
+    status: ProgramBProjectStatus.CLOSED,
+    acceptedByCompanyAt: new Date('2026-05-17T11:00:00.000Z'),
+    acceptedByNtiAt: new Date('2026-05-17T12:00:00.000Z'),
+  };
+
   beforeEach(() => {
     projectsRepository = {
       transaction: jest.fn((fn: (db: object) => Promise<unknown>) =>
@@ -145,25 +176,46 @@ describe('ProgramBProjectsService', () => {
       }),
     };
 
+    teamRepository = {
+      findMember: jest.fn().mockResolvedValue({
+        userId: 'company-user-1',
+        teamId: 'team-1',
+      }),
+    };
+
     service = new ProgramBProjectsService(
       projectsRepository as never,
       userRepository as never,
+      teamRepository as never,
     );
   });
 
-  it('creates a milestone for a company-side project member', async () => {
+  it('creates a milestone for a company-side project team member', async () => {
     const milestone = {
       id: 'milestone-1',
       projectId: 'project-1',
       title: 'Prototype',
       status: ProgramBMilestoneStatus.PLANNED,
     };
+
     projectsRepository.createMilestone.mockResolvedValue(milestone);
 
     const result = await service.createMilestone(
       'project-1',
       { title: 'Prototype' },
       companyUser as never,
+    );
+
+    expect(userRepository.findActiveOrganizationMember).toHaveBeenCalledWith(
+      'org-1',
+      'company-user-1',
+      { tx: 'db-client' },
+    );
+
+    expect(teamRepository.findMember).toHaveBeenCalledWith(
+      'team-1',
+      'company-user-1',
+      { tx: 'db-client' },
     );
 
     expect(projectsRepository.createMilestone).toHaveBeenCalledWith(
@@ -174,13 +226,58 @@ describe('ProgramBProjectsService', () => {
       }),
       { tx: 'db-client' },
     );
+
     expect(result).toBe(milestone);
+  });
+
+  it('allows company owners to manage milestones without team membership check', async () => {
+    const milestone = {
+      id: 'milestone-1',
+      projectId: 'project-1',
+      title: 'Prototype',
+      status: ProgramBMilestoneStatus.PLANNED,
+    };
+
+    userRepository.findActiveOrganizationMember.mockResolvedValue({
+      id: 'company-owner-1',
+    });
+    projectsRepository.createMilestone.mockResolvedValue(milestone);
+
+    const result = await service.createMilestone(
+      'project-1',
+      { title: 'Prototype' },
+      companyOwner as never,
+    );
+
+    expect(userRepository.findActiveOrganizationMember).toHaveBeenCalledWith(
+      'org-1',
+      'company-owner-1',
+      { tx: 'db-client' },
+    );
+
+    expect(teamRepository.findMember).not.toHaveBeenCalled();
+    expect(result).toBe(milestone);
+  });
+
+  it('rejects company employees who are not members of the project team', async () => {
+    teamRepository.findMember.mockResolvedValue(null);
+
+    await expect(
+      service.createMilestone(
+        'project-1',
+        { title: 'Prototype' },
+        companyUser as never,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(projectsRepository.createMilestone).not.toHaveBeenCalled();
   });
 
   it('updates a milestone through project-scoped conditional write', async () => {
     projectsRepository.updateMilestoneForProject.mockResolvedValue({
       count: 1,
     });
+
     projectsRepository.findMilestoneForProject.mockResolvedValue({
       id: 'milestone-1',
       projectId: 'project-1',
@@ -207,16 +304,31 @@ describe('ProgramBProjectsService', () => {
       },
       { tx: 'db-client' },
     );
+
     expect(result.title).toBe('Updated');
   });
 
-  it('creates mentoring notes for NTI-side reviewers and mentors', async () => {
+  it('rejects empty milestone update body', async () => {
+    await expect(
+      service.updateMilestone(
+        'project-1',
+        'milestone-1',
+        {},
+        companyUser as never,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(projectsRepository.findProjectForExecution).not.toHaveBeenCalled();
+  });
+
+  it('creates mentoring notes for the assigned mentor', async () => {
     const note = {
       id: 'note-1',
       projectId: 'project-1',
       authorUserId: 'mentor-1',
       note: 'Review deployment plan',
     };
+
     projectsRepository.createMentoringNote.mockResolvedValue(note);
 
     const result = await service.createMentoringNote(
@@ -239,6 +351,35 @@ describe('ProgramBProjectsService', () => {
       },
       { tx: 'db-client' },
     );
+
+    expect(result).toBe(note);
+  });
+
+  it('creates mentoring notes for NTI-side reviewer roles', async () => {
+    const note = {
+      id: 'note-1',
+      projectId: 'project-1',
+      authorUserId: 'admin-1',
+      note: 'Review deployment plan',
+    };
+
+    projectsRepository.createMentoringNote.mockResolvedValue(note);
+
+    const result = await service.createMentoringNote(
+      'project-1',
+      { note: 'Review deployment plan' },
+      admin as never,
+    );
+
+    expect(projectsRepository.createMentoringNote).toHaveBeenCalledWith(
+      {
+        projectId: 'project-1',
+        authorUserId: 'admin-1',
+        note: 'Review deployment plan',
+      },
+      { tx: 'db-client' },
+    );
+
     expect(result).toBe(note);
   });
 
@@ -256,6 +397,26 @@ describe('ProgramBProjectsService', () => {
         } as never,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(projectsRepository.createMentoringNote).not.toHaveBeenCalled();
+  });
+
+  it('rejects inactive mentors from creating mentoring notes', async () => {
+    await expect(
+      service.createMentoringNote(
+        'project-1',
+        { note: 'Review deployment plan' },
+        {
+          id: 'mentor-1',
+          email: 'mentor@example.com',
+          role: UserRole.MENTOR,
+          status: UserStatus.PENDING,
+          organizationId: null,
+        } as never,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(projectsRepository.createMentoringNote).not.toHaveBeenCalled();
   });
 
   it('restricts PO reviews to the assigned product owner', async () => {
@@ -268,6 +429,8 @@ describe('ProgramBProjectsService', () => {
         companyUser as never,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(projectsRepository.createPoReview).not.toHaveBeenCalled();
   });
 
   it('creates PO reviews for the assigned product owner', async () => {
@@ -295,6 +458,7 @@ describe('ProgramBProjectsService', () => {
       },
       { tx: 'db-client' },
     );
+
     expect(result.id).toBe('review-1');
   });
 
@@ -311,6 +475,78 @@ describe('ProgramBProjectsService', () => {
         } as never,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(projectsRepository.createPoReview).not.toHaveBeenCalled();
+  });
+
+  it('allows the assigned product owner to record company acceptance', async () => {
+    projectsRepository.acceptProjectByCompany.mockResolvedValue({
+      ...activeProject,
+      acceptedByCompanyAt: new Date('2026-05-17T11:00:00.000Z'),
+      status: ProgramBProjectStatus.ACTIVE,
+    });
+
+    const result = await service.recordFinalAcceptance(
+      'project-1',
+      { side: ProgramBFinalAcceptanceSide.COMPANY },
+      productOwner as never,
+    );
+
+    expect(userRepository.findActiveOrganizationMember).not.toHaveBeenCalled();
+
+    expect(projectsRepository.acceptProjectByCompany).toHaveBeenCalledWith(
+      'project-1',
+      expect.any(Date) as Date,
+      false,
+      { tx: 'db-client' },
+    );
+
+    expect(result.status).toBe(ProgramBProjectStatus.ACTIVE);
+  });
+
+  it('allows same-organization company owners to record company acceptance', async () => {
+    userRepository.findActiveOrganizationMember.mockResolvedValue({
+      id: 'company-owner-1',
+    });
+
+    projectsRepository.acceptProjectByCompany.mockResolvedValue({
+      ...activeProject,
+      acceptedByCompanyAt: new Date('2026-05-17T11:00:00.000Z'),
+      status: ProgramBProjectStatus.ACTIVE,
+    });
+
+    const result = await service.recordFinalAcceptance(
+      'project-1',
+      { side: ProgramBFinalAcceptanceSide.COMPANY },
+      companyOwner as never,
+    );
+
+    expect(userRepository.findActiveOrganizationMember).toHaveBeenCalledWith(
+      'org-1',
+      'company-owner-1',
+      { tx: 'db-client' },
+    );
+
+    expect(projectsRepository.acceptProjectByCompany).toHaveBeenCalledWith(
+      'project-1',
+      expect.any(Date) as Date,
+      false,
+      { tx: 'db-client' },
+    );
+
+    expect(result.status).toBe(ProgramBProjectStatus.ACTIVE);
+  });
+
+  it('rejects non-owner company users from recording company acceptance', async () => {
+    await expect(
+      service.recordFinalAcceptance(
+        'project-1',
+        { side: ProgramBFinalAcceptanceSide.COMPANY },
+        companyUser as never,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(projectsRepository.acceptProjectByCompany).not.toHaveBeenCalled();
   });
 
   it('keeps the project open after only one final acceptance', async () => {
@@ -318,9 +554,6 @@ describe('ProgramBProjectsService', () => {
       ...activeProject,
       acceptedByCompanyAt: new Date('2026-05-17T11:00:00.000Z'),
       status: ProgramBProjectStatus.ACTIVE,
-    });
-    userRepository.findActiveOrganizationMember.mockResolvedValue({
-      id: 'po-1',
     });
 
     const result = await service.recordFinalAcceptance(
@@ -335,6 +568,7 @@ describe('ProgramBProjectsService', () => {
       false,
       { tx: 'db-client' },
     );
+
     expect(result.status).toBe(ProgramBProjectStatus.ACTIVE);
   });
 
@@ -343,9 +577,11 @@ describe('ProgramBProjectsService', () => {
       ...activeProject,
       acceptedByCompanyAt: new Date('2026-05-17T11:00:00.000Z'),
     };
+
     projectsRepository.findProjectForExecution.mockResolvedValue(
       companyAcceptedProject,
     );
+
     projectsRepository.acceptProjectByNti.mockResolvedValue({
       ...companyAcceptedProject,
       acceptedByNtiAt: new Date('2026-05-17T12:00:00.000Z'),
@@ -364,6 +600,7 @@ describe('ProgramBProjectsService', () => {
       true,
       { tx: 'db-client' },
     );
+
     expect(result.status).toBe(ProgramBProjectStatus.CLOSED);
   });
 
@@ -372,6 +609,7 @@ describe('ProgramBProjectsService', () => {
       ...activeProject,
       acceptedByCompanyAt: new Date('2026-05-17T11:00:00.000Z'),
     };
+
     projectsRepository.findProjectForExecution.mockResolvedValue(
       acceptedProject,
     );
@@ -402,15 +640,12 @@ describe('ProgramBProjectsService', () => {
         admin as never,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(projectsRepository.acceptProjectByNti).not.toHaveBeenCalled();
   });
 
-  it('rejects normal writes after closure', async () => {
-    projectsRepository.findProjectForExecution.mockResolvedValue({
-      ...activeProject,
-      status: ProgramBProjectStatus.CLOSED,
-      acceptedByCompanyAt: new Date('2026-05-17T11:00:00.000Z'),
-      acceptedByNtiAt: new Date('2026-05-17T12:00:00.000Z'),
-    });
+  it('rejects milestone creation after closure', async () => {
+    projectsRepository.findProjectForExecution.mockResolvedValue(closedProject);
 
     await expect(
       service.createMilestone(
@@ -419,5 +654,52 @@ describe('ProgramBProjectsService', () => {
         companyUser as never,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(projectsRepository.createMilestone).not.toHaveBeenCalled();
+  });
+
+  it('rejects milestone updates after closure', async () => {
+    projectsRepository.findProjectForExecution.mockResolvedValue(closedProject);
+
+    await expect(
+      service.updateMilestone(
+        'project-1',
+        'milestone-1',
+        { title: 'Late update' },
+        companyUser as never,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(projectsRepository.updateMilestoneForProject).not.toHaveBeenCalled();
+  });
+
+  it('rejects mentoring notes after closure', async () => {
+    projectsRepository.findProjectForExecution.mockResolvedValue(closedProject);
+
+    await expect(
+      service.createMentoringNote('project-1', { note: 'Late note' }, {
+        id: 'mentor-1',
+        email: 'mentor@example.com',
+        role: UserRole.MENTOR,
+        status: UserStatus.ACTIVE,
+        organizationId: null,
+      } as never),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(projectsRepository.createMentoringNote).not.toHaveBeenCalled();
+  });
+
+  it('rejects PO reviews after closure', async () => {
+    projectsRepository.findProjectForExecution.mockResolvedValue(closedProject);
+
+    await expect(
+      service.createPoReview(
+        'project-1',
+        { decision: ProgramBPoDecision.APPROVED },
+        productOwner as never,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(projectsRepository.createPoReview).not.toHaveBeenCalled();
   });
 });

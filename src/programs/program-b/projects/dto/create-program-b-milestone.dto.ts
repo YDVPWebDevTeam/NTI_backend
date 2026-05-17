@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  MaxLength,
 } from 'class-validator';
 import { ProgramBMilestoneStatus } from 'generated/prisma/enums';
 
@@ -12,17 +13,21 @@ export class CreateProgramBMilestoneDto {
   @ApiProperty({
     description: 'Milestone title.',
     example: 'Prototype delivery',
+    maxLength: 255,
   })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   title!: string;
 
   @ApiPropertyOptional({
     description: 'Milestone description.',
     example: 'Deliver a clickable prototype for PO review.',
+    maxLength: 2000,
   })
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   description?: string;
 
   @ApiPropertyOptional({

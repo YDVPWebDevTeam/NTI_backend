@@ -14,6 +14,7 @@ import {
 } from 'generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../../common/types/auth-user-context.type';
 import type { PrismaDbClient } from '../../../infrastructure/database';
+import { TeamRepository } from '../../../team/team.repository';
 import { UserRepository } from '../../../user/user.repository';
 import {
   CreateProgramBFinalAcceptanceDto,
@@ -37,6 +38,7 @@ export class ProgramBProjectsService {
   constructor(
     private readonly projectsRepository: ProgramBProjectsRepository,
     private readonly userRepository: UserRepository,
+    private readonly teamRepository: TeamRepository,
   ) {}
 
   async createMilestone(
@@ -46,6 +48,7 @@ export class ProgramBProjectsService {
   ) {
     return this.projectsRepository.transaction(async (db) => {
       const project = await this.loadProjectOrThrow(projectId, db);
+
       this.ensureProjectWritable(project);
       await this.ensureCompanySideProjectMember(project, user, db);
 
@@ -76,6 +79,7 @@ export class ProgramBProjectsService {
 
     return this.projectsRepository.transaction(async (db) => {
       const project = await this.loadProjectOrThrow(projectId, db);
+
       this.ensureProjectWritable(project);
       await this.ensureCompanySideProjectMember(project, user, db);
 
@@ -111,6 +115,7 @@ export class ProgramBProjectsService {
   ) {
     return this.projectsRepository.transaction(async (db) => {
       const project = await this.loadProjectOrThrow(projectId, db);
+
       this.ensureProjectWritable(project);
       this.ensureMentoringNoteAuthor(project, user);
 
@@ -132,6 +137,7 @@ export class ProgramBProjectsService {
   ) {
     return this.projectsRepository.transaction(async (db) => {
       const project = await this.loadProjectOrThrow(projectId, db);
+
       this.ensureProjectWritable(project);
       this.ensureActiveAssignedProductOwner(project, user);
 
@@ -154,6 +160,7 @@ export class ProgramBProjectsService {
   ): Promise<ProgramBProjectExecutionView> {
     return this.projectsRepository.transaction(async (db) => {
       const project = await this.loadProjectOrThrow(projectId, db);
+
       this.ensureProjectWritableForAcceptance(project, dto.side);
 
       if (dto.side === ProgramBFinalAcceptanceSide.COMPANY) {
@@ -208,13 +215,30 @@ export class ProgramBProjectsService {
       );
     }
 
-    const member = await this.userRepository.findActiveOrganizationMember(
-      project.backlogItem.organizationId,
+    const organizationMember =
+      await this.userRepository.findActiveOrganizationMember(
+        project.backlogItem.organizationId,
+        user.id,
+        db,
+      );
+
+    if (!organizationMember) {
+      throw new ForbiddenException(
+        'Only company-side project members may manage milestones',
+      );
+    }
+
+    if (user.role === UserRole.COMPANY_OWNER) {
+      return;
+    }
+
+    const teamMember = await this.teamRepository.findMember(
+      project.teamId,
       user.id,
       db,
     );
 
-    if (!member) {
+    if (!teamMember) {
       throw new ForbiddenException(
         'Only company-side project members may manage milestones',
       );
@@ -272,27 +296,36 @@ export class ProgramBProjectsService {
     user: AuthenticatedUserContext,
     db?: PrismaDbClient,
   ): Promise<void> {
-    const isProductOwner = project.productOwnerUserId === user.id;
-    const isCompanyOwnerFromSameOrganization =
-      user.role === UserRole.COMPANY_OWNER &&
-      user.organizationId === project.backlogItem.organizationId;
-
-    if (
-      user.status !== UserStatus.ACTIVE ||
-      (!isProductOwner && !isCompanyOwnerFromSameOrganization)
-    ) {
+    if (user.status !== UserStatus.ACTIVE) {
       throw new ForbiddenException(
         'Only the product owner or same-organization company owner may record company acceptance',
       );
     }
 
-    const member = await this.userRepository.findActiveOrganizationMember(
-      project.backlogItem.organizationId,
-      user.id,
-      db,
-    );
+    const isProductOwner = project.productOwnerUserId === user.id;
 
-    if (!member) {
+    if (isProductOwner) {
+      return;
+    }
+
+    const isCompanyOwnerFromSameOrganization =
+      user.role === UserRole.COMPANY_OWNER &&
+      user.organizationId === project.backlogItem.organizationId;
+
+    if (!isCompanyOwnerFromSameOrganization) {
+      throw new ForbiddenException(
+        'Only the product owner or same-organization company owner may record company acceptance',
+      );
+    }
+
+    const organizationMember =
+      await this.userRepository.findActiveOrganizationMember(
+        project.backlogItem.organizationId,
+        user.id,
+        db,
+      );
+
+    if (!organizationMember) {
       throw new ForbiddenException(
         'Only the product owner or same-organization company owner may record company acceptance',
       );
@@ -319,6 +352,7 @@ export class ProgramBProjectsService {
     }
 
     this.ensureProjectWritable(project);
+
     const now = new Date();
     const willClose = Boolean(project.acceptedByNtiAt);
 
@@ -339,6 +373,7 @@ export class ProgramBProjectsService {
     }
 
     this.ensureProjectWritable(project);
+
     const now = new Date();
     const willClose = Boolean(project.acceptedByCompanyAt);
 
@@ -357,6 +392,7 @@ export class ProgramBProjectsService {
     const isIdempotentCompanyAcceptance =
       side === ProgramBFinalAcceptanceSide.COMPANY &&
       project.acceptedByCompanyAt !== null;
+
     const isIdempotentNtiAcceptance =
       side === ProgramBFinalAcceptanceSide.NTI &&
       project.acceptedByNtiAt !== null;

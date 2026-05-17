@@ -166,6 +166,25 @@ enum NeedsInfoItemStatus {
   RESOLVED
 }
 
+enum ProgramBProjectStatus {
+  ACTIVE
+  BLOCKED
+  COMPLETED
+  CLOSED
+}
+
+enum ProgramBMilestoneStatus {
+  PLANNED
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum ProgramBPoDecision {
+  APPROVED
+  CHANGES_REQUESTED
+}
+
 model User {
   id                 String  @id @default(uuid())
   firstName          String
@@ -200,14 +219,17 @@ model User {
   uploads                       UploadedFile[]
   organizationDocumentsUploaded OrganizationDocument[] @relation("OrganizationDocumentUploadedBy")
 
-  applicationsCreated           Application[]               @relation("ApplicationCreatedBy")
-  assignedProgramAApplications  Application[]               @relation("ApplicationAssignedMentor")
-  programAMentorAssignmentsMade Application[]               @relation("ApplicationMentorAssignedBy")
-  updatedApplicationSections    ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
-  applicationSectionHistories   ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
-  applicationDocumentsCreated   ApplicationDocument[]       @relation("ApplicationDocumentCreatedBy")
-  applicationDocumentsForMember ApplicationDocument[]       @relation("ApplicationDocumentMember")
-  productOwnerForBacklogItems   BacklogItem[]               @relation("BacklogItemProductOwner")
+  applicationsCreated             Application[]               @relation("ApplicationCreatedBy")
+  assignedProgramAApplications    Application[]               @relation("ApplicationAssignedMentor")
+  programAMentorAssignmentsMade   Application[]               @relation("ApplicationMentorAssignedBy")
+  updatedApplicationSections      ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
+  applicationSectionHistories     ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
+  applicationDocumentsCreated     ApplicationDocument[]       @relation("ApplicationDocumentCreatedBy")
+  applicationDocumentsForMember   ApplicationDocument[]       @relation("ApplicationDocumentMember")
+  productOwnerForBacklogItems     BacklogItem[]               @relation("BacklogItemProductOwner")
+  productOwnerForProgramBProjects ProgramBProject[]           @relation("ProgramBProjectProductOwner")
+  programBMentoringNotesAuthored  ProgramBMentoringNote[]     @relation("ProgramBMentoringNoteAuthor")
+  programBPoReviewsAuthored       ProgramBPoReview[]          @relation("ProgramBPoReviewAuthor")
 
   needsInfoItemsCreated           NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
   needsInfoItemsResolved          NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
@@ -280,8 +302,9 @@ model Team {
 
   members TeamMember[]
 
-  invitations  Invitation[]
-  applications Application[]
+  invitations      Invitation[]
+  applications     Application[]
+  programBProjects ProgramBProject[]
 
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
@@ -335,7 +358,8 @@ model Application {
   mentorAssignedById String?
   mentorAssignedBy   User?                    @relation("ApplicationMentorAssignedBy", fields: [mentorAssignedById], references: [id], onDelete: SetNull)
 
-  mentorshipNotes ProgramAMentorshipNote[]
+  mentorshipNotes  ProgramAMentorshipNote[]
+  programBProjects ProgramBProject[]
 
   status      ApplicationStatus @default(DRAFT)
   submittedAt DateTime?
@@ -452,7 +476,8 @@ model BacklogItem {
   expectedOutcomes String?
 
   productOwnerUserId String?
-  productOwner       User?   @relation("BacklogItemProductOwner", fields: [productOwnerUserId], references: [id], onDelete: SetNull)
+  productOwner       User?             @relation("BacklogItemProductOwner", fields: [productOwnerUserId], references: [id], onDelete: SetNull)
+  programBProjects   ProgramBProject[]
 
   status BacklogItemStatus @default(DRAFT)
 
@@ -616,6 +641,91 @@ model NeedsInfoReply {
   createdAt DateTime @default(now())
 
   @@index([needsInfoItemId, createdAt])
+}
+
+model ProgramBProject {
+  id String @id @default(uuid())
+
+  backlogItemId String
+  backlogItem   BacklogItem @relation(fields: [backlogItemId], references: [id], onDelete: Restrict)
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Restrict)
+
+  productOwnerUserId String
+  productOwnerUser   User   @relation("ProgramBProjectProductOwner", fields: [productOwnerUserId], references: [id], onDelete: Restrict)
+
+  status ProgramBProjectStatus @default(ACTIVE)
+
+  acceptedByCompanyAt DateTime?
+  acceptedByNtiAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  milestones     ProgramBMilestone[]
+  mentoringNotes ProgramBMentoringNote[]
+  poReviews      ProgramBPoReview[]
+
+  @@index([teamId])
+  @@index([backlogItemId])
+  @@index([applicationId])
+  @@index([productOwnerUserId])
+  @@index([status])
+}
+
+model ProgramBMilestone {
+  id String @id @default(uuid())
+
+  projectId String
+  project   ProgramBProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  dueAt       DateTime?
+  status      ProgramBMilestoneStatus @default(PLANNED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, createdAt])
+  @@index([projectId, status])
+}
+
+model ProgramBMentoringNote {
+  id String @id @default(uuid())
+
+  projectId String
+  project   ProgramBProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  authorUserId String
+  authorUser   User   @relation("ProgramBMentoringNoteAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  note String
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId, createdAt])
+}
+
+model ProgramBPoReview {
+  id String @id @default(uuid())
+
+  projectId String
+  project   ProgramBProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  authorUserId String
+  authorUser   User   @relation("ProgramBPoReviewAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  decision ProgramBPoDecision
+  comment  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId, createdAt])
 }
 
 model ApplicationStatusEvent {

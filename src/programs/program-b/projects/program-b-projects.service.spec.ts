@@ -2,10 +2,6 @@ jest.mock('./program-b-projects.repository', () => ({
   ProgramBProjectsRepository: class ProgramBProjectsRepository {},
 }));
 
-jest.mock('../../../team/team.repository', () => ({
-  TeamRepository: class TeamRepository {},
-}));
-
 jest.mock(
   'generated/prisma/client',
   () => ({
@@ -91,10 +87,6 @@ describe('ProgramBProjectsService', () => {
     findActiveOrganizationMember: jest.Mock;
   };
 
-  let teamRepository: {
-    findMember: jest.Mock;
-  };
-
   const companyUser = {
     id: 'company-user-1',
     email: 'company@example.com',
@@ -131,6 +123,7 @@ describe('ProgramBProjectsService', () => {
     id: 'project-1',
     backlogItemId: 'backlog-1',
     applicationId: 'application-1',
+    teamApplicationId: null,
     teamId: 'team-1',
     productOwnerUserId: 'po-1',
     status: ProgramBProjectStatus.ACTIVE,
@@ -146,6 +139,7 @@ describe('ProgramBProjectsService', () => {
       id: 'application-1',
       mentorUserId: 'mentor-1',
     },
+    teamApplication: null,
   };
 
   const closedProject = {
@@ -176,21 +170,13 @@ describe('ProgramBProjectsService', () => {
       }),
     };
 
-    teamRepository = {
-      findMember: jest.fn().mockResolvedValue({
-        userId: 'company-user-1',
-        teamId: 'team-1',
-      }),
-    };
-
     service = new ProgramBProjectsService(
       projectsRepository as never,
       userRepository as never,
-      teamRepository as never,
     );
   });
 
-  it('creates a milestone for a company-side project team member', async () => {
+  it('creates a milestone for an active company-side organization member', async () => {
     const milestone = {
       id: 'milestone-1',
       projectId: 'project-1',
@@ -208,12 +194,6 @@ describe('ProgramBProjectsService', () => {
 
     expect(userRepository.findActiveOrganizationMember).toHaveBeenCalledWith(
       'org-1',
-      'company-user-1',
-      { tx: 'db-client' },
-    );
-
-    expect(teamRepository.findMember).toHaveBeenCalledWith(
-      'team-1',
       'company-user-1',
       { tx: 'db-client' },
     );
@@ -255,12 +235,11 @@ describe('ProgramBProjectsService', () => {
       { tx: 'db-client' },
     );
 
-    expect(teamRepository.findMember).not.toHaveBeenCalled();
     expect(result).toBe(milestone);
   });
 
-  it('rejects company employees who are not members of the project team', async () => {
-    teamRepository.findMember.mockResolvedValue(null);
+  it('rejects company employees who are not active organization members', async () => {
+    userRepository.findActiveOrganizationMember.mockResolvedValue(null);
 
     await expect(
       service.createMilestone(

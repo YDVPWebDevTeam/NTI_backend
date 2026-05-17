@@ -11,6 +11,7 @@ const projectExecutionSelect = {
   id: true,
   backlogItemId: true,
   applicationId: true,
+  teamApplicationId: true,
   teamId: true,
   productOwnerUserId: true,
   status: true,
@@ -28,6 +29,12 @@ const projectExecutionSelect = {
     select: {
       id: true,
       mentorUserId: true,
+    },
+  },
+  teamApplication: {
+    select: {
+      id: true,
+      createdById: true,
     },
   },
 } satisfies Prisma.ProgramBProjectSelect;
@@ -55,6 +62,22 @@ export class ProgramBProjectsRepository {
       where: { id },
       select: projectExecutionSelect,
     });
+  }
+
+  findProjectByTeamApplicationId(
+    teamApplicationId: string,
+    db?: PrismaDbClient,
+  ) {
+    return (db ?? this.prisma.client).programBProject.findUnique({
+      where: { teamApplicationId },
+    });
+  }
+
+  createProject(
+    data: Prisma.ProgramBProjectUncheckedCreateInput,
+    db?: PrismaDbClient,
+  ) {
+    return (db ?? this.prisma.client).programBProject.create({ data });
   }
 
   createMilestone(

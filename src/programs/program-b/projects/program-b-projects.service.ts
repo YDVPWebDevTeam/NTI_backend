@@ -14,7 +14,6 @@ import {
 } from 'generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../../common/types/auth-user-context.type';
 import type { PrismaDbClient } from '../../../infrastructure/database';
-import { TeamRepository } from '../../../team/team.repository';
 import { UserRepository } from '../../../user/user.repository';
 import {
   CreateProgramBFinalAcceptanceDto,
@@ -38,7 +37,6 @@ export class ProgramBProjectsService {
   constructor(
     private readonly projectsRepository: ProgramBProjectsRepository,
     private readonly userRepository: UserRepository,
-    private readonly teamRepository: TeamRepository,
   ) {}
 
   async createMilestone(
@@ -227,22 +225,6 @@ export class ProgramBProjectsService {
         'Only company-side project members may manage milestones',
       );
     }
-
-    if (user.role === UserRole.COMPANY_OWNER) {
-      return;
-    }
-
-    const teamMember = await this.teamRepository.findMember(
-      project.teamId,
-      user.id,
-      db,
-    );
-
-    if (!teamMember) {
-      throw new ForbiddenException(
-        'Only company-side project members may manage milestones',
-      );
-    }
   }
 
   private ensureMentoringNoteAuthor(
@@ -267,7 +249,7 @@ export class ProgramBProjectsService {
 
     if (
       user.role === UserRole.MENTOR &&
-      project.application.mentorUserId === user.id
+      project.application?.mentorUserId === user.id
     ) {
       return;
     }

@@ -76,6 +76,9 @@ CREATE INDEX "ProgramBProject_productOwnerUserId_idx" ON "ProgramBProject"("prod
 CREATE INDEX "ProgramBProject_status_idx" ON "ProgramBProject"("status");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "ProgramBProject_active_applicationId_key" ON "ProgramBProject"("applicationId") WHERE "status" <> 'CLOSED';
+
+-- CreateIndex
 CREATE INDEX "ProgramBMilestone_projectId_createdAt_idx" ON "ProgramBMilestone"("projectId", "createdAt");
 
 -- CreateIndex

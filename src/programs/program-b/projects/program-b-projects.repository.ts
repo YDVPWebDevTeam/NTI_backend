@@ -24,6 +24,12 @@ const projectExecutionSelect = {
       organizationId: true,
     },
   },
+  application: {
+    select: {
+      id: true,
+      mentorUserId: true,
+    },
+  },
 } satisfies Prisma.ProgramBProjectSelect;
 
 export type ProgramBProjectExecutionView = Prisma.ProgramBProjectGetPayload<{
@@ -100,18 +106,34 @@ export class ProgramBProjectsRepository {
     return (db ?? this.prisma.client).programBPoReview.create({ data });
   }
 
-  updateProjectAcceptance(
+  acceptProjectByCompany(
     projectId: string,
-    data: {
-      acceptedByCompanyAt?: Date;
-      acceptedByNtiAt?: Date;
-      status?: ProgramBProjectStatus;
-    },
+    acceptedAt: Date,
+    shouldClose: boolean,
     db?: PrismaDbClient,
   ): Promise<ProgramBProjectExecutionView> {
     return (db ?? this.prisma.client).programBProject.update({
       where: { id: projectId },
-      data,
+      data: {
+        acceptedByCompanyAt: acceptedAt,
+        ...(shouldClose ? { status: ProgramBProjectStatus.CLOSED } : {}),
+      },
+      select: projectExecutionSelect,
+    });
+  }
+
+  acceptProjectByNti(
+    projectId: string,
+    acceptedAt: Date,
+    shouldClose: boolean,
+    db?: PrismaDbClient,
+  ): Promise<ProgramBProjectExecutionView> {
+    return (db ?? this.prisma.client).programBProject.update({
+      where: { id: projectId },
+      data: {
+        acceptedByNtiAt: acceptedAt,
+        ...(shouldClose ? { status: ProgramBProjectStatus.CLOSED } : {}),
+      },
       select: projectExecutionSelect,
     });
   }

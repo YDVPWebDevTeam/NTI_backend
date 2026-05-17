@@ -15,5 +15,6 @@ import { ProgramBBacklogService } from './program-b-backlog.service';
     OrganizationRepository,
     UserRepository,
   ],
+  exports: [ProgramBBacklogService],
 })
 export class ProgramBBacklogModule {}

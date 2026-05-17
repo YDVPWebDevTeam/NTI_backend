@@ -77,6 +77,14 @@ enum ApplicationStatus {
   ARCHIVED
 }
 
+enum ProgramBTeamApplicationStatus {
+  SUBMITTED
+  WITHDRAWN
+  SHORTLISTED
+  ACCEPTED
+  REJECTED
+}
+
 enum DocumentType {
   EXECUTIVE_SUMMARY
   TECHNICAL_ARCHITECTURE
@@ -207,8 +215,10 @@ model User {
   applicationStatusEventsChanged  ApplicationStatusEvent[] @relation("ApplicationStatusChangedBy")
   programAMentorshipNotesAuthored ProgramAMentorshipNote[] @relation("ProgramAMentorshipNoteAuthor")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  programBTeamApplications   ProgramBTeamApplication[]
+  programBTeamApplicationCvs ProgramBTeamApplicationCv[]
 
   @@index([organizationId])
   @@index([role, status])
@@ -237,11 +247,13 @@ model UploadedFile {
   uploadedAt         DateTime?
   failedAt           DateTime?
 
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  academicEvidenceFor  StudentProfile[]      @relation("StudentAcademicEvidence")
-  cvFor                StudentProfile[]      @relation("StudentCvFile")
-  applicationDocuments ApplicationDocument[]
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  academicEvidenceFor        StudentProfile[]            @relation("StudentAcademicEvidence")
+  cvFor                      StudentProfile[]            @relation("StudentCvFile")
+  applicationDocuments       ApplicationDocument[]
+  programBTeamApplications   ProgramBTeamApplication[]
+  programBTeamApplicationCvs ProgramBTeamApplicationCv[]
 
   @@index([ownerId, status])
   @@index([status, uploadUrlExpiresAt])
@@ -271,10 +283,11 @@ model Team {
   invitations  Invitation[]
   applications Application[]
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  lockedAt   DateTime? // When a team is locked, it cannot be modified (e.g., members cannot be added or removed)
-  archivedAt DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  lockedAt                 DateTime? // When a team is locked, it cannot be modified (e.g., members cannot be added or removed)
+  archivedAt               DateTime?
+  programBTeamApplications ProgramBTeamApplication[]
 
   @@index([leaderId])
   @@index([archivedAt])
@@ -387,6 +400,46 @@ model EligibilityRuleConfig {
   @@unique([callId, code])
 }
 
+model ProgramBTeamApplication {
+  id             String                        @id @default(uuid())
+  backlogItemId  String
+  teamId         String
+  createdById    String
+  motivation     String
+  proposalText   String?
+  proposalFileId String?
+  status         ProgramBTeamApplicationStatus @default(SUBMITTED)
+  submittedAt    DateTime                      @default(now())
+  withdrawnAt    DateTime?
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+
+  backlogItem   BacklogItem                 @relation(fields: [backlogItemId], references: [id])
+  team          Team                        @relation(fields: [teamId], references: [id])
+  createdBy     User                        @relation(fields: [createdById], references: [id])
+  proposalFile  UploadedFile?               @relation(fields: [proposalFileId], references: [id])
+  cvAttachments ProgramBTeamApplicationCv[]
+
+  @@index([backlogItemId, teamId], map: "idx_pb_app_backlog_team")
+  @@index([status], map: "idx_pb_app_status")
+}
+
+model ProgramBTeamApplicationCv {
+  id               String   @id @default(uuid())
+  applicationId    String
+  teamMemberUserId String
+  uploadedFileId   String
+  createdAt        DateTime @default(now())
+
+  application    ProgramBTeamApplication @relation(fields: [applicationId], references: [id])
+  teamMemberUser User                    @relation(fields: [teamMemberUserId], references: [id])
+  uploadedFile   UploadedFile            @relation(fields: [uploadedFileId], references: [id])
+
+  @@unique([applicationId, teamMemberUserId], map: "uq_pb_app_cv_team_member")
+  @@index([applicationId], map: "idx_pb_app_cv_application")
+  @@index([uploadedFileId], map: "idx_pb_app_cv_file")
+}
+
 model BacklogItem {
   id String @id @default(uuid())
 
@@ -403,8 +456,9 @@ model BacklogItem {
 
   status BacklogItemStatus @default(DRAFT)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  programBTeamApplications ProgramBTeamApplication[]
 
   @@index([organizationId])
   @@index([status])

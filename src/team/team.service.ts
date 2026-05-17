@@ -142,6 +142,34 @@ export class TeamService {
     return this.toTeamDetail(ensuredTeam);
   }
 
+  async findOne(id: string): Promise<Team | null> {
+    return this.teamRepository.findUnique({ id });
+  }
+
+  async isTeamMember(teamId: string, userId: string): Promise<boolean> {
+    const membership = await this.teamRepository.findMember(teamId, userId);
+    return !!membership;
+  }
+
+  async ensureLeaderOwnedUnarchivedTeam(
+    teamId: string,
+    userId: string,
+  ): Promise<Team> {
+    const team = await this.teamRepository.findUnique({ id: teamId });
+
+    if (!team) {
+      throw new NotFoundException('Team not found');
+    }
+    if (team.leaderId !== userId) {
+      throw new ForbiddenException('Only team leader can act on this team');
+    }
+    if (team.archivedAt) {
+      throw new ConflictException('Archived team cannot be used');
+    }
+
+    return team;
+  }
+
   async findPublicById(id: string): Promise<TeamPublicView> {
     const team = await this.teamRepository.findPublicById(id);
 

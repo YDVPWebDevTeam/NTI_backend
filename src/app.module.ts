@@ -19,6 +19,7 @@ import { FilesModule } from './files';
 import { OrganizationModule } from './organization/organization.module';
 import { ProgramBBacklogModule } from './programs/program-b/backlog/program-b-backlog.module';
 import { ProgramBProjectsModule } from './programs/program-b/projects/program-b-projects.module';
+import { ProgramBTeamApplicationModule } from './programs/program-b/team-application/program-b-team-application.module';
 import { StudentProfileModule } from './student-profile';
 import { ApplicationsModule } from './applications';
 
@@ -42,6 +43,7 @@ const queueProcessorProviders =
     OrganizationModule,
     ProgramBBacklogModule,
     ProgramBProjectsModule,
+    ProgramBTeamApplicationModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

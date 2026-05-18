@@ -114,6 +114,7 @@ describe('ProgramBBacklogService', () => {
   let teamApplicationRepository: {
     findCandidatesForBacklog?: jest.Mock;
     findUnique: jest.Mock;
+    findUniqueWithCv: jest.Mock;
     update: jest.Mock;
     updateMany: jest.Mock;
   };
@@ -205,6 +206,7 @@ describe('ProgramBBacklogService', () => {
     teamApplicationRepository = {
       findCandidatesForBacklog: jest.fn(),
       findUnique: jest.fn(),
+      findUniqueWithCv: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
     };
@@ -328,7 +330,7 @@ describe('ProgramBBacklogService', () => {
   it('shortlists a submitted candidate for a published backlog item', async () => {
     organizationRepository.findUnique.mockResolvedValue(activeOrganization);
     backlogRepository.findUnique.mockResolvedValue(publishedItem);
-    teamApplicationRepository.findUnique
+    teamApplicationRepository.findUniqueWithCv
       .mockResolvedValueOnce(submittedCandidate)
       .mockResolvedValueOnce({
         ...submittedCandidate,
@@ -378,7 +380,7 @@ describe('ProgramBBacklogService', () => {
   it('rejects shortlist from non-submitted status', async () => {
     organizationRepository.findUnique.mockResolvedValue(activeOrganization);
     backlogRepository.findUnique.mockResolvedValue(publishedItem);
-    teamApplicationRepository.findUnique.mockResolvedValue({
+    teamApplicationRepository.findUniqueWithCv.mockResolvedValue({
       ...submittedCandidate,
       status: ProgramBTeamApplicationStatus.REJECTED,
     });
@@ -396,7 +398,7 @@ describe('ProgramBBacklogService', () => {
   it('accepts one candidate and rejects the remaining active ones', async () => {
     organizationRepository.findUnique.mockResolvedValue(activeOrganization);
     backlogRepository.findUnique.mockResolvedValue(publishedItem);
-    teamApplicationRepository.findUnique
+    teamApplicationRepository.findUniqueWithCv
       .mockResolvedValueOnce({
         ...submittedCandidate,
         status: ProgramBTeamApplicationStatus.SHORTLISTED,
@@ -446,7 +448,7 @@ describe('ProgramBBacklogService', () => {
   it('rejects accept after candidate was already rejected', async () => {
     organizationRepository.findUnique.mockResolvedValue(activeOrganization);
     backlogRepository.findUnique.mockResolvedValue(publishedItem);
-    teamApplicationRepository.findUnique.mockResolvedValue({
+    teamApplicationRepository.findUniqueWithCv.mockResolvedValue({
       ...submittedCandidate,
       status: ProgramBTeamApplicationStatus.REJECTED,
     });
@@ -484,7 +486,7 @@ describe('ProgramBBacklogService', () => {
       ...publishedItem,
       productOwnerUserId: 'employee-1',
     });
-    teamApplicationRepository.findUnique.mockResolvedValue({
+    teamApplicationRepository.findUniqueWithCv.mockResolvedValue({
       ...submittedCandidate,
       status: ProgramBTeamApplicationStatus.ACCEPTED,
     });
@@ -532,7 +534,7 @@ describe('ProgramBBacklogService', () => {
   it('rejects project handoff for non-accepted candidates', async () => {
     organizationRepository.findUnique.mockResolvedValue(activeOrganization);
     backlogRepository.findUnique.mockResolvedValue(publishedItem);
-    teamApplicationRepository.findUnique.mockResolvedValue({
+    teamApplicationRepository.findUniqueWithCv.mockResolvedValue({
       ...submittedCandidate,
       status: ProgramBTeamApplicationStatus.SHORTLISTED,
     });
@@ -553,7 +555,7 @@ describe('ProgramBBacklogService', () => {
       ...publishedItem,
       productOwnerUserId: null,
     });
-    teamApplicationRepository.findUnique.mockResolvedValue({
+    teamApplicationRepository.findUniqueWithCv.mockResolvedValue({
       ...submittedCandidate,
       status: ProgramBTeamApplicationStatus.ACCEPTED,
     });

@@ -70,4 +70,14 @@ export class ProgramBTeamApplicationRepository extends BaseRepository<
       select: this.candidateWithCvSelect,
     });
   }
+
+  findUniqueWithCv(
+    where: Prisma.ProgramBTeamApplicationWhereUniqueInput,
+    db?: PrismaDbClient,
+  ) {
+    return (db ?? this.prisma.client).programBTeamApplication.findUnique({
+      where,
+      select: this.candidateWithCvSelect,
+    });
+  }
 }

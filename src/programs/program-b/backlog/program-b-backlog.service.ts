@@ -680,7 +680,7 @@ export class ProgramBBacklogService {
     applicationId: string,
     db?: PrismaDbClient,
   ): Promise<ProgramBTeamApplication> {
-    const candidate = await this.teamApplicationRepository.findUnique(
+    const candidate = await this.teamApplicationRepository.findUniqueWithCv(
       { id: applicationId },
       db,
     );

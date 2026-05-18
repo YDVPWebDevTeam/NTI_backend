@@ -83,6 +83,7 @@ enum ProgramBTeamApplicationStatus {
   SHORTLISTED
   ACCEPTED
   REJECTED
+  PROJECT_CREATED
 }
 
 enum DocumentType {
@@ -434,15 +435,20 @@ model ProgramBTeamApplication {
   proposalFileId String?
   status         ProgramBTeamApplicationStatus @default(SUBMITTED)
   submittedAt    DateTime                      @default(now())
+  shortlistedAt  DateTime?
+  acceptedAt     DateTime?
+  rejectedAt     DateTime?
   withdrawnAt    DateTime?
+  decisionReason String?
   createdAt      DateTime                      @default(now())
   updatedAt      DateTime                      @updatedAt
 
-  backlogItem   BacklogItem                 @relation(fields: [backlogItemId], references: [id])
-  team          Team                        @relation(fields: [teamId], references: [id])
-  createdBy     User                        @relation(fields: [createdById], references: [id])
-  proposalFile  UploadedFile?               @relation(fields: [proposalFileId], references: [id])
-  cvAttachments ProgramBTeamApplicationCv[]
+  backlogItem     BacklogItem                 @relation(fields: [backlogItemId], references: [id])
+  team            Team                        @relation(fields: [teamId], references: [id])
+  createdBy       User                        @relation(fields: [createdById], references: [id])
+  proposalFile    UploadedFile?               @relation(fields: [proposalFileId], references: [id])
+  cvAttachments   ProgramBTeamApplicationCv[]
+  programBProject ProgramBProject?
 
   @@index([backlogItemId, teamId], map: "idx_pb_app_backlog_team")
   @@index([status], map: "idx_pb_app_status")
@@ -649,8 +655,11 @@ model ProgramBProject {
   backlogItemId String
   backlogItem   BacklogItem @relation(fields: [backlogItemId], references: [id], onDelete: Restrict)
 
-  applicationId String
-  application   Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  teamApplicationId String?                  @unique
+  teamApplication   ProgramBTeamApplication? @relation(fields: [teamApplicationId], references: [id], onDelete: Restrict)
 
   teamId String
   team   Team   @relation(fields: [teamId], references: [id], onDelete: Restrict)
@@ -673,6 +682,7 @@ model ProgramBProject {
   @@index([teamId])
   @@index([backlogItemId])
   @@index([applicationId])
+  @@index([teamApplicationId])
   @@index([productOwnerUserId])
   @@index([status])
 }

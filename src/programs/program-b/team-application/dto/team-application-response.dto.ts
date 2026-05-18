@@ -76,8 +76,23 @@ export class ProgramBTeamApplicationResponseDto {
   @ApiProperty({ description: 'Submission timestamp.' })
   submittedAt!: Date;
 
+  @ApiPropertyOptional({ description: 'Shortlist timestamp.' })
+  shortlistedAt?: Date;
+
+  @ApiPropertyOptional({ description: 'Acceptance timestamp.' })
+  acceptedAt?: Date;
+
+  @ApiPropertyOptional({ description: 'Rejection timestamp.' })
+  rejectedAt?: Date;
+
   @ApiPropertyOptional({ description: 'Withdrawal timestamp.' })
   withdrawnAt?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Decision rationale provided during candidate review.',
+    example: 'Strong domain match and delivery readiness.',
+  })
+  decisionReason?: string;
 
   @ApiProperty({ description: 'Creation timestamp.' })
   createdAt!: Date;
@@ -102,10 +117,14 @@ type ApplicationRaw = {
   proposalFileId: string | null;
   status: ProgramBTeamApplicationStatus;
   submittedAt: Date;
+  shortlistedAt: Date | null;
+  acceptedAt: Date | null;
+  rejectedAt: Date | null;
   withdrawnAt: Date | null;
+  decisionReason: string | null;
   createdAt: Date;
   updatedAt: Date;
-  cvAttachments: Array<{
+  cvAttachments?: Array<{
     id: string;
     teamMemberUserId: string;
     uploadedFileId: string;
@@ -131,10 +150,14 @@ export function toProgramBTeamApplicationResponseDto(
     proposalFileId: application.proposalFileId ?? undefined,
     status: application.status,
     submittedAt: application.submittedAt,
+    shortlistedAt: application.shortlistedAt ?? undefined,
+    acceptedAt: application.acceptedAt ?? undefined,
+    rejectedAt: application.rejectedAt ?? undefined,
     withdrawnAt: application.withdrawnAt ?? undefined,
+    decisionReason: application.decisionReason ?? undefined,
     createdAt: application.createdAt,
     updatedAt: application.updatedAt,
-    cvAttachments: application.cvAttachments.map((cv) => ({
+    cvAttachments: (application.cvAttachments ?? []).map((cv) => ({
       id: cv.id,
       teamMemberUserId: cv.teamMemberUserId,
       uploadedFileId: cv.uploadedFileId,

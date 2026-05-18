@@ -33,6 +33,14 @@ jest.mock(
       ACTIVE: 'ACTIVE',
       SUSPENDED: 'SUSPENDED',
     },
+    ProgramBTeamApplicationStatus: {
+      SUBMITTED: 'SUBMITTED',
+      WITHDRAWN: 'WITHDRAWN',
+      SHORTLISTED: 'SHORTLISTED',
+      ACCEPTED: 'ACCEPTED',
+      REJECTED: 'REJECTED',
+      PROJECT_CREATED: 'PROJECT_CREATED',
+    },
     UserRole: {
       COMPANY_OWNER: 'COMPANY_OWNER',
       COMPANY_EMPLOYEE: 'COMPANY_EMPLOYEE',
@@ -57,6 +65,14 @@ jest.mock(
   { virtual: true },
 );
 
+jest.mock('../team-application/program-b-team-application.repository', () => ({
+  ProgramBTeamApplicationRepository: class ProgramBTeamApplicationRepository {},
+}));
+
+jest.mock('../projects/program-b-projects.repository', () => ({
+  ProgramBProjectsRepository: class ProgramBProjectsRepository {},
+}));
+
 import {
   BadRequestException,
   ConflictException,
@@ -66,6 +82,7 @@ import {
 import {
   BacklogItemStatus,
   OrganizationStatus,
+  ProgramBTeamApplicationStatus,
   UserRole,
   UserStatus,
 } from 'generated/prisma/enums';
@@ -92,6 +109,19 @@ describe('ProgramBBacklogService', () => {
   let userRepository: {
     findOrganizationMember: jest.Mock;
     findActiveOrganizationMember: jest.Mock;
+  };
+
+  let teamApplicationRepository: {
+    findCandidatesForBacklog?: jest.Mock;
+    findUnique: jest.Mock;
+    findUniqueWithCv: jest.Mock;
+    update: jest.Mock;
+    updateMany: jest.Mock;
+  };
+
+  let projectsRepository: {
+    findProjectByTeamApplicationId: jest.Mock;
+    createProject: jest.Mock;
   };
 
   const owner = {
@@ -128,6 +158,30 @@ describe('ProgramBBacklogService', () => {
     updatedAt: new Date('2026-05-05T10:00:00.000Z'),
   };
 
+  const publishedItem = {
+    ...draftItem,
+    status: BacklogItemStatus.PUBLISHED,
+  };
+
+  const submittedCandidate = {
+    id: 'candidate-1',
+    backlogItemId: 'item-1',
+    teamId: 'team-1',
+    createdById: 'student-1',
+    motivation: 'We can deliver this quickly',
+    proposalText: 'Implementation plan',
+    proposalFileId: null,
+    status: ProgramBTeamApplicationStatus.SUBMITTED,
+    submittedAt: new Date('2026-05-10T10:00:00.000Z'),
+    shortlistedAt: null,
+    acceptedAt: null,
+    rejectedAt: null,
+    withdrawnAt: null,
+    decisionReason: null,
+    createdAt: new Date('2026-05-10T10:00:00.000Z'),
+    updatedAt: new Date('2026-05-10T10:00:00.000Z'),
+  };
+
   beforeEach(() => {
     backlogRepository = {
       create: jest.fn(),
@@ -149,10 +203,25 @@ describe('ProgramBBacklogService', () => {
       findActiveOrganizationMember: jest.fn(),
     };
 
+    teamApplicationRepository = {
+      findCandidatesForBacklog: jest.fn(),
+      findUnique: jest.fn(),
+      findUniqueWithCv: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    };
+
+    projectsRepository = {
+      findProjectByTeamApplicationId: jest.fn(),
+      createProject: jest.fn(),
+    };
+
     service = new ProgramBBacklogService(
       backlogRepository as never,
       organizationRepository as never,
       userRepository as never,
+      teamApplicationRepository as never,
+      projectsRepository as never,
     );
   });
 
@@ -255,6 +324,296 @@ describe('ProgramBBacklogService', () => {
 
     await expect(
       service.update('item-1', { title: 'Updated' }, employee as never),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('shortlists a submitted candidate for a published backlog item', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findUnique.mockResolvedValue(publishedItem);
+    teamApplicationRepository.findUniqueWithCv
+      .mockResolvedValueOnce(submittedCandidate)
+      .mockResolvedValueOnce({
+        ...submittedCandidate,
+        status: ProgramBTeamApplicationStatus.SHORTLISTED,
+        shortlistedAt: new Date('2026-05-17T10:00:00.000Z'),
+        decisionReason: 'Strong domain match.',
+      });
+    teamApplicationRepository.updateMany.mockResolvedValue({ count: 1 });
+
+    const result = await service.shortlistCandidate(
+      'item-1',
+      'candidate-1',
+      { reason: 'Strong domain match.' },
+      owner as never,
+    );
+
+    expect(teamApplicationRepository.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'candidate-1',
+        backlogItemId: 'item-1',
+        status: ProgramBTeamApplicationStatus.SUBMITTED,
+      }),
+      expect.objectContaining({
+        status: ProgramBTeamApplicationStatus.SHORTLISTED,
+        decisionReason: 'Strong domain match.',
+      }),
+      {},
+    );
+    expect(result.status).toBe(ProgramBTeamApplicationStatus.SHORTLISTED);
+  });
+
+  it('lists backlog candidates for company-side review', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findUnique.mockResolvedValue(publishedItem);
+    teamApplicationRepository.findCandidatesForBacklog = jest
+      .fn()
+      .mockResolvedValue([submittedCandidate]);
+
+    const result = await service.listCandidates('item-1', owner as never);
+
+    expect(
+      teamApplicationRepository.findCandidatesForBacklog,
+    ).toHaveBeenCalledWith('item-1');
+    expect(result).toEqual([submittedCandidate]);
+  });
+
+  it('rejects shortlist from non-submitted status', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findUnique.mockResolvedValue(publishedItem);
+    teamApplicationRepository.findUniqueWithCv.mockResolvedValue({
+      ...submittedCandidate,
+      status: ProgramBTeamApplicationStatus.REJECTED,
+    });
+
+    await expect(
+      service.shortlistCandidate(
+        'item-1',
+        'candidate-1',
+        { reason: 'Retry' },
+        owner as never,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('accepts one candidate and rejects the remaining active ones', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findUnique.mockResolvedValue(publishedItem);
+    teamApplicationRepository.findUniqueWithCv
+      .mockResolvedValueOnce({
+        ...submittedCandidate,
+        status: ProgramBTeamApplicationStatus.SHORTLISTED,
+      })
+      .mockResolvedValueOnce({
+        ...submittedCandidate,
+        status: ProgramBTeamApplicationStatus.ACCEPTED,
+        acceptedAt: new Date('2026-05-17T10:00:00.000Z'),
+        decisionReason: 'Best delivery readiness.',
+      });
+    teamApplicationRepository.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 2 });
+
+    const result = await service.acceptCandidate(
+      'item-1',
+      'candidate-1',
+      { reason: 'Best delivery readiness.' },
+      owner as never,
+    );
+
+    expect(teamApplicationRepository.updateMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        id: 'candidate-1',
+        backlogItemId: 'item-1',
+      }),
+      expect.objectContaining({
+        status: ProgramBTeamApplicationStatus.ACCEPTED,
+        decisionReason: 'Best delivery readiness.',
+      }),
+      {},
+    );
+    expect(teamApplicationRepository.updateMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        backlogItemId: 'item-1',
+      }),
+      expect.objectContaining({
+        status: ProgramBTeamApplicationStatus.REJECTED,
+      }),
+      {},
+    );
+    expect(result.status).toBe(ProgramBTeamApplicationStatus.ACCEPTED);
+  });
+
+  it('rejects accept after candidate was already rejected', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findUnique.mockResolvedValue(publishedItem);
+    teamApplicationRepository.findUniqueWithCv.mockResolvedValue({
+      ...submittedCandidate,
+      status: ProgramBTeamApplicationStatus.REJECTED,
+    });
+
+    await expect(
+      service.acceptCandidate(
+        'item-1',
+        'candidate-1',
+        { reason: 'Reconsider' },
+        owner as never,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('maps duplicate acceptance races to a conflict', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.transaction.mockRejectedValue({ code: 'P2002' });
+
+    await expect(
+      service.acceptCandidate(
+        'item-1',
+        'candidate-1',
+        { reason: 'Winner' },
+        owner as never,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('creates a project from an accepted candidate and marks it as handed off', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    userRepository.findActiveOrganizationMember.mockResolvedValue({
+      id: 'employee-1',
+    });
+    backlogRepository.findUnique.mockResolvedValue({
+      ...publishedItem,
+      productOwnerUserId: 'employee-1',
+    });
+    teamApplicationRepository.findUniqueWithCv.mockResolvedValue({
+      ...submittedCandidate,
+      status: ProgramBTeamApplicationStatus.ACCEPTED,
+    });
+    projectsRepository.findProjectByTeamApplicationId.mockResolvedValue(null);
+    projectsRepository.createProject.mockResolvedValue({
+      id: 'project-1',
+      backlogItemId: 'item-1',
+      applicationId: null,
+      teamApplicationId: 'candidate-1',
+      teamId: 'team-1',
+      productOwnerUserId: 'employee-1',
+      status: 'ACTIVE',
+      acceptedByCompanyAt: null,
+      acceptedByNtiAt: null,
+      createdAt: new Date('2026-05-17T10:00:00.000Z'),
+      updatedAt: new Date('2026-05-17T10:00:00.000Z'),
+    });
+    teamApplicationRepository.update.mockResolvedValue({
+      ...submittedCandidate,
+      status: ProgramBTeamApplicationStatus.PROJECT_CREATED,
+    });
+
+    const result = await service.createProjectFromCandidate(
+      'item-1',
+      'candidate-1',
+      owner as never,
+    );
+
+    expect(projectsRepository.createProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backlogItemId: 'item-1',
+        teamApplicationId: 'candidate-1',
+        teamId: 'team-1',
+      }),
+      {},
+    );
+    expect(teamApplicationRepository.update).toHaveBeenCalledWith(
+      { id: 'candidate-1' },
+      { status: ProgramBTeamApplicationStatus.PROJECT_CREATED },
+      {},
+    );
+    expect(result.id).toBe('project-1');
+  });
+
+  it('rejects project handoff for non-accepted candidates', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findUnique.mockResolvedValue(publishedItem);
+    teamApplicationRepository.findUniqueWithCv.mockResolvedValue({
+      ...submittedCandidate,
+      status: ProgramBTeamApplicationStatus.SHORTLISTED,
+    });
+    projectsRepository.findProjectByTeamApplicationId.mockResolvedValue(null);
+
+    await expect(
+      service.createProjectFromCandidate(
+        'item-1',
+        'candidate-1',
+        owner as never,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects project handoff when backlog item has no product owner', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findUnique.mockResolvedValue({
+      ...publishedItem,
+      productOwnerUserId: null,
+    });
+    teamApplicationRepository.findUniqueWithCv.mockResolvedValue({
+      ...submittedCandidate,
+      status: ProgramBTeamApplicationStatus.ACCEPTED,
+    });
+    projectsRepository.findProjectByTeamApplicationId.mockResolvedValue(null);
+
+    await expect(
+      service.createProjectFromCandidate(
+        'item-1',
+        'candidate-1',
+        owner as never,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('returns the existing project on duplicate handoff attempts', async () => {
+    const existingProject = {
+      id: 'project-1',
+      backlogItemId: 'item-1',
+      applicationId: null,
+      teamApplicationId: 'candidate-1',
+      teamId: 'team-1',
+      productOwnerUserId: 'employee-1',
+      status: 'ACTIVE',
+      acceptedByCompanyAt: null,
+      acceptedByNtiAt: null,
+      createdAt: new Date('2026-05-17T10:00:00.000Z'),
+      updatedAt: new Date('2026-05-17T10:00:00.000Z'),
+    };
+
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.transaction.mockRejectedValue({ code: 'P2002' });
+    projectsRepository.findProjectByTeamApplicationId.mockResolvedValue(
+      existingProject,
+    );
+
+    const result = await service.createProjectFromCandidate(
+      'item-1',
+      'candidate-1',
+      owner as never,
+    );
+
+    expect(result).toBe(existingProject);
+  });
+
+  it('rejects candidate decisions for archived backlog items', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findUnique.mockResolvedValue({
+      ...publishedItem,
+      status: BacklogItemStatus.ARCHIVED,
+    });
+
+    await expect(
+      service.rejectCandidate(
+        'item-1',
+        'candidate-1',
+        { reason: 'Archived backlog' },
+        owner as never,
+      ),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 

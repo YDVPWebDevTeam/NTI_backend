@@ -6,13 +6,18 @@ import { TeamModule } from '../../../team/team.module';
 import { FilesModule } from '../../../files/files.module';
 import { DatabaseModule } from '../../../infrastructure/database/database.module';
 import { ProgramBBacklogModule } from '../backlog/program-b-backlog.module';
+import { ProgramBTeamApplicationRepository } from './program-b-team-application.repository';
 
 @Module({
   imports: [TeamModule, FilesModule, DatabaseModule, ProgramBBacklogModule],
-  providers: [ProgramBTeamApplicationService],
+  providers: [
+    ProgramBTeamApplicationService,
+    ProgramBTeamApplicationRepository,
+  ],
   controllers: [
     ProgramBTeamApplicationController,
     ProgramBTeamApplicationWithdrawalController,
   ],
+  exports: [ProgramBTeamApplicationRepository],
 })
 export class ProgramBTeamApplicationModule {}

@@ -11,9 +11,13 @@ import {
 import { BacklogItemStatus } from 'generated/prisma/enums';
 import { createPaginationQueryDecorators } from '../../../../common/pagination';
 import { createApiDecorator } from '../../../../infrastructure/api-docs/api-docs-factory';
+import { ProgramBProjectDto } from '../../projects/dto/program-b-project.dto';
+import { ProgramBTeamApplicationResponseDto } from '../../team-application/dto/team-application-response.dto';
 import { BACKLOG_SORT_VALUES } from '../dto/get-program-b-backlog-query.dto';
+import { ProgramBBacklogCandidatesResponseDto } from '../dto/program-b-backlog-candidates-response.dto';
 import { CreateProgramBBacklogItemDto } from '../dto/create-program-b-backlog-item.dto';
 import { GetProgramBBacklogResponseDto } from '../dto/get-program-b-backlog-response.dto';
+import { ProgramBCandidateDecisionDto } from '../dto/program-b-candidate-decision.dto';
 import { ProgramBBacklogItemDto } from '../dto/program-b-backlog-item.dto';
 import { UpdateProgramBBacklogItemDto } from '../dto/update-program-b-backlog-item.dto';
 
@@ -205,6 +209,173 @@ export const ArchiveProgramBBacklogItemApi = () =>
       ApiNotFoundResponse({ description: 'Backlog item was not found.' }),
       ApiConflictResponse({
         description: 'Only draft or published backlog items may be archived.',
+      }),
+    ],
+  });
+
+export const ListProgramBBacklogCandidatesApi = () =>
+  createApiDecorator({
+    summary: 'List Program B backlog candidates',
+    description:
+      'Returns all candidate team applications linked to the specified backlog item for company-side review and selection.',
+    successResponse: {
+      status: 200,
+      type: ProgramBBacklogCandidatesResponseDto,
+      description: 'Candidates were retrieved successfully.',
+    },
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ApiParam({
+        name: 'id',
+        description: 'Backlog item identifier.',
+        format: 'uuid',
+      }),
+    ],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Identifier is malformed.' }),
+      ApiForbiddenResponse({
+        description:
+          'Only company-side organization members from the same active organization may view backlog candidates.',
+      }),
+      ApiNotFoundResponse({ description: 'Backlog item was not found.' }),
+    ],
+  });
+
+const candidateActionParams = [
+  ApiBearerAuth('access-token'),
+  ApiParam({
+    name: 'id',
+    description: 'Backlog item identifier.',
+    format: 'uuid',
+  }),
+  ApiParam({
+    name: 'applicationId',
+    description: 'Program B candidate application identifier.',
+    format: 'uuid',
+  }),
+] as const;
+
+export const ShortlistProgramBBacklogCandidateApi = () =>
+  createApiDecorator({
+    summary: 'Shortlist Program B backlog candidate',
+    description:
+      'Moves a Program B candidate application from SUBMITTED to SHORTLISTED for the specified published backlog item.',
+    body: ProgramBCandidateDecisionDto,
+    successResponse: {
+      status: 200,
+      type: ProgramBTeamApplicationResponseDto,
+      description: 'Candidate was shortlisted successfully.',
+    },
+    extraDecorators: [...candidateActionParams],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description: 'Identifiers are malformed or request body is invalid.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only company-side organization members from the same active organization may shortlist candidates.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Backlog item or candidate application was not found.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Only published non-archived backlog items accept decisions, and only SUBMITTED candidates may be shortlisted.',
+      }),
+    ],
+  });
+
+export const AcceptProgramBBacklogCandidateApi = () =>
+  createApiDecorator({
+    summary: 'Accept Program B backlog candidate',
+    description:
+      'Accepts one candidate application for the specified published backlog item and automatically rejects the remaining active candidates.',
+    body: ProgramBCandidateDecisionDto,
+    successResponse: {
+      status: 200,
+      type: ProgramBTeamApplicationResponseDto,
+      description: 'Candidate was accepted successfully.',
+    },
+    extraDecorators: [...candidateActionParams],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description: 'Identifiers are malformed or request body is invalid.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only company-side organization members from the same active organization may accept candidates.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Backlog item or candidate application was not found.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Only published non-archived backlog items accept decisions, only SUBMITTED or SHORTLISTED candidates may be accepted, and only one accepted candidate may exist per backlog item.',
+      }),
+    ],
+  });
+
+export const RejectProgramBBacklogCandidateApi = () =>
+  createApiDecorator({
+    summary: 'Reject Program B backlog candidate',
+    description:
+      'Rejects one candidate application for the specified published backlog item.',
+    body: ProgramBCandidateDecisionDto,
+    successResponse: {
+      status: 200,
+      type: ProgramBTeamApplicationResponseDto,
+      description: 'Candidate was rejected successfully.',
+    },
+    extraDecorators: [...candidateActionParams],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description: 'Identifiers are malformed or request body is invalid.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only company-side organization members from the same active organization may reject candidates.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Backlog item or candidate application was not found.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Only published non-archived backlog items accept decisions, and only SUBMITTED or SHORTLISTED candidates may be rejected.',
+      }),
+    ],
+  });
+
+export const CreateProgramBProjectFromCandidateApi = () =>
+  createApiDecorator({
+    summary: 'Create Program B project from accepted candidate',
+    description:
+      'Creates or returns an idempotent Program B delivery project for the accepted candidate of the specified backlog item.',
+    successResponse: {
+      status: 200,
+      type: ProgramBProjectDto,
+      description:
+        'Program B project handoff record was returned successfully.',
+    },
+    extraDecorators: [...candidateActionParams],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description: 'Identifiers are malformed.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Only company-side organization members from the same active organization may create a project handoff.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Backlog item or candidate application was not found.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Project handoff is allowed only for accepted candidates on non-archived backlog items with an active same-organization product owner.',
       }),
     ],
   });

@@ -5,12 +5,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { BacklogItem, Prisma } from '../../../../generated/prisma/client';
+import {
+  BacklogItem,
+  Prisma,
+  ProgramBProject,
+  ProgramBTeamApplication,
+} from '../../../../generated/prisma/client';
 import {
   BacklogItemStatus,
   OrganizationStatus,
+  ProgramBTeamApplicationStatus,
   UserStatus,
 } from '../../../../generated/prisma/enums';
+import { isPrismaUniqueConstraintError } from '../../../common/prisma/prisma-error.utils';
 import type { AuthenticatedUserContext } from '../../../common/types/auth-user-context.type';
 import {
   buildOrderBy,
@@ -19,10 +26,13 @@ import {
 } from '../../../common/pagination';
 import { OrganizationRepository } from '../../../organization/organization.repository';
 import { UserRepository } from '../../../user/user.repository';
+import { ProgramBProjectsRepository } from '../projects/program-b-projects.repository';
+import { ProgramBTeamApplicationRepository } from '../team-application/program-b-team-application.repository';
 import type { PrismaDbClient } from '../../../infrastructure/database';
 import { CreateProgramBBacklogItemDto } from './dto/create-program-b-backlog-item.dto';
 import { GetProgramBBacklogQueryDto } from './dto/get-program-b-backlog-query.dto';
 import { GetProgramBBacklogResponseDto } from './dto/get-program-b-backlog-response.dto';
+import { ProgramBCandidateDecisionDto } from './dto/program-b-candidate-decision.dto';
 import { UpdateProgramBBacklogItemDto } from './dto/update-program-b-backlog-item.dto';
 import { ProgramBBacklogRepository } from './program-b-backlog.repository';
 
@@ -36,6 +46,8 @@ export class ProgramBBacklogService {
     private readonly backlogRepository: ProgramBBacklogRepository,
     private readonly organizationRepository: OrganizationRepository,
     private readonly userRepository: UserRepository,
+    private readonly teamApplicationRepository: ProgramBTeamApplicationRepository,
+    private readonly projectsRepository: ProgramBProjectsRepository,
   ) {}
 
   async create(
@@ -178,6 +190,15 @@ export class ProgramBBacklogService {
     return this.backlogRepository.findUnique({ id });
   }
 
+  async listCandidates(backlogItemId: string, user: AuthenticatedUserContext) {
+    const organization = await this.ensureActiveOrganizationMember(user);
+    await this.getItemForOrganizationOrThrow(backlogItemId, organization.id);
+
+    return this.teamApplicationRepository.findCandidatesForBacklog(
+      backlogItemId,
+    );
+  }
+
   async publish(
     id: string,
     user: AuthenticatedUserContext,
@@ -280,6 +301,342 @@ export class ProgramBBacklogService {
     }, this.backlogLifecycleTransactionOptions);
   }
 
+  async shortlistCandidate(
+    backlogItemId: string,
+    applicationId: string,
+    dto: ProgramBCandidateDecisionDto,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramBTeamApplication> {
+    const organization = await this.ensureActiveOrganizationMember(user);
+
+    return this.backlogRepository.transaction(async (db) => {
+      const backlogItem = await this.getItemForOrganizationOrThrow(
+        backlogItemId,
+        organization.id,
+        db,
+      );
+      this.ensureCandidateDecisionsAllowed(backlogItem);
+
+      const candidate = await this.getCandidateForBacklogOrThrow(
+        backlogItem.id,
+        applicationId,
+        db,
+      );
+
+      if (candidate.status === ProgramBTeamApplicationStatus.SHORTLISTED) {
+        return candidate;
+      }
+
+      if (candidate.status !== ProgramBTeamApplicationStatus.SUBMITTED) {
+        throw new ConflictException(
+          'Only submitted candidates may be shortlisted',
+        );
+      }
+
+      const result = await this.teamApplicationRepository.updateMany(
+        {
+          id: candidate.id,
+          backlogItemId: backlogItem.id,
+          status: ProgramBTeamApplicationStatus.SUBMITTED,
+        },
+        {
+          status: ProgramBTeamApplicationStatus.SHORTLISTED,
+          shortlistedAt: new Date(),
+          decisionReason: dto.reason ?? null,
+        },
+        db,
+      );
+
+      if (result.count === 0) {
+        throw new ConflictException(
+          'Only submitted candidates may be shortlisted',
+        );
+      }
+
+      return this.getCandidateForBacklogOrThrow(
+        backlogItem.id,
+        candidate.id,
+        db,
+      );
+    }, this.backlogLifecycleTransactionOptions);
+  }
+
+  async acceptCandidate(
+    backlogItemId: string,
+    applicationId: string,
+    dto: ProgramBCandidateDecisionDto,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramBTeamApplication> {
+    const organization = await this.ensureActiveOrganizationMember(user);
+
+    try {
+      return await this.backlogRepository.transaction(async (db) => {
+        const backlogItem = await this.getItemForOrganizationOrThrow(
+          backlogItemId,
+          organization.id,
+          db,
+        );
+        this.ensureCandidateDecisionsAllowed(backlogItem);
+
+        const candidate = await this.getCandidateForBacklogOrThrow(
+          backlogItem.id,
+          applicationId,
+          db,
+        );
+
+        if (
+          candidate.status === ProgramBTeamApplicationStatus.ACCEPTED ||
+          candidate.status === ProgramBTeamApplicationStatus.PROJECT_CREATED
+        ) {
+          return candidate;
+        }
+
+        if (
+          candidate.status !== ProgramBTeamApplicationStatus.SUBMITTED &&
+          candidate.status !== ProgramBTeamApplicationStatus.SHORTLISTED
+        ) {
+          throw new ConflictException(
+            'Only submitted or shortlisted candidates may be accepted',
+          );
+        }
+
+        const acceptedAt = new Date();
+        const result = await this.teamApplicationRepository.updateMany(
+          {
+            id: candidate.id,
+            backlogItemId: backlogItem.id,
+            status: {
+              in: [
+                ProgramBTeamApplicationStatus.SUBMITTED,
+                ProgramBTeamApplicationStatus.SHORTLISTED,
+              ],
+            },
+          },
+          {
+            status: ProgramBTeamApplicationStatus.ACCEPTED,
+            acceptedAt,
+            decisionReason: dto.reason ?? null,
+          },
+          db,
+        );
+
+        if (result.count === 0) {
+          throw new ConflictException(
+            'Only submitted or shortlisted candidates may be accepted',
+          );
+        }
+
+        await this.teamApplicationRepository.updateMany(
+          {
+            backlogItemId: backlogItem.id,
+            id: {
+              not: candidate.id,
+            },
+            status: {
+              in: [
+                ProgramBTeamApplicationStatus.SUBMITTED,
+                ProgramBTeamApplicationStatus.SHORTLISTED,
+              ],
+            },
+          },
+          {
+            status: ProgramBTeamApplicationStatus.REJECTED,
+            rejectedAt: acceptedAt,
+            decisionReason:
+              'Automatically rejected because another candidate was accepted.',
+          },
+          db,
+        );
+
+        return this.getCandidateForBacklogOrThrow(
+          backlogItem.id,
+          candidate.id,
+          db,
+        );
+      }, this.backlogLifecycleTransactionOptions);
+    } catch (error) {
+      if (isPrismaUniqueConstraintError(error)) {
+        throw new ConflictException(
+          'A candidate has already been accepted for this backlog item',
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  async rejectCandidate(
+    backlogItemId: string,
+    applicationId: string,
+    dto: ProgramBCandidateDecisionDto,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramBTeamApplication> {
+    const organization = await this.ensureActiveOrganizationMember(user);
+
+    return this.backlogRepository.transaction(async (db) => {
+      const backlogItem = await this.getItemForOrganizationOrThrow(
+        backlogItemId,
+        organization.id,
+        db,
+      );
+      this.ensureCandidateDecisionsAllowed(backlogItem);
+
+      const candidate = await this.getCandidateForBacklogOrThrow(
+        backlogItem.id,
+        applicationId,
+        db,
+      );
+
+      if (candidate.status === ProgramBTeamApplicationStatus.REJECTED) {
+        return candidate;
+      }
+
+      if (
+        candidate.status !== ProgramBTeamApplicationStatus.SUBMITTED &&
+        candidate.status !== ProgramBTeamApplicationStatus.SHORTLISTED
+      ) {
+        throw new ConflictException(
+          'Only submitted or shortlisted candidates may be rejected',
+        );
+      }
+
+      const result = await this.teamApplicationRepository.updateMany(
+        {
+          id: candidate.id,
+          backlogItemId: backlogItem.id,
+          status: {
+            in: [
+              ProgramBTeamApplicationStatus.SUBMITTED,
+              ProgramBTeamApplicationStatus.SHORTLISTED,
+            ],
+          },
+        },
+        {
+          status: ProgramBTeamApplicationStatus.REJECTED,
+          rejectedAt: new Date(),
+          decisionReason: dto.reason ?? null,
+        },
+        db,
+      );
+
+      if (result.count === 0) {
+        throw new ConflictException(
+          'Only submitted or shortlisted candidates may be rejected',
+        );
+      }
+
+      return this.getCandidateForBacklogOrThrow(
+        backlogItem.id,
+        candidate.id,
+        db,
+      );
+    }, this.backlogLifecycleTransactionOptions);
+  }
+
+  async createProjectFromCandidate(
+    backlogItemId: string,
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramBProject> {
+    const organization = await this.ensureActiveOrganizationMember(user);
+
+    try {
+      return await this.backlogRepository.transaction(async (db) => {
+        const backlogItem = await this.getItemForOrganizationOrThrow(
+          backlogItemId,
+          organization.id,
+          db,
+        );
+
+        if (backlogItem.status === BacklogItemStatus.ARCHIVED) {
+          throw new ConflictException(
+            'Archived backlog items cannot create Program B projects',
+          );
+        }
+
+        const candidate = await this.getCandidateForBacklogOrThrow(
+          backlogItem.id,
+          applicationId,
+          db,
+        );
+
+        const existingProject =
+          await this.projectsRepository.findProjectByTeamApplicationId(
+            candidate.id,
+            db,
+          );
+
+        if (existingProject) {
+          if (
+            candidate.status !== ProgramBTeamApplicationStatus.PROJECT_CREATED
+          ) {
+            await this.teamApplicationRepository.update(
+              { id: candidate.id },
+              { status: ProgramBTeamApplicationStatus.PROJECT_CREATED },
+              db,
+            );
+          }
+
+          return existingProject;
+        }
+
+        if (candidate.status !== ProgramBTeamApplicationStatus.ACCEPTED) {
+          throw new ConflictException(
+            'Only accepted candidates may be handed off into a project',
+          );
+        }
+
+        if (!backlogItem.productOwnerUserId) {
+          throw new ConflictException(
+            'Backlog item must have an active product owner before project handoff',
+          );
+        }
+
+        await this.ensureProductOwnerFromSameOrganization(
+          organization.id,
+          backlogItem.productOwnerUserId,
+          true,
+          db,
+        );
+
+        const project = await this.projectsRepository.createProject(
+          {
+            backlogItemId: backlogItem.id,
+            teamApplicationId: candidate.id,
+            teamId: candidate.teamId,
+            productOwnerUserId: backlogItem.productOwnerUserId,
+          },
+          db,
+        );
+
+        await this.teamApplicationRepository.update(
+          { id: candidate.id },
+          { status: ProgramBTeamApplicationStatus.PROJECT_CREATED },
+          db,
+        );
+
+        return project;
+      }, this.backlogLifecycleTransactionOptions);
+    } catch (error) {
+      if (isPrismaUniqueConstraintError(error)) {
+        const existingProject =
+          await this.projectsRepository.findProjectByTeamApplicationId(
+            applicationId,
+          );
+
+        if (existingProject) {
+          return existingProject;
+        }
+
+        throw new ConflictException(
+          'A Program B project already exists for this candidate',
+        );
+      }
+
+      throw error;
+    }
+  }
+
   private async ensureActiveOrganizationMember(user: AuthenticatedUserContext) {
     if (!user.organizationId || user.status !== UserStatus.ACTIVE) {
       throw new ForbiddenException(
@@ -316,6 +673,37 @@ export class ProgramBBacklogService {
     }
 
     return item;
+  }
+
+  private async getCandidateForBacklogOrThrow(
+    backlogItemId: string,
+    applicationId: string,
+    db?: PrismaDbClient,
+  ): Promise<ProgramBTeamApplication> {
+    const candidate = await this.teamApplicationRepository.findUniqueWithCv(
+      { id: applicationId },
+      db,
+    );
+
+    if (!candidate || candidate.backlogItemId !== backlogItemId) {
+      throw new NotFoundException('Program B candidate application not found');
+    }
+
+    return candidate;
+  }
+
+  private ensureCandidateDecisionsAllowed(backlogItem: BacklogItem): void {
+    if (backlogItem.status === BacklogItemStatus.ARCHIVED) {
+      throw new ConflictException(
+        'Archived backlog items do not accept candidate decisions',
+      );
+    }
+
+    if (backlogItem.status !== BacklogItemStatus.PUBLISHED) {
+      throw new ConflictException(
+        'Only published backlog items accept candidate decisions',
+      );
+    }
   }
 
   private async ensureProductOwnerFromSameOrganization(

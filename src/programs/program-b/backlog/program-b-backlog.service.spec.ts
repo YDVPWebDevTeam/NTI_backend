@@ -547,6 +547,27 @@ describe('ProgramBBacklogService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('rejects project handoff when backlog item has no product owner', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findUnique.mockResolvedValue({
+      ...publishedItem,
+      productOwnerUserId: null,
+    });
+    teamApplicationRepository.findUnique.mockResolvedValue({
+      ...submittedCandidate,
+      status: ProgramBTeamApplicationStatus.ACCEPTED,
+    });
+    projectsRepository.findProjectByTeamApplicationId.mockResolvedValue(null);
+
+    await expect(
+      service.createProjectFromCandidate(
+        'item-1',
+        'candidate-1',
+        owner as never,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
   it('returns the existing project on duplicate handoff attempts', async () => {
     const existingProject = {
       id: 'project-1',

@@ -586,18 +586,18 @@ export class ProgramBBacklogService {
           );
         }
 
+        if (!backlogItem.productOwnerUserId) {
+          throw new ConflictException(
+            'Backlog item must have an active product owner before project handoff',
+          );
+        }
+
         await this.ensureProductOwnerFromSameOrganization(
           organization.id,
           backlogItem.productOwnerUserId,
           true,
           db,
         );
-
-        if (!backlogItem.productOwnerUserId) {
-          throw new ConflictException(
-            'Backlog item must have an active product owner before project handoff',
-          );
-        }
 
         const project = await this.projectsRepository.createProject(
           {

@@ -133,6 +133,30 @@ export class ApplicationsRepository extends BaseRepository<
     });
   }
 
+  updateDecisionIfCurrent(
+    id: string,
+    currentStatus: ApplicationStatus,
+    nextStatus: ApplicationStatus,
+    decisionById: string,
+    decisionRationale: string,
+    decidedAt: Date,
+    db?: PrismaDbClient,
+  ) {
+    return (db ?? this.prisma.client).application.updateMany({
+      where: {
+        id,
+        status: currentStatus,
+        decidedAt: null,
+      },
+      data: {
+        status: nextStatus,
+        decidedAt,
+        decisionById,
+        decisionRationale,
+      },
+    });
+  }
+
   assignMentor(
     applicationId: string,
     mentorUserId: string,
@@ -168,6 +192,8 @@ export class ApplicationsRepository extends BaseRepository<
       status: true,
       submittedAt: true,
       decidedAt: true,
+      decisionById: true,
+      decisionRationale: true,
       createdAt: true,
       updatedAt: true,
       call: {
@@ -208,6 +234,16 @@ export class ApplicationsRepository extends BaseRepository<
           status: true,
         },
       },
+      decisionBy: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+          status: true,
+        },
+      },
     } as const;
   }
 
@@ -223,6 +259,8 @@ export class ApplicationsRepository extends BaseRepository<
       status: true,
       submittedAt: true,
       decidedAt: true,
+      decisionById: true,
+      decisionRationale: true,
       createdAt: true,
       updatedAt: true,
       call: {

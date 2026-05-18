@@ -23,6 +23,12 @@ export class ApplicationDetailDto {
   @ApiProperty({ required: false, nullable: true })
   decidedAt!: Date | null;
 
+  @ApiProperty({ required: false, nullable: true })
+  decisionById!: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  decisionRationale!: string | null;
+
   @ApiProperty()
   createdAt!: Date;
 

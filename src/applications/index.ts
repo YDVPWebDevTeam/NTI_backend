@@ -5,6 +5,7 @@ export { ApplicationsService } from './applications.service';
 export { ApplicationSectionsService } from './application-sections.service';
 export { ApplicationsRepository } from './applications.repository';
 export { ApplicationDocumentsRepository } from './application-documents.repository';
+export { ApplicationEvaluationsRepository } from './application-evaluations.repository';
 export { ApplicationSectionsRepository } from './application-sections.repository';
 export { ProgramAMentorshipRepository } from './program-a-mentorship.repository';
 export { AdminApplicationsController } from './admin-applications.controller';
@@ -20,11 +21,14 @@ export {
   AssignMentorApi,
   AttachApplicationDocumentApi,
   CompleteApplicationApi,
+  CreateApplicationDecisionApi,
+  CreateApplicationEvaluationApi,
   CreateMentorshipNoteApi,
   CreateApplicationApi,
   CreateNeedsInfoItemApi,
   GetApplicationApi,
   GetApplicationDocumentCompletenessApi,
+  GetEligibilitySignalsApi,
   GetMentorshipNotesApi,
   GetNeedsInfoThreadApi,
   GetPublicActiveCallsApi,
@@ -32,6 +36,7 @@ export {
   GetPublicCallsApi,
   GetRequiredDocumentsApi,
   GetSectionHistoryApi,
+  ListApplicationEvaluationsApi,
   ListApplicationSectionsApi,
   ReplyToNeedsInfoItemApi,
   RejectApplicationApi,
@@ -78,3 +83,6 @@ export { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
 export { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';
 export { OptionalApplicationTransitionNoteDto } from './dto/optional-application-transition-note.dto';
 export { ProgramAMentorshipNoteDto } from './dto/program-a-mentorship-note.dto';
+export { ApplicationEvaluationDto } from './dto/application-evaluation.dto';
+export { CreateApplicationDecisionDto } from './dto/create-application-decision.dto';
+export { CreateApplicationEvaluationDto } from './dto/create-application-evaluation.dto';

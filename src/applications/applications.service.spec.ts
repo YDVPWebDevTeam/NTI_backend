@@ -6,6 +6,10 @@ jest.mock('./application-documents.repository', () => ({
   ApplicationDocumentsRepository: class ApplicationDocumentsRepository {},
 }));
 
+jest.mock('./application-evaluations.repository', () => ({
+  ApplicationEvaluationsRepository: class ApplicationEvaluationsRepository {},
+}));
+
 jest.mock('./rules/application-rules.service', () => ({
   ApplicationRulesService: class ApplicationRulesService {},
 }));
@@ -53,6 +57,7 @@ import {
   UserRole,
 } from '../../generated/prisma/enums';
 import { ApplicationsService } from './applications.service';
+import { ApplicationDecision } from './dto/create-application-decision.dto';
 
 describe('ApplicationsService', () => {
   let service: ApplicationsService;
@@ -65,11 +70,16 @@ describe('ApplicationsService', () => {
     transaction: jest.Mock;
     assignMentor: jest.Mock;
     updateStatusIfCurrent: jest.Mock;
+    updateDecisionIfCurrent: jest.Mock;
   };
   let applicationDocumentsRepository: {
     deactivateActiveBySlot: jest.Mock;
     findLatestVersionNumberBySlot: jest.Mock;
     createVersioned: jest.Mock;
+  };
+  let applicationEvaluationsRepository: {
+    createEvaluation: jest.Mock;
+    listByApplication: jest.Mock;
   };
   let applicationRulesService: {
     validateApplicationCreationRules: jest.Mock;
@@ -153,6 +163,8 @@ describe('ApplicationsService', () => {
     status: ApplicationStatus.DRAFT,
     submittedAt: null,
     decidedAt: null,
+    decisionById: null,
+    decisionRationale: null,
     createdAt: new Date('2026-04-20T12:00:00.000Z'),
     updatedAt: new Date('2026-04-20T12:00:00.000Z'),
     call: mockCall,
@@ -171,6 +183,8 @@ describe('ApplicationsService', () => {
     status: ApplicationStatus.DRAFT,
     submittedAt: null,
     decidedAt: null,
+    decisionById: null,
+    decisionRationale: null,
     mentorUserId: null,
     mentorAssignedAt: null,
     mentorAssignedById: null,
@@ -188,6 +202,46 @@ describe('ApplicationsService', () => {
     },
   };
 
+  // A complete evaluation containing all three required criterion codes.
+  const completeEvaluation = {
+    id: 'eval-1',
+    applicationId: 'application-1',
+    evaluatorId: 'evaluator-1',
+    recommendation: 'APPROVE',
+    comment: 'Looks good',
+    createdAt: new Date('2026-05-10T10:00:00.000Z'),
+    updatedAt: new Date('2026-05-10T10:00:00.000Z'),
+    scores: [
+      {
+        id: 'score-1',
+        evaluationId: 'eval-1',
+        criterionCode: 'TECHNICAL_QUALITY',
+        score: { toString: () => '4' },
+        comment: null,
+      },
+      {
+        id: 'score-2',
+        evaluationId: 'eval-1',
+        criterionCode: 'BUSINESS_VALUE',
+        score: { toString: () => '5' },
+        comment: null,
+      },
+      {
+        id: 'score-3',
+        evaluationId: 'eval-1',
+        criterionCode: 'TEAM_CAPABILITY',
+        score: { toString: () => '4' },
+        comment: null,
+      },
+    ],
+  };
+
+  const validEvaluationScores = [
+    { criterionCode: 'TECHNICAL_QUALITY', score: 4 },
+    { criterionCode: 'BUSINESS_VALUE', score: 5 },
+    { criterionCode: 'TEAM_CAPABILITY', score: 4 },
+  ];
+
   beforeEach(() => {
     applicationsRepository = {
       findActiveByTeamAndCall: jest.fn(),
@@ -197,6 +251,7 @@ describe('ApplicationsService', () => {
       submitDraft: jest.fn(),
       assignMentor: jest.fn(),
       updateStatusIfCurrent: jest.fn(),
+      updateDecisionIfCurrent: jest.fn(),
       transaction: jest.fn((fn: (db: never) => Promise<unknown>) =>
         fn({ tx: 'db-client' } as never),
       ),
@@ -208,6 +263,11 @@ describe('ApplicationsService', () => {
         .fn()
         .mockResolvedValue({ version: 1 }),
       createVersioned: jest.fn(),
+    };
+
+    applicationEvaluationsRepository = {
+      createEvaluation: jest.fn(),
+      listByApplication: jest.fn(),
     };
 
     applicationRulesService = {
@@ -264,6 +324,7 @@ describe('ApplicationsService', () => {
 
     service = new ApplicationsService(
       applicationsRepository as never,
+      applicationEvaluationsRepository as never,
       applicationDocumentsRepository as never,
       applicationRulesService as never,
       callsRepository as never,
@@ -1522,5 +1583,374 @@ describe('ApplicationsService', () => {
         role: UserRole.ADMIN,
       } as never),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  describe('application evaluations', () => {
+    it('creates evaluation for evaluator-side user in FORMALLY_VERIFIED status', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+        ...workflowApplication,
+        status: ApplicationStatus.FORMALLY_VERIFIED,
+      });
+      applicationEvaluationsRepository.createEvaluation.mockResolvedValue(
+        completeEvaluation,
+      );
+
+      const result = await service.createEvaluation(
+        'application-1',
+        {
+          id: 'evaluator-1',
+          email: 'evaluator@example.com',
+          role: UserRole.EVALUATOR,
+        } as never,
+        {
+          recommendation: 'APPROVE' as never,
+          comment: 'Looks good',
+          scores: validEvaluationScores,
+        },
+      );
+
+      expect(
+        applicationEvaluationsRepository.createEvaluation,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          applicationId: 'application-1',
+          evaluatorId: 'evaluator-1',
+          scores: validEvaluationScores,
+        }),
+        { tx: 'db-client' },
+      );
+      expect(result.id).toBe('eval-1');
+      expect(result.evaluatorId).toBe('evaluator-1');
+      expect(result.scores).toHaveLength(3);
+    });
+
+    it('blocks evaluation for student', async () => {
+      await expect(
+        service.createEvaluation(
+          'application-1',
+          {
+            id: 'user-1',
+            email: 'lead@example.com',
+            role: UserRole.STUDENT,
+          } as never,
+          {
+            recommendation: 'APPROVE' as never,
+            comment: 'Should not work',
+            scores: validEvaluationScores,
+          },
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(
+        applicationEvaluationsRepository.createEvaluation,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('blocks evaluation in DRAFT status', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+        ...workflowApplication,
+        status: ApplicationStatus.DRAFT,
+      });
+
+      await expect(
+        service.createEvaluation(
+          'application-1',
+          {
+            id: 'evaluator-1',
+            email: 'evaluator@example.com',
+            role: UserRole.EVALUATOR,
+          } as never,
+          {
+            recommendation: 'APPROVE' as never,
+            comment: 'Too early',
+            scores: validEvaluationScores,
+          },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('blocks evaluation with missing criteria', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+        ...workflowApplication,
+        status: ApplicationStatus.FORMALLY_VERIFIED,
+      });
+
+      await expect(
+        service.createEvaluation(
+          'application-1',
+          {
+            id: 'evaluator-1',
+            email: 'evaluator@example.com',
+            role: UserRole.EVALUATOR,
+          } as never,
+          {
+            recommendation: 'APPROVE' as never,
+            comment: 'Incomplete scores',
+            scores: [{ criterionCode: 'TECHNICAL_QUALITY', score: 4 }],
+          },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(
+        applicationEvaluationsRepository.createEvaluation,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('blocks duplicate evaluation from same evaluator', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+        ...workflowApplication,
+        status: ApplicationStatus.EVALUATING,
+      });
+      applicationEvaluationsRepository.createEvaluation.mockRejectedValue({
+        code: 'P2002',
+      });
+
+      await expect(
+        service.createEvaluation(
+          'application-1',
+          {
+            id: 'evaluator-1',
+            email: 'evaluator@example.com',
+            role: UserRole.EVALUATOR,
+          } as never,
+          {
+            recommendation: 'APPROVE' as never,
+            comment: 'Duplicate',
+            scores: validEvaluationScores,
+          },
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('application decisions', () => {
+    it('approves application when complete evaluation exists', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+        ...workflowApplication,
+        status: ApplicationStatus.EVALUATING,
+        decidedAt: null,
+      });
+      applicationEvaluationsRepository.listByApplication.mockResolvedValue([
+        completeEvaluation,
+      ]);
+      applicationsRepository.updateDecisionIfCurrent.mockResolvedValue({
+        count: 1,
+      });
+      applicationsRepository.findByIdWithRelations.mockResolvedValue({
+        ...detailApplication,
+        status: ApplicationStatus.APPROVED,
+        decidedAt: new Date('2026-05-15T10:00:00.000Z'),
+        decisionById: 'evaluator-1',
+        decisionRationale: 'Meets all criteria',
+      });
+
+      const result = await service.createDecision(
+        'application-1',
+        {
+          id: 'evaluator-1',
+          email: 'evaluator@example.com',
+          role: UserRole.EVALUATOR,
+        } as never,
+        {
+          decision: ApplicationDecision.APPROVED,
+          rationale: 'Meets all criteria',
+        },
+      );
+
+      expect(
+        applicationsRepository.updateDecisionIfCurrent,
+      ).toHaveBeenCalledWith(
+        'application-1',
+        ApplicationStatus.EVALUATING,
+        ApplicationStatus.APPROVED,
+        'evaluator-1',
+        'Meets all criteria',
+        expect.any(Date),
+        { tx: 'db-client' },
+      );
+      expect(result.status).toBe(ApplicationStatus.APPROVED);
+      expect(result.decisionRationale).toBe('Meets all criteria');
+    });
+
+    it('rejects application when complete evaluation exists', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+        ...workflowApplication,
+        status: ApplicationStatus.EVALUATING,
+        decidedAt: null,
+      });
+      applicationEvaluationsRepository.listByApplication.mockResolvedValue([
+        completeEvaluation,
+      ]);
+      applicationsRepository.updateDecisionIfCurrent.mockResolvedValue({
+        count: 1,
+      });
+      applicationsRepository.findByIdWithRelations.mockResolvedValue({
+        ...detailApplication,
+        status: ApplicationStatus.REJECTED,
+        decidedAt: new Date('2026-05-15T10:30:00.000Z'),
+        decisionById: 'evaluator-1',
+        decisionRationale: 'Does not meet requirements',
+      });
+
+      const result = await service.createDecision(
+        'application-1',
+        {
+          id: 'evaluator-1',
+          email: 'evaluator@example.com',
+          role: UserRole.EVALUATOR,
+        } as never,
+        {
+          decision: ApplicationDecision.REJECTED,
+          rationale: 'Does not meet requirements',
+        },
+      );
+
+      expect(
+        applicationsRepository.updateDecisionIfCurrent,
+      ).toHaveBeenCalledWith(
+        'application-1',
+        ApplicationStatus.EVALUATING,
+        ApplicationStatus.REJECTED,
+        'evaluator-1',
+        'Does not meet requirements',
+        expect.any(Date),
+        { tx: 'db-client' },
+      );
+      expect(result.status).toBe(ApplicationStatus.REJECTED);
+    });
+
+    it('blocks decision without evaluations', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+        ...workflowApplication,
+        status: ApplicationStatus.EVALUATING,
+        decidedAt: null,
+      });
+      applicationEvaluationsRepository.listByApplication.mockResolvedValue([]);
+
+      await expect(
+        service.createDecision(
+          'application-1',
+          {
+            id: 'evaluator-1',
+            email: 'evaluator@example.com',
+            role: UserRole.EVALUATOR,
+          } as never,
+          { decision: ApplicationDecision.APPROVED, rationale: 'Looks good' },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(
+        applicationsRepository.updateDecisionIfCurrent,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('blocks second decision', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+        ...workflowApplication,
+        status: ApplicationStatus.APPROVED,
+        decidedAt: new Date('2026-05-14T09:00:00.000Z'),
+      });
+
+      await expect(
+        service.createDecision(
+          'application-1',
+          {
+            id: 'evaluator-1',
+            email: 'evaluator@example.com',
+            role: UserRole.EVALUATOR,
+          } as never,
+          {
+            decision: ApplicationDecision.REJECTED,
+            rationale: 'Changed my mind',
+          },
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(
+        applicationsRepository.updateDecisionIfCurrent,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('creates status event for decision', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+        ...workflowApplication,
+        status: ApplicationStatus.EVALUATING,
+        decidedAt: null,
+      });
+      applicationEvaluationsRepository.listByApplication.mockResolvedValue([
+        completeEvaluation,
+      ]);
+      applicationsRepository.updateDecisionIfCurrent.mockResolvedValue({
+        count: 1,
+      });
+      applicationsRepository.findByIdWithRelations.mockResolvedValue({
+        ...detailApplication,
+        status: ApplicationStatus.APPROVED,
+        decidedAt: new Date('2026-05-15T11:00:00.000Z'),
+        decisionById: 'evaluator-1',
+        decisionRationale: 'All good',
+      });
+
+      await service.createDecision(
+        'application-1',
+        {
+          id: 'evaluator-1',
+          email: 'evaluator@example.com',
+          role: UserRole.EVALUATOR,
+        } as never,
+        { decision: ApplicationDecision.APPROVED, rationale: 'All good' },
+      );
+
+      expect(needsInfoRepository.createStatusEvent).toHaveBeenCalledWith(
+        {
+          applicationId: 'application-1',
+          fromStatus: ApplicationStatus.EVALUATING,
+          toStatus: ApplicationStatus.APPROVED,
+          changedById: 'evaluator-1',
+          reason: 'All good',
+        },
+        { tx: 'db-client' },
+      );
+    });
+
+    it('returns decision metadata in application detail', async () => {
+      const decidedAt = new Date('2026-05-15T12:00:00.000Z');
+
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+        ...workflowApplication,
+        status: ApplicationStatus.FORMALLY_VERIFIED,
+        decidedAt: null,
+      });
+      applicationEvaluationsRepository.listByApplication.mockResolvedValue([
+        completeEvaluation,
+      ]);
+      applicationsRepository.updateDecisionIfCurrent.mockResolvedValue({
+        count: 1,
+      });
+      applicationsRepository.findByIdWithRelations.mockResolvedValue({
+        ...detailApplication,
+        status: ApplicationStatus.REJECTED,
+        decidedAt,
+        decisionById: 'evaluator-1',
+        decisionRationale: 'Insufficient team capability',
+      });
+
+      const result = await service.createDecision(
+        'application-1',
+        {
+          id: 'evaluator-1',
+          email: 'evaluator@example.com',
+          role: UserRole.EVALUATOR,
+        } as never,
+        {
+          decision: ApplicationDecision.REJECTED,
+          rationale: 'Insufficient team capability',
+        },
+      );
+
+      expect(result.decidedAt).toEqual(decidedAt);
+      expect(result.decisionById).toBe('evaluator-1');
+      expect(result.decisionRationale).toBe('Insufficient team capability');
+    });
   });
 });

@@ -963,6 +963,35 @@ describe('ProgramBBacklogService', () => {
         ),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
+
+    it('returns 404 when backlog item does not exist (company owner path)', async () => {
+      organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+      backlogRepository.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.assignProductOwner(
+          'nonexistent-item',
+          { productOwnerUserId: 'po-user-1' },
+          owner as never,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws ConflictException on race condition when item is archived during transaction', async () => {
+      organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+      backlogRepository.findUnique.mockResolvedValue(draftItem);
+      userRepository.findUnique.mockResolvedValue(targetUser);
+      userRepository.findActiveOrganizationMember.mockResolvedValue(targetUser);
+      backlogRepository.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.assignProductOwner(
+          'item-1',
+          { productOwnerUserId: 'po-user-1' },
+          owner as never,
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
   });
 
   describe('assertProductOwnerOrAdmin', () => {
@@ -970,7 +999,7 @@ describe('ProgramBBacklogService', () => {
       expect(() =>
         service.assertProductOwnerOrAdmin(
           { ...owner, id: 'employee-1' } as never,
-          draftItem,
+          { ...draftItem, productOwnerUserId: 'employee-1' },
         ),
       ).not.toThrow();
     });

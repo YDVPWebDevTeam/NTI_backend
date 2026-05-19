@@ -219,12 +219,13 @@ export class ProgramBBacklogService {
       );
     }
 
-    await this.ensureAssignableProductOwner(
-      item.organizationId,
-      dto.productOwnerUserId,
-    );
-
     return this.backlogRepository.transaction(async (db) => {
+      await this.ensureAssignableProductOwner(
+        item.organizationId,
+        dto.productOwnerUserId,
+        db,
+      );
+
       const result = await this.backlogRepository.updateMany(
         {
           id: item.id,

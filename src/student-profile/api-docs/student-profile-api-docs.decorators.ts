@@ -14,6 +14,7 @@ import {
   SpecializationLookupDto,
   UniversityLookupDto,
 } from '../academic-structure/dto/academic-structure.dto';
+import { CompleteStudentProfileDto } from '../dto/complete-student-profile.dto';
 import { GetMyStudentProfileResponseDto } from '../dto/student-profile.dto';
 import { UpdateAcademicInformationDto } from '../dto/update-academic-information.dto';
 import { UpdateProfessionalSkillsDto } from '../dto/update-professional-skills.dto';
@@ -105,6 +106,7 @@ export const CompleteProfileApi = () =>
     summary: 'Mark profile as complete',
     description:
       'Marks profile as complete when required academic and professional sections are filled.',
+    body: CompleteStudentProfileDto,
     successResponse: {
       status: 200,
       type: GetMyStudentProfileResponseDto,

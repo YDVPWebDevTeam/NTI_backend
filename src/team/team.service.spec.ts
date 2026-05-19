@@ -262,7 +262,7 @@ describe('TeamService', () => {
         teamName: 'Alpha Team',
         token: 'token-1',
       },
-      { jobId: 'team-invitation:invite-1' },
+      { jobId: 'team-invitation-invite-1' },
     );
     expect(result).toMatchObject({
       id: 'team-1',
@@ -286,6 +286,67 @@ describe('TeamService', () => {
       id: 'team-1',
       leaderId: 'user-1',
     });
+  });
+
+  it('renames an existing personal team when a custom name is provided', async () => {
+    teamRepository.findActiveByUserId.mockResolvedValueOnce([
+      {
+        id: 'team-1',
+        name: 'Test Student Team',
+        leaderId: 'user-1',
+        updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+        lockedAt: null,
+        archivedAt: null,
+        members: [
+          {
+            userId: 'user-1',
+            teamId: 'team-1',
+            user: {
+              id: 'user-1',
+              firstName: 'Team',
+              lastName: 'Leader',
+              email: 'leader@example.com',
+              role: 'STUDENT',
+              status: 'ACTIVE',
+              isEmailConfirmed: true,
+              isAdminConfirmed: false,
+              organizationId: null,
+              createdAt: new Date('2026-04-20T10:00:00.000Z'),
+              updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+            },
+          },
+        ],
+        leader: {
+          id: 'user-1',
+          firstName: 'Team',
+          lastName: 'Leader',
+          email: 'leader@example.com',
+          role: 'STUDENT',
+          status: 'ACTIVE',
+          isEmailConfirmed: true,
+          isAdminConfirmed: false,
+          organizationId: null,
+          createdAt: new Date('2026-04-20T10:00:00.000Z'),
+          updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+        },
+      },
+    ]);
+
+    await service.ensurePersonalTeamForUser(
+      {
+        id: 'user-1',
+        email: 'a@example.com',
+        role: 'STUDENT',
+        status: 'ACTIVE',
+      } as AuthenticatedUserContext,
+      'Launch Crew',
+    );
+
+    expect(teamRepository.update).toHaveBeenCalledWith(
+      { id: 'team-1' },
+      { name: 'Launch Crew' },
+      transactionClient,
+    );
   });
 
   it('throws when multiple active teams are associated with the user', async () => {
@@ -368,7 +429,7 @@ describe('TeamService', () => {
         teamName: 'Alpha Team',
         token: 'token-1',
       },
-      { jobId: 'team-invitation:invite-1' },
+      { jobId: 'team-invitation-invite-1' },
     );
     expect(result).toEqual({
       createdCount: 2,
@@ -444,7 +505,7 @@ describe('TeamService', () => {
 
     expect(queueService.removeEmailJob).toHaveBeenCalledTimes(1);
     expect(queueService.removeEmailJob).toHaveBeenCalledWith(
-      'team-invitation:invite-1',
+      'team-invitation-invite-1',
     );
     expect(invitationService.revokeInvitations).toHaveBeenCalledWith([
       'invite-1',

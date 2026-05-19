@@ -368,7 +368,7 @@ describe('InvitationService', () => {
         token: 'token-1',
       },
       {
-        jobId: 'team-invitation:invite-1:token-1',
+        jobId: 'team-invitation-invite-1-token-1',
       },
     );
     expect(result.expiresAt).toEqual(expiresAt);
@@ -426,7 +426,7 @@ describe('InvitationService', () => {
         teamName: 'Alpha Team',
         token: 'token-2',
       },
-      { jobId: 'team-invitation:invite-1:token-2' },
+      { jobId: 'team-invitation-invite-1-token-2' },
     );
     expect(result.token).toBe('token-2');
   });

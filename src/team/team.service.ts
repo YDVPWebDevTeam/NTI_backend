@@ -107,7 +107,17 @@ export class TeamService {
         );
 
         if (existingTeams.length === 1) {
-          return existingTeams[0];
+          const [existingTeam] = existingTeams;
+
+          if (this.shouldRenamePersonalTeam(existingTeam, user.id, teamName)) {
+            return this.teamRepository.update(
+              { id: existingTeam.id },
+              { name: teamName },
+              db,
+            );
+          }
+
+          return existingTeam;
         }
 
         if (existingTeams.length > 1) {
@@ -267,7 +277,7 @@ export class TeamService {
 
     try {
       for (const invitation of invitations) {
-        const jobId = `team-invitation:${invitation.id}`;
+        const jobId = `team-invitation-${invitation.id}`;
 
         await this.queueService.addEmail(
           EMAIL_JOBS.TEAM_INVITATION,
@@ -503,6 +513,19 @@ export class TeamService {
     if (team.leaderId !== actorId) {
       throw new ForbiddenException();
     }
+  }
+
+  private shouldRenamePersonalTeam(
+    team: TeamWithRelations,
+    userId: string,
+    requestedName: string,
+  ): boolean {
+    return (
+      team.name !== requestedName &&
+      team.leaderId === userId &&
+      team.members.length === 1 &&
+      team.members[0]?.userId === userId
+    );
   }
 
   private ensureTeamIsUnlocked(team: Team): void {

@@ -82,6 +82,17 @@ export class ProfessionalProjectInputDto {
 }
 
 export class UpdateProfessionalSkillsDto {
+  @ApiPropertyOptional({
+    example: 'Alpha Team',
+    description:
+      'Optional personal team name to use when the standalone student team is first created.',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  teamName?: string;
+
   @ApiProperty({
     type: [String],
     enum: StudentFocusArea,

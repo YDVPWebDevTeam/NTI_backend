@@ -8,6 +8,7 @@ import { UploadStatus } from '../../generated/prisma/enums';
 import { EligibilitySignalsService } from '../applications/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { TeamService } from '../team/team.service';
+import { CompleteStudentProfileDto } from './dto/complete-student-profile.dto';
 import { GetMyStudentProfileResponseDto } from './dto/student-profile.dto';
 import { UpdateAcademicInformationDto } from './dto/update-academic-information.dto';
 import { UpdateProfessionalSkillsDto } from './dto/update-professional-skills.dto';
@@ -98,11 +99,13 @@ export class StudentProfileService {
       );
     }
 
+    const { teamName, ...profileUpdate } = dto;
+
     const profile = await this.repository.transaction(async (db) => {
       try {
         return await this.repository.replaceProfessionalSkills(
           authUser.id,
-          dto,
+          profileUpdate,
           db,
         );
       } catch (error) {
@@ -116,13 +119,14 @@ export class StudentProfileService {
       }
     });
 
-    await this.ensureStandaloneStudentTeam(authUser, profile);
+    await this.ensureStandaloneStudentTeam(authUser, profile, teamName);
 
     return this.toMyProfileResponse(profile);
   }
 
   async completeProfile(
     authUser: AuthenticatedUserContext,
+    dto: CompleteStudentProfileDto,
   ): Promise<GetMyStudentProfileResponseDto> {
     const profile = await this.repository.findByUserIdWithRelations(
       authUser.id,
@@ -141,7 +145,11 @@ export class StudentProfileService {
 
     const completedProfile = await this.repository.markCompleted(authUser.id);
 
-    await this.ensureStandaloneStudentTeam(authUser, completedProfile);
+    await this.ensureStandaloneStudentTeam(
+      authUser,
+      completedProfile,
+      dto.teamName,
+    );
 
     return this.toMyProfileResponse(completedProfile);
   }
@@ -149,6 +157,7 @@ export class StudentProfileService {
   private async ensureStandaloneStudentTeam(
     authUser: AuthenticatedUserContext,
     profile: StudentProfileWithRelations,
+    requestedTeamName?: string,
   ): Promise<void> {
     if (
       !this.isAcademicCompleted(profile) ||
@@ -159,7 +168,23 @@ export class StudentProfileService {
 
     await this.teamService.ensurePersonalTeamForUser(
       authUser,
-      this.buildDefaultTeamName(profile.user.firstName, profile.user.lastName),
+      this.resolvePersonalTeamName(profile, requestedTeamName),
+    );
+  }
+
+  private resolvePersonalTeamName(
+    profile: StudentProfileWithRelations,
+    requestedTeamName?: string,
+  ): string {
+    const trimmedTeamName = requestedTeamName?.trim();
+
+    if (trimmedTeamName) {
+      return trimmedTeamName;
+    }
+
+    return this.buildDefaultTeamName(
+      profile.user.firstName,
+      profile.user.lastName,
     );
   }
 

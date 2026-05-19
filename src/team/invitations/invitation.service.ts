@@ -220,7 +220,7 @@ export class InvitationService {
       previousToken,
       db,
     );
-    const jobId = `team-invitation:${updated.id}:${updated.token}`;
+    const jobId = `team-invitation-${updated.id}-${updated.token}`;
 
     try {
       await this.queueService.addEmail(

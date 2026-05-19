@@ -267,7 +267,7 @@ export class TeamService {
 
     try {
       for (const invitation of invitations) {
-        const jobId = `team-invitation:${invitation.id}`;
+        const jobId = `team-invitation-${invitation.id}`;
 
         await this.queueService.addEmail(
           EMAIL_JOBS.TEAM_INVITATION,

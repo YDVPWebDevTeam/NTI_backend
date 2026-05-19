@@ -262,7 +262,7 @@ describe('TeamService', () => {
         teamName: 'Alpha Team',
         token: 'token-1',
       },
-      { jobId: 'team-invitation:invite-1' },
+      { jobId: 'team-invitation-invite-1' },
     );
     expect(result).toMatchObject({
       id: 'team-1',
@@ -368,7 +368,7 @@ describe('TeamService', () => {
         teamName: 'Alpha Team',
         token: 'token-1',
       },
-      { jobId: 'team-invitation:invite-1' },
+      { jobId: 'team-invitation-invite-1' },
     );
     expect(result).toEqual({
       createdCount: 2,
@@ -444,7 +444,7 @@ describe('TeamService', () => {
 
     expect(queueService.removeEmailJob).toHaveBeenCalledTimes(1);
     expect(queueService.removeEmailJob).toHaveBeenCalledWith(
-      'team-invitation:invite-1',
+      'team-invitation-invite-1',
     );
     expect(invitationService.revokeInvitations).toHaveBeenCalledWith([
       'invite-1',

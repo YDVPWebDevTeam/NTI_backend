@@ -44,6 +44,8 @@ jest.mock(
     UserRole: {
       COMPANY_OWNER: 'COMPANY_OWNER',
       COMPANY_EMPLOYEE: 'COMPANY_EMPLOYEE',
+      ADMIN: 'ADMIN',
+      SUPER_ADMIN: 'SUPER_ADMIN',
     },
   }),
   { virtual: true },
@@ -109,6 +111,7 @@ describe('ProgramBBacklogService', () => {
   let userRepository: {
     findOrganizationMember: jest.Mock;
     findActiveOrganizationMember: jest.Mock;
+    findUnique: jest.Mock;
   };
 
   let teamApplicationRepository: {
@@ -138,6 +141,22 @@ describe('ProgramBBacklogService', () => {
     role: UserRole.COMPANY_EMPLOYEE,
     status: 'ACTIVE',
     organizationId: 'org-1',
+  } as const;
+
+  const admin = {
+    id: 'admin-1',
+    email: 'admin@example.com',
+    role: UserRole.ADMIN,
+    status: 'ACTIVE',
+    organizationId: null,
+  } as const;
+
+  const superAdmin = {
+    id: 'super-1',
+    email: 'super@example.com',
+    role: UserRole.SUPER_ADMIN,
+    status: 'ACTIVE',
+    organizationId: null,
   } as const;
 
   const activeOrganization = {
@@ -201,6 +220,7 @@ describe('ProgramBBacklogService', () => {
     userRepository = {
       findOrganizationMember: jest.fn(),
       findActiveOrganizationMember: jest.fn(),
+      findUnique: jest.fn(),
     };
 
     teamApplicationRepository = {
@@ -768,5 +788,218 @@ describe('ProgramBBacklogService', () => {
     );
     expect(backlogRepository.update).not.toHaveBeenCalled();
     expect(result.status).toBe(BacklogItemStatus.ARCHIVED);
+  });
+
+  describe('assignProductOwner', () => {
+    const targetUser = {
+      id: 'po-user-1',
+      organizationId: 'org-1',
+      status: 'ACTIVE',
+    };
+
+    it('company owner assigns product owner on a draft item', async () => {
+      organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+      backlogRepository.findUnique
+        .mockResolvedValueOnce(draftItem)
+        .mockResolvedValueOnce({
+          ...draftItem,
+          productOwnerUserId: 'po-user-1',
+        });
+      userRepository.findUnique.mockResolvedValue(targetUser);
+      userRepository.findActiveOrganizationMember.mockResolvedValue(targetUser);
+      backlogRepository.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.assignProductOwner(
+        'item-1',
+        { productOwnerUserId: 'po-user-1' },
+        owner as never,
+      );
+
+      expect(backlogRepository.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'item-1' }),
+        { productOwnerUserId: 'po-user-1' },
+        expect.anything(),
+      );
+      expect(result.productOwnerUserId).toBe('po-user-1');
+    });
+
+    it('company owner assigns product owner on a published item', async () => {
+      organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+      backlogRepository.findUnique
+        .mockResolvedValueOnce(publishedItem)
+        .mockResolvedValueOnce({
+          ...publishedItem,
+          productOwnerUserId: 'po-user-1',
+        });
+      userRepository.findUnique.mockResolvedValue(targetUser);
+      userRepository.findActiveOrganizationMember.mockResolvedValue(targetUser);
+      backlogRepository.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.assignProductOwner(
+        'item-1',
+        { productOwnerUserId: 'po-user-1' },
+        owner as never,
+      );
+
+      expect(result.productOwnerUserId).toBe('po-user-1');
+    });
+
+    it('admin assigns product owner without organization membership check', async () => {
+      backlogRepository.findUnique
+        .mockResolvedValueOnce(draftItem)
+        .mockResolvedValueOnce({
+          ...draftItem,
+          productOwnerUserId: 'po-user-1',
+        });
+      userRepository.findUnique.mockResolvedValue(targetUser);
+      userRepository.findActiveOrganizationMember.mockResolvedValue(targetUser);
+      backlogRepository.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.assignProductOwner(
+        'item-1',
+        { productOwnerUserId: 'po-user-1' },
+        admin as never,
+      );
+
+      expect(organizationRepository.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('super admin assigns product owner without organization membership check', async () => {
+      backlogRepository.findUnique
+        .mockResolvedValueOnce(draftItem)
+        .mockResolvedValueOnce({
+          ...draftItem,
+          productOwnerUserId: 'po-user-1',
+        });
+      userRepository.findUnique.mockResolvedValue(targetUser);
+      userRepository.findActiveOrganizationMember.mockResolvedValue(targetUser);
+      backlogRepository.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.assignProductOwner(
+        'item-1',
+        { productOwnerUserId: 'po-user-1' },
+        superAdmin as never,
+      );
+
+      expect(organizationRepository.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('rejects assignment on archived backlog item with 409', async () => {
+      organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+      backlogRepository.findUnique.mockResolvedValue({
+        ...draftItem,
+        status: BacklogItemStatus.ARCHIVED,
+      });
+
+      await expect(
+        service.assignProductOwner(
+          'item-1',
+          { productOwnerUserId: 'po-user-1' },
+          owner as never,
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('returns 404 when target user does not exist', async () => {
+      organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+      backlogRepository.findUnique.mockResolvedValue(draftItem);
+      userRepository.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.assignProductOwner(
+          'item-1',
+          { productOwnerUserId: 'unknown-user' },
+          owner as never,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('rejects assignment when target user belongs to a different organization', async () => {
+      organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+      backlogRepository.findUnique.mockResolvedValue(draftItem);
+      userRepository.findUnique.mockResolvedValue({
+        id: 'other-org-user',
+        organizationId: 'org-2',
+        status: 'ACTIVE',
+      });
+      userRepository.findActiveOrganizationMember.mockResolvedValue(null);
+
+      await expect(
+        service.assignProductOwner(
+          'item-1',
+          { productOwnerUserId: 'other-org-user' },
+          owner as never,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('rejects assignment when target user is inactive', async () => {
+      organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+      backlogRepository.findUnique.mockResolvedValue(draftItem);
+      userRepository.findUnique.mockResolvedValue({
+        id: 'inactive-user',
+        organizationId: 'org-1',
+        status: UserStatus.PENDING,
+      });
+      userRepository.findActiveOrganizationMember.mockResolvedValue(null);
+
+      await expect(
+        service.assignProductOwner(
+          'item-1',
+          { productOwnerUserId: 'inactive-user' },
+          owner as never,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('returns 404 when backlog item does not exist (admin path)', async () => {
+      backlogRepository.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.assignProductOwner(
+          'nonexistent-item',
+          { productOwnerUserId: 'po-user-1' },
+          admin as never,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('assertProductOwnerOrAdmin', () => {
+    it('allows the assigned product owner to act', () => {
+      expect(() =>
+        service.assertProductOwnerOrAdmin(
+          { ...owner, id: 'employee-1' } as never,
+          draftItem,
+        ),
+      ).not.toThrow();
+    });
+
+    it('allows admin to act regardless of product owner assignment', () => {
+      expect(() =>
+        service.assertProductOwnerOrAdmin(admin as never, {
+          ...draftItem,
+          productOwnerUserId: 'someone-else',
+        }),
+      ).not.toThrow();
+    });
+
+    it('allows super admin to act regardless of product owner assignment', () => {
+      expect(() =>
+        service.assertProductOwnerOrAdmin(superAdmin as never, {
+          ...draftItem,
+          productOwnerUserId: 'someone-else',
+        }),
+      ).not.toThrow();
+    });
+
+    it('forbids non-PO non-admin users', () => {
+      expect(() =>
+        service.assertProductOwnerOrAdmin(
+          { ...owner, id: 'other-user' } as never,
+          { ...draftItem, productOwnerUserId: 'employee-1' },
+        ),
+      ).toThrow(ForbiddenException);
+    });
   });
 });

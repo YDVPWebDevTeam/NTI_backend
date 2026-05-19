@@ -22,6 +22,7 @@ import type { AuthenticatedUserContext } from '../../../common/types/auth-user-c
 import {
   AcceptProgramBBacklogCandidateApi,
   ArchiveProgramBBacklogItemApi,
+  AssignProductOwnerApi,
   CreateProgramBProjectFromCandidateApi,
   CreateProgramBBacklogItemApi,
   DeleteProgramBBacklogItemApi,
@@ -36,6 +37,7 @@ import {
   ProgramBProjectDto,
   toProgramBProjectDto,
 } from '../projects/dto/program-b-project.dto';
+import { AssignProductOwnerDto } from './dto/assign-product-owner.dto';
 import { CreateProgramBBacklogItemDto } from './dto/create-program-b-backlog-item.dto';
 import { GetProgramBBacklogQueryDto } from './dto/get-program-b-backlog-query.dto';
 import { GetProgramBBacklogResponseDto } from './dto/get-program-b-backlog-response.dto';
@@ -75,6 +77,19 @@ export class ProgramBBacklogController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ProgramBBacklogItemDto> {
     return this.backlogService.update(id, dto, user);
+  }
+
+  @AssignProductOwnerApi()
+  @Patch(':id/product-owner')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.COMPANY_OWNER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  assignProductOwner(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AssignProductOwnerDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ProgramBBacklogItemDto> {
+    return this.backlogService.assignProductOwner(id, dto, user);
   }
 
   @DeleteProgramBBacklogItemApi()

@@ -15,6 +15,7 @@ import {
   BacklogItemStatus,
   OrganizationStatus,
   ProgramBTeamApplicationStatus,
+  UserRole,
   UserStatus,
 } from '../../../../generated/prisma/enums';
 import { isPrismaUniqueConstraintError } from '../../../common/prisma/prisma-error.utils';
@@ -29,6 +30,7 @@ import { UserRepository } from '../../../user/user.repository';
 import { ProgramBProjectsRepository } from '../projects/program-b-projects.repository';
 import { ProgramBTeamApplicationRepository } from '../team-application/program-b-team-application.repository';
 import type { PrismaDbClient } from '../../../infrastructure/database';
+import { AssignProductOwnerDto } from './dto/assign-product-owner.dto';
 import { CreateProgramBBacklogItemDto } from './dto/create-program-b-backlog-item.dto';
 import { GetProgramBBacklogQueryDto } from './dto/get-program-b-backlog-query.dto';
 import { GetProgramBBacklogResponseDto } from './dto/get-program-b-backlog-response.dto';
@@ -188,6 +190,84 @@ export class ProgramBBacklogService {
 
   async findOne(id: string): Promise<BacklogItem | null> {
     return this.backlogRepository.findUnique({ id });
+  }
+
+  async assignProductOwner(
+    id: string,
+    dto: AssignProductOwnerDto,
+    user: AuthenticatedUserContext,
+  ): Promise<BacklogItem> {
+    const isAdmin =
+      user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
+
+    let item: BacklogItem;
+
+    if (isAdmin) {
+      const found = await this.backlogRepository.findUnique({ id });
+      if (!found) {
+        throw new NotFoundException('Backlog item not found');
+      }
+      item = found;
+    } else {
+      const organization = await this.ensureActiveOrganizationMember(user);
+      item = await this.getItemForOrganizationOrThrow(id, organization.id);
+    }
+
+    if (item.status === BacklogItemStatus.ARCHIVED) {
+      throw new ConflictException(
+        'Product Owner cannot be assigned to an archived backlog item',
+      );
+    }
+
+    await this.ensureAssignableProductOwner(
+      item.organizationId,
+      dto.productOwnerUserId,
+    );
+
+    return this.backlogRepository.transaction(async (db) => {
+      const result = await this.backlogRepository.updateMany(
+        {
+          id: item.id,
+          status: {
+            in: [BacklogItemStatus.DRAFT, BacklogItemStatus.PUBLISHED],
+          },
+        },
+        { productOwnerUserId: dto.productOwnerUserId },
+        db,
+      );
+
+      if (result.count === 0) {
+        throw new ConflictException(
+          'Product Owner cannot be assigned to an archived backlog item',
+        );
+      }
+
+      const updatedItem = await this.backlogRepository.findUnique(
+        { id: item.id },
+        db,
+      );
+
+      if (!updatedItem) {
+        throw new NotFoundException('Backlog item not found');
+      }
+
+      return updatedItem;
+    }, this.backlogLifecycleTransactionOptions);
+  }
+
+  assertProductOwnerOrAdmin(
+    actor: AuthenticatedUserContext,
+    item: BacklogItem,
+  ): void {
+    if (actor.role === UserRole.ADMIN || actor.role === UserRole.SUPER_ADMIN) {
+      return;
+    }
+
+    if (actor.id === item.productOwnerUserId) {
+      return;
+    }
+
+    throw new ForbiddenException();
   }
 
   async listCandidates(backlogItemId: string, user: AuthenticatedUserContext) {
@@ -731,6 +811,33 @@ export class ProgramBBacklogService {
     if (!productOwner) {
       throw new BadRequestException(
         'Product owner must be a member of the same organization',
+      );
+    }
+  }
+
+  private async ensureAssignableProductOwner(
+    organizationId: string,
+    productOwnerUserId: string,
+    db?: PrismaDbClient,
+  ): Promise<void> {
+    const user = await this.userRepository.findUnique(
+      { id: productOwnerUserId },
+      db,
+    );
+
+    if (!user) {
+      throw new NotFoundException('Target user not found');
+    }
+
+    const member = await this.userRepository.findActiveOrganizationMember(
+      organizationId,
+      productOwnerUserId,
+      db,
+    );
+
+    if (!member) {
+      throw new ForbiddenException(
+        'Target user must be an active member of the same organization',
       );
     }
   }

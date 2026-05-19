@@ -19,6 +19,7 @@ import { CreateProgramBBacklogItemDto } from '../dto/create-program-b-backlog-it
 import { GetProgramBBacklogResponseDto } from '../dto/get-program-b-backlog-response.dto';
 import { ProgramBCandidateDecisionDto } from '../dto/program-b-candidate-decision.dto';
 import { ProgramBBacklogItemDto } from '../dto/program-b-backlog-item.dto';
+import { AssignProductOwnerDto } from '../dto/assign-product-owner.dto';
 import { UpdateProgramBBacklogItemDto } from '../dto/update-program-b-backlog-item.dto';
 
 export const CreateProgramBBacklogItemApi = () =>
@@ -376,6 +377,44 @@ export const CreateProgramBProjectFromCandidateApi = () =>
       ApiConflictResponse({
         description:
           'Project handoff is allowed only for accepted candidates on non-archived backlog items with an active same-organization product owner.',
+      }),
+    ],
+  });
+
+export const AssignProductOwnerApi = () =>
+  createApiDecorator({
+    summary: 'Assign or reassign Product Owner for a backlog item',
+    description:
+      'Assigns or reassigns the Product Owner for an existing draft or published backlog item. Allowed for company owner (same organization), admin, and super admin.',
+    body: AssignProductOwnerDto,
+    successResponse: {
+      status: 200,
+      type: ProgramBBacklogItemDto,
+      description: 'Product Owner was assigned successfully.',
+    },
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ApiParam({
+        name: 'id',
+        description: 'Backlog item identifier.',
+        format: 'uuid',
+      }),
+    ],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description: 'Identifier is malformed or request body is invalid.',
+      }),
+      ApiForbiddenResponse({
+        description:
+          'Actor is not allowed to assign Product Owner, or target user is not an active member of the same organization.',
+      }),
+      ApiNotFoundResponse({
+        description: 'Backlog item or target user was not found.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Product Owner cannot be assigned to an archived backlog item.',
       }),
     ],
   });

@@ -222,6 +222,8 @@ model User {
 
   applicationsCreated             Application[]               @relation("ApplicationCreatedBy")
   assignedProgramAApplications    Application[]               @relation("ApplicationAssignedMentor")
+  applicationEvaluations          ApplicationEvaluation[]     @relation("ApplicationEvaluationEvaluator")
+  applicationDecisions            Application[]               @relation("ApplicationDecisionBy")
   programAMentorAssignmentsMade   Application[]               @relation("ApplicationMentorAssignedBy")
   updatedApplicationSections      ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
   applicationSectionHistories     ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
@@ -366,6 +368,12 @@ model Application {
   submittedAt DateTime?
   decidedAt   DateTime?
 
+  decisionById      String?
+  decisionBy        User?   @relation("ApplicationDecisionBy", fields: [decisionById], references: [id])
+  decisionRationale String?
+
+  evaluations ApplicationEvaluation[]
+
   sections ApplicationSection[]
 
   createdAt DateTime @default(now())
@@ -376,6 +384,41 @@ model Application {
   @@index([createdById, status])
   @@index([mentorUserId, status])
   @@index([mentorAssignedById])
+  @@index([decisionById])
+}
+
+model ApplicationEvaluation {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  evaluatorId String
+  evaluator   User   @relation("ApplicationEvaluationEvaluator", fields: [evaluatorId], references: [id])
+
+  recommendation EvaluationRecommendation?
+  comment        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scores ApplicationEvaluationScore[]
+
+  @@unique([applicationId, evaluatorId])
+  @@index([applicationId, createdAt])
+  @@index([applicationId, evaluatorId])
+}
+
+model ApplicationEvaluationScore {
+  id           String                @id @default(uuid())
+  evaluationId String
+  evaluation   ApplicationEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  criterionCode String
+  score         Decimal
+  comment       String?
+
+  @@unique([evaluationId, criterionCode])
+  @@index([criterionCode])
 }
 
 model ProgramAMentorshipNote {
@@ -757,6 +800,12 @@ model ApplicationStatusEvent {
 
   @@index([applicationId, createdAt])
   @@index([needsInfoItemId])
+}
+
+enum EvaluationRecommendation {
+  APPROVE
+  REJECT
+  NEEDS_INFO
 }
 
 enum InvitationStatus {

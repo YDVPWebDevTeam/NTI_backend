@@ -28,13 +28,22 @@ import { TeamRepository } from '../team/team.repository';
 import { UserRepository } from '../user/user.repository';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { ApplicationDocumentsRepository } from './application-documents.repository';
+import {
+  ApplicationEvaluationsRepository,
+  ApplicationEvaluationWithScores,
+} from './application-evaluations.repository';
 import { ApplicationRulesService } from './rules/application-rules.service';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationDocumentDto } from './dto/application-document.dto';
+import { ApplicationEvaluationDto } from './dto/application-evaluation.dto';
 import { ApplicationStatusEventDto } from './dto/application-status-event.dto';
 import { AssignMentorDto } from './dto/assign-mentor.dto';
 import { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import {
+  ApplicationDecision,
+  CreateApplicationDecisionDto,
+} from './dto/create-application-decision.dto';
 import { CreateMentorshipNoteDto } from './dto/create-mentorship-note.dto';
 import { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
 import { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
@@ -63,6 +72,7 @@ import {
   ProgramAMentorshipNoteWithAuthor,
   ProgramAMentorshipRepository,
 } from './program-a-mentorship.repository';
+import { CreateApplicationEvaluationDto } from './dto/create-application-evaluation.dto';
 
 type RequiredDocumentSlot = {
   documentType: DocumentType;
@@ -87,6 +97,12 @@ export class ApplicationsService {
       ApplicationStatus.COMPLETED,
     ];
 
+  private readonly requiredEvaluationCriterionCodes = [
+    'TECHNICAL_QUALITY',
+    'BUSINESS_VALUE',
+    'TEAM_CAPABILITY',
+  ] as const;
+
   private readonly applicationDocumentAttachTransactionOptions = {
     isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
   } as const;
@@ -97,6 +113,7 @@ export class ApplicationsService {
 
   constructor(
     private readonly applicationsRepository: ApplicationsRepository,
+    private readonly applicationEvaluationsRepository: ApplicationEvaluationsRepository,
     private readonly applicationDocumentsRepository: ApplicationDocumentsRepository,
     private readonly applicationRulesService: ApplicationRulesService,
     private readonly callsRepository: CallsRepository,
@@ -343,6 +360,180 @@ export class ApplicationsService {
       applicationId,
       signals,
     };
+  }
+
+  async createEvaluation(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    dto: CreateApplicationEvaluationDto,
+  ): Promise<ApplicationEvaluationDto> {
+    if (!this.isReviewerSideUser(user)) {
+      throw new ForbiddenException(
+        'Only reviewer-side users can create application evaluations',
+      );
+    }
+
+    return this.applicationsRepository.transaction(async (db) => {
+      const application = await this.loadWorkflowApplicationOrThrow(
+        applicationId,
+        db,
+      );
+
+      this.ensureProgramAApplicationLifecycle(application);
+      this.ensureApplicationCanBeEvaluated(application.status);
+      this.validateEvaluationScores(dto.scores);
+
+      try {
+        const evaluation =
+          await this.applicationEvaluationsRepository.createEvaluation(
+            {
+              applicationId: application.id,
+              evaluatorId: user.id,
+              recommendation: dto.recommendation,
+              comment: dto.comment,
+              scores: dto.scores,
+            },
+            db,
+          );
+
+        return this.toApplicationEvaluationDto(evaluation);
+      } catch (error) {
+        if (this.isUniqueConstraintError(error)) {
+          throw new ConflictException(
+            'Evaluator has already submitted an evaluation for this application',
+          );
+        }
+
+        throw error;
+      }
+    });
+  }
+
+  async listEvaluations(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ApplicationEvaluationDto[]> {
+    if (!this.isReviewerSideUser(user)) {
+      throw new ForbiddenException(
+        'Only reviewer-side users can view application evaluations',
+      );
+    }
+
+    const application =
+      await this.loadWorkflowApplicationOrThrow(applicationId);
+
+    this.ensureProgramAApplicationLifecycle(application);
+
+    const evaluations =
+      await this.applicationEvaluationsRepository.listByApplication(
+        application.id,
+      );
+
+    return evaluations.map((evaluation) =>
+      this.toApplicationEvaluationDto(evaluation),
+    );
+  }
+
+  async createDecision(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    dto: CreateApplicationDecisionDto,
+  ): Promise<ApplicationDetailDto> {
+    if (!this.isReviewerSideUser(user)) {
+      throw new ForbiddenException(
+        'Only reviewer-side users can make application decisions',
+      );
+    }
+
+    const normalizedRationale = dto.rationale.trim();
+
+    if (!normalizedRationale) {
+      throw new BadRequestException('Decision rationale is required');
+    }
+
+    const targetStatus =
+      dto.decision === ApplicationDecision.APPROVED
+        ? ApplicationStatus.APPROVED
+        : ApplicationStatus.REJECTED;
+
+    const updatedApplication = await this.applicationsRepository.transaction(
+      async (db) => {
+        const application = await this.loadWorkflowApplicationOrThrow(
+          applicationId,
+          db,
+        );
+
+        this.ensureProgramAApplicationLifecycle(application);
+
+        if (application.decidedAt) {
+          throw new ConflictException('Application is already decided');
+        }
+
+        this.ensureApplicationCanBeEvaluated(application.status);
+
+        const evaluations =
+          await this.applicationEvaluationsRepository.listByApplication(
+            application.id,
+            db,
+          );
+
+        this.ensureEvaluationCompleteness(evaluations);
+
+        const decidedAt = new Date();
+
+        const updated =
+          await this.applicationsRepository.updateDecisionIfCurrent(
+            application.id,
+            application.status,
+            targetStatus,
+            user.id,
+            normalizedRationale,
+            decidedAt,
+            db,
+          );
+
+        if (updated.count !== 1) {
+          throw new ConflictException(
+            'Application decision was changed concurrently. Please retry.',
+          );
+        }
+
+        await this.needsInfoRepository.createStatusEvent(
+          {
+            applicationId: application.id,
+            fromStatus: application.status,
+            toStatus: targetStatus,
+            changedById: user.id,
+            reason: normalizedRationale,
+          },
+          db,
+        );
+
+        const refreshed =
+          await this.applicationsRepository.findByIdWithRelations(
+            application.id,
+            db,
+          );
+
+        if (!refreshed) {
+          throw new NotFoundException('Application not found');
+        }
+
+        return refreshed;
+      },
+      this.needsInfoTransactionOptions,
+    );
+
+    if (updatedApplication.call.type === ProgramType.PROGRAM_A) {
+      await this.sendProgramAApplicationEmail(
+        updatedApplication,
+        targetStatus === ApplicationStatus.APPROVED
+          ? EMAIL_JOBS.APPLICATION_APPROVED
+          : EMAIL_JOBS.APPLICATION_REJECTED,
+      );
+    }
+
+    return this.toDetailDto(updatedApplication);
   }
 
   async submit(
@@ -921,6 +1112,75 @@ export class ApplicationsService {
       },
       reason,
     );
+  }
+
+  private ensureApplicationCanBeEvaluated(status: ApplicationStatus): void {
+    const allowedStatuses: ApplicationStatus[] = [
+      ApplicationStatus.FORMALLY_VERIFIED,
+      ApplicationStatus.EVALUATING,
+    ];
+
+    if (!allowedStatuses.includes(status)) {
+      throw new BadRequestException(
+        `Evaluation workflow is not allowed for application status ${status}`,
+      );
+    }
+  }
+
+  private validateEvaluationScores(
+    scores: CreateApplicationEvaluationDto['scores'],
+  ): void {
+    const requiredCodes = [...this.requiredEvaluationCriterionCodes];
+    const submittedCodes = scores.map((score) => score.criterionCode);
+    const uniqueCodes = new Set(submittedCodes);
+
+    if (uniqueCodes.size !== submittedCodes.length) {
+      throw new BadRequestException('Duplicate evaluation criterion codes');
+    }
+
+    const missingCodes = requiredCodes.filter((code) => !uniqueCodes.has(code));
+
+    if (missingCodes.length > 0) {
+      throw new BadRequestException(
+        `Missing required evaluation criteria: ${missingCodes.join(', ')}`,
+      );
+    }
+
+    const unknownCodes = submittedCodes.filter(
+      (code) => !(requiredCodes as readonly string[]).includes(code),
+    );
+
+    if (unknownCodes.length > 0) {
+      throw new BadRequestException(
+        `Unknown evaluation criteria: ${unknownCodes.join(', ')}`,
+      );
+    }
+  }
+
+  private ensureEvaluationCompleteness(
+    evaluations: ApplicationEvaluationWithScores[],
+  ): void {
+    if (evaluations.length === 0) {
+      throw new BadRequestException(
+        'At least one complete evaluation is required before final decision',
+      );
+    }
+
+    const requiredCodes = [...this.requiredEvaluationCriterionCodes];
+
+    const hasCompleteEvaluation = evaluations.some((evaluation) => {
+      const scoreCodes = new Set(
+        evaluation.scores.map((score) => score.criterionCode),
+      );
+
+      return requiredCodes.every((code) => scoreCodes.has(code));
+    });
+
+    if (!hasCompleteEvaluation) {
+      throw new BadRequestException(
+        'At least one evaluation must contain all required criteria before final decision',
+      );
+    }
   }
 
   private async loadWorkflowApplicationOrThrow(
@@ -1562,6 +1822,8 @@ export class ApplicationsService {
       status: application.status,
       submittedAt: application.submittedAt,
       decidedAt: application.decidedAt,
+      decisionById: application.decisionById,
+      decisionRationale: application.decisionRationale,
       createdAt: application.createdAt,
       updatedAt: application.updatedAt,
     };
@@ -1601,6 +1863,27 @@ export class ApplicationsService {
       uploadStatus: document.uploadedFile.status,
       uploadedFileOwnerId: document.uploadedFile.ownerId,
       createdAt: document.createdAt,
+    };
+  }
+
+  private toApplicationEvaluationDto(
+    evaluation: ApplicationEvaluationWithScores,
+  ): ApplicationEvaluationDto {
+    return {
+      id: evaluation.id,
+      applicationId: evaluation.applicationId,
+      evaluatorId: evaluation.evaluatorId,
+      recommendation: evaluation.recommendation,
+      comment: evaluation.comment,
+      scores: evaluation.scores.map((score) => ({
+        id: score.id,
+        evaluationId: score.evaluationId,
+        criterionCode: score.criterionCode,
+        score: score.score.toString(),
+        comment: score.comment,
+      })),
+      createdAt: evaluation.createdAt,
+      updatedAt: evaluation.updatedAt,
     };
   }
 

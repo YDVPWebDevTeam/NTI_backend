@@ -16,12 +16,16 @@ import { ApplicationLifecycleTransitionDto } from '../dto/application-lifecycle-
 import { AssignMentorDto } from '../dto/assign-mentor.dto';
 import { ApplicationDetailDto } from '../dto/application-detail.dto';
 import { ApplicationDocumentDto } from '../dto/application-document.dto';
+import { ApplicationEvaluationDto } from '../dto/application-evaluation.dto';
 import { AttachApplicationDocumentDto } from '../dto/attach-application-document.dto';
 import { CreateApplicationDto } from '../dto/create-application.dto';
+import { CreateApplicationDecisionDto } from '../dto/create-application-decision.dto';
+import { CreateApplicationEvaluationDto } from '../dto/create-application-evaluation.dto';
 import { CreateMentorshipNoteDto } from '../dto/create-mentorship-note.dto';
 import { CreateNeedsInfoItemDto } from '../dto/create-needs-info-item.dto';
 import { CreateNeedsInfoReplyDto } from '../dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from '../dto/document-completeness.dto';
+import { EligibilitySignalsResponseDto } from '../dto/eligibility-signal.dto';
 import { MentorAssignmentDto } from '../dto/mentor-assignment.dto';
 import { NeedsInfoItemDto } from '../dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from '../dto/needs-info-reply.dto';
@@ -226,6 +230,111 @@ export const GetApplicationDocumentCompletenessApi = () =>
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
       ApiBadRequestResponse({ description: 'Invalid application id format.' }),
       ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const GetEligibilitySignalsApi = () =>
+  createApiDecorator({
+    summary: 'Get application eligibility signals',
+    description:
+      'Recomputes and returns eligibility signals for an application. Accessible to reviewer-side users and application team members.',
+    successResponse: {
+      status: 200,
+      type: EligibilitySignalsResponseDto,
+      description: 'Eligibility signals for the application.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
+      ApiForbiddenResponse({
+        description: 'User has no access to eligibility signals.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const CreateApplicationEvaluationApi = () =>
+  createApiDecorator({
+    summary: 'Create application evaluation',
+    description:
+      'Reviewer-side users can submit one criterion-based evaluation for an application in FORMALLY_VERIFIED or EVALUATING status. The MVP requires TECHNICAL_QUALITY, BUSINESS_VALUE, and TEAM_CAPABILITY scores.',
+    body: CreateApplicationEvaluationDto,
+    successResponse: {
+      status: 201,
+      type: ApplicationEvaluationDto,
+      description: 'Application evaluation was created.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid application id, invalid status, duplicate criteria, unknown criteria, or missing required criteria.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only reviewer-side users can create evaluations.',
+      }),
+      ApiConflictResponse({
+        description:
+          'The evaluator has already submitted an evaluation for this application.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const ListApplicationEvaluationsApi = () =>
+  createApiDecorator({
+    summary: 'List application evaluations',
+    description:
+      'Returns criterion-based evaluations for an application. Reviewer-side users only.',
+    successResponse: {
+      status: 200,
+      type: ApplicationEvaluationDto,
+      isArray: true,
+      description: 'Application evaluations.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
+      ApiForbiddenResponse({
+        description: 'Only reviewer-side users can view evaluations.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application does not belong to the supported Program A workflow.',
+      }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const CreateApplicationDecisionApi = () =>
+  createApiDecorator({
+    summary: 'Create final application decision',
+    description:
+      'Reviewer-side users can approve or reject an application after at least one complete evaluation exists. The decision stores status, decidedAt, decisionById, decisionRationale, and creates an application status event.',
+    body: CreateApplicationDecisionDto,
+    successResponse: {
+      status: 200,
+      type: ApplicationDetailDto,
+      description: 'Application decision was created.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({
+        description:
+          'Invalid payload, invalid application status, missing rationale, or evaluation completeness precondition failed.',
+      }),
+      ApiForbiddenResponse({
+        description: 'Only reviewer-side users can make application decisions.',
+      }),
+      ApiConflictResponse({
+        description:
+          'Application is already decided or decision was changed concurrently.',
+      }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
     ],
   });

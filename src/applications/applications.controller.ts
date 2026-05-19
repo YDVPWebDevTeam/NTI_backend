@@ -6,8 +6,8 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
-  Put,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -18,30 +18,37 @@ import type { AuthenticatedUserContext } from '../common/types/auth-user-context
 import {
   AssignMentorApi,
   AttachApplicationDocumentApi,
-  CreateMentorshipNoteApi,
+  CreateApplicationDecisionApi,
+  CreateApplicationEvaluationApi,
   CreateApplicationApi,
+  CreateMentorshipNoteApi,
   CreateNeedsInfoItemApi,
   GetApplicationApi,
   GetApplicationDocumentCompletenessApi,
+  GetEligibilitySignalsApi,
   GetMentorshipNotesApi,
   GetNeedsInfoThreadApi,
-  GetSectionHistoryApi,
-  ListApplicationSectionsApi,
   GetPublicActiveCallsApi,
   GetPublicCallByIdApi,
   GetPublicCallsApi,
+  GetSectionHistoryApi,
+  ListApplicationEvaluationsApi,
+  ListApplicationSectionsApi,
   ReplyToNeedsInfoItemApi,
   ResubmitApplicationApi,
   SetActiveSectionVersionApi,
   SubmitApplicationApi,
   UpsertApplicationSectionApi,
 } from './api-docs';
+import { ApplicationDetailDto } from './dto/application-detail.dto';
+import { ApplicationDocumentDto } from './dto/application-document.dto';
+import { ApplicationEvaluationDto } from './dto/application-evaluation.dto';
 import { ApplicationSectionDto } from './dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from './dto/application-section-history.dto';
 import { AssignMentorDto } from './dto/assign-mentor.dto';
-import { ApplicationDetailDto } from './dto/application-detail.dto';
-import { ApplicationDocumentDto } from './dto/application-document.dto';
 import { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
+import { CreateApplicationDecisionDto } from './dto/create-application-decision.dto';
+import { CreateApplicationEvaluationDto } from './dto/create-application-evaluation.dto';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { CreateMentorshipNoteDto } from './dto/create-mentorship-note.dto';
 import { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
@@ -49,18 +56,18 @@ import { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
 import { DocumentCompletenessDto } from './dto/document-completeness.dto';
 import { EligibilitySignalsResponseDto } from './dto/eligibility-signal.dto';
 import { MentorAssignmentDto } from './dto/mentor-assignment.dto';
-import { ProgramAMentorshipNoteDto } from './dto/program-a-mentorship-note.dto';
 import { NeedsInfoItemDto } from './dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';
+import { ProgramAMentorshipNoteDto } from './dto/program-a-mentorship-note.dto';
 import { PublicCallDto } from './dto/public-call.dto';
 import { PublicCallsQueryDto } from './dto/public-calls-query.dto';
 import { PublicCallsResponseDto } from './dto/public-calls-response.dto';
 import { ResubmitApplicationDto } from './dto/resubmit-application.dto';
 import { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
 import { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
-import { ApplicationsService } from './applications.service';
 import { ApplicationSectionsService } from './application-sections.service';
+import { ApplicationsService } from './applications.service';
 
 @ApiTags('Applications')
 @Controller('applications')
@@ -135,12 +142,47 @@ export class ApplicationsController {
     return this.applicationsService.getDocumentCompleteness(id, user);
   }
 
+  @GetEligibilitySignalsApi()
   @Get(':id/eligibility-signals')
+  @UseGuards(JwtAuthGuard)
   getEligibilitySignals(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<EligibilitySignalsResponseDto> {
     return this.applicationsService.getEligibilitySignals(id, user);
+  }
+
+  @CreateApplicationEvaluationApi()
+  @Post(':id/evaluations')
+  @UseGuards(JwtAuthGuard)
+  createEvaluation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: CreateApplicationEvaluationDto,
+  ): Promise<ApplicationEvaluationDto> {
+    return this.applicationsService.createEvaluation(id, user, dto);
+  }
+
+  @ListApplicationEvaluationsApi()
+  @Get(':id/evaluations')
+  @UseGuards(JwtAuthGuard)
+  listEvaluations(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ApplicationEvaluationDto[]> {
+    return this.applicationsService.listEvaluations(id, user);
+  }
+
+  @CreateApplicationDecisionApi()
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/decision')
+  @UseGuards(JwtAuthGuard)
+  createDecision(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: CreateApplicationDecisionDto,
+  ): Promise<ApplicationDetailDto> {
+    return this.applicationsService.createDecision(id, user, dto);
   }
 
   @SubmitApplicationApi()
@@ -233,6 +275,7 @@ export class ApplicationsController {
 
   @ListApplicationSectionsApi()
   @Get(':applicationId/sections')
+  @UseGuards(JwtAuthGuard)
   listSections(
     @Param('applicationId', ParseUUIDPipe) applicationId: string,
     @GetUserContext() user: AuthenticatedUserContext,
@@ -242,6 +285,7 @@ export class ApplicationsController {
 
   @UpsertApplicationSectionApi()
   @Put(':applicationId/sections/:key')
+  @UseGuards(JwtAuthGuard)
   upsertSection(
     @Param('applicationId', ParseUUIDPipe) applicationId: string,
     @Param('key') key: string,
@@ -253,6 +297,7 @@ export class ApplicationsController {
 
   @GetSectionHistoryApi()
   @Get(':applicationId/sections/:key/history')
+  @UseGuards(JwtAuthGuard)
   getSectionHistory(
     @Param('applicationId', ParseUUIDPipe) applicationId: string,
     @Param('key') key: string,
@@ -263,6 +308,7 @@ export class ApplicationsController {
 
   @SetActiveSectionVersionApi()
   @Put(':applicationId/sections/:key/active-version')
+  @UseGuards(JwtAuthGuard)
   setActiveVersion(
     @Param('applicationId', ParseUUIDPipe) applicationId: string,
     @Param('key') key: string,

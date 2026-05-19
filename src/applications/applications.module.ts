@@ -19,6 +19,7 @@ import { ProgramAMentorshipRepository } from './program-a-mentorship.repository'
 import { UserRepository } from '../user/user.repository';
 import { ApplicationSectionsRulesService } from './rules/application-sections-rules.service';
 import { ApplicationSectionsService } from './application-sections.service';
+import { ApplicationEvaluationsRepository } from './application-evaluations.repository';
 
 @Module({
   imports: [AuthModule, TeamModule, FilesModule, EligibilitySignalsModule],
@@ -41,6 +42,7 @@ import { ApplicationSectionsService } from './application-sections.service';
     AdminCallsService,
     ApplicationsService,
     ApplicationSectionsService,
+    ApplicationEvaluationsRepository,
   ],
   exports: [ApplicationsService],
 })

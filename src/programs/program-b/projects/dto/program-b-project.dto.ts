@@ -31,6 +31,12 @@ export class ProgramBProjectDto {
   })
   productOwnerUserId!: string;
 
+  @ApiPropertyOptional({
+    description: 'Assigned mentor identifier.',
+    format: 'uuid',
+  })
+  mentorUserId?: string;
+
   @ApiProperty({
     description: 'Project execution status.',
     enum: ProgramBProjectStatus,
@@ -59,6 +65,7 @@ type ProgramBProjectRaw = {
   teamApplicationId: string | null;
   teamId: string;
   productOwnerUserId: string;
+  mentorUserId: string | null;
   status: ProgramBProjectStatus;
   acceptedByCompanyAt: Date | null;
   acceptedByNtiAt: Date | null;
@@ -76,6 +83,7 @@ export function toProgramBProjectDto(
     teamApplicationId: project.teamApplicationId ?? undefined,
     teamId: project.teamId,
     productOwnerUserId: project.productOwnerUserId,
+    mentorUserId: project.mentorUserId ?? undefined,
     status: project.status,
     acceptedByCompanyAt: project.acceptedByCompanyAt ?? undefined,
     acceptedByNtiAt: project.acceptedByNtiAt ?? undefined,

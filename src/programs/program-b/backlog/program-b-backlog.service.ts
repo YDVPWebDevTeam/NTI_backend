@@ -6,15 +6,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
-  BacklogItem,
   Prisma,
-  ProgramBProject,
   ProgramBTeamApplication,
 } from '../../../../generated/prisma/client';
 import {
   BacklogItemStatus,
+  FileVisibility,
   OrganizationStatus,
   ProgramBTeamApplicationStatus,
+  UploadStatus,
   UserRole,
   UserStatus,
 } from '../../../../generated/prisma/enums';
@@ -25,18 +25,31 @@ import {
   buildPaginationMeta,
   resolvePagination,
 } from '../../../common/pagination';
+import { FilesService } from '../../../files/files.service';
+import { PrismaDbClient } from '../../../infrastructure/database';
+import { R2StorageService } from '../../../infrastructure/storage';
 import { OrganizationRepository } from '../../../organization/organization.repository';
 import { UserRepository } from '../../../user/user.repository';
 import { ProgramBProjectsRepository } from '../projects/program-b-projects.repository';
 import { ProgramBTeamApplicationRepository } from '../team-application/program-b-team-application.repository';
-import type { PrismaDbClient } from '../../../infrastructure/database';
 import { AssignProductOwnerDto } from './dto/assign-product-owner.dto';
+import { CompleteProgramBDocumentUploadDto } from './dto/complete-program-b-document-upload.dto';
+import { CreateProgramBBacklogDocumentUploadDto } from './dto/create-program-b-backlog-document-upload.dto';
 import { CreateProgramBBacklogItemDto } from './dto/create-program-b-backlog-item.dto';
 import { GetProgramBBacklogQueryDto } from './dto/get-program-b-backlog-query.dto';
 import { GetProgramBBacklogResponseDto } from './dto/get-program-b-backlog-response.dto';
+import {
+  ProgramBBacklogDocumentDto,
+  ProgramBBacklogDocumentUploadDto,
+  ProgramBDocumentDownloadDto,
+} from './dto/program-b-backlog-document.dto';
+import { ProgramBBacklogItemDto } from './dto/program-b-backlog-item.dto';
 import { ProgramBCandidateDecisionDto } from './dto/program-b-candidate-decision.dto';
 import { UpdateProgramBBacklogItemDto } from './dto/update-program-b-backlog-item.dto';
-import { ProgramBBacklogRepository } from './program-b-backlog.repository';
+import {
+  ProgramBBacklogDetailView,
+  ProgramBBacklogRepository,
+} from './program-b-backlog.repository';
 
 @Injectable()
 export class ProgramBBacklogService {
@@ -50,19 +63,21 @@ export class ProgramBBacklogService {
     private readonly userRepository: UserRepository,
     private readonly teamApplicationRepository: ProgramBTeamApplicationRepository,
     private readonly projectsRepository: ProgramBProjectsRepository,
+    private readonly filesService: FilesService,
+    private readonly storageService: R2StorageService,
   ) {}
 
   async create(
     dto: CreateProgramBBacklogItemDto,
     user: AuthenticatedUserContext,
-  ): Promise<BacklogItem> {
+  ): Promise<ProgramBBacklogItemDto> {
     const organization = await this.ensureActiveOrganizationMember(user);
     await this.ensureProductOwnerFromSameOrganization(
       organization.id,
       dto.productOwnerUserId,
     );
 
-    return this.backlogRepository.create({
+    const created = await this.backlogRepository.create({
       organizationId: organization.id,
       title: dto.title,
       description: dto.description,
@@ -71,13 +86,23 @@ export class ProgramBBacklogService {
       productOwnerUserId: dto.productOwnerUserId,
       status: BacklogItemStatus.DRAFT,
     });
+
+    const createdItem = await this.backlogRepository.findDetailUnique({
+      id: created.id,
+    });
+
+    if (!createdItem) {
+      throw new NotFoundException('Backlog item not found');
+    }
+
+    return this.toBacklogItemDto(createdItem);
   }
 
   async update(
     id: string,
     dto: UpdateProgramBBacklogItemDto,
     user: AuthenticatedUserContext,
-  ): Promise<BacklogItem> {
+  ): Promise<ProgramBBacklogItemDto> {
     const organization = await this.ensureActiveOrganizationMember(user);
     const item = await this.getItemForOrganizationOrThrow(id, organization.id);
 
@@ -87,18 +112,9 @@ export class ProgramBBacklogService {
 
     const updateData: Prisma.BacklogItemUncheckedUpdateInput = {};
 
-    if (dto.title !== undefined) {
-      updateData.title = dto.title;
-    }
-
-    if (dto.description !== undefined) {
-      updateData.description = dto.description;
-    }
-
-    if (dto.budget !== undefined) {
-      updateData.budget = dto.budget;
-    }
-
+    if (dto.title !== undefined) updateData.title = dto.title;
+    if (dto.description !== undefined) updateData.description = dto.description;
+    if (dto.budget !== undefined) updateData.budget = dto.budget;
     if (dto.expectedOutcomes !== undefined) {
       updateData.expectedOutcomes = dto.expectedOutcomes;
     }
@@ -117,10 +133,7 @@ export class ProgramBBacklogService {
 
     return this.backlogRepository.transaction(async (db) => {
       const result = await this.backlogRepository.updateMany(
-        {
-          id: item.id,
-          status: BacklogItemStatus.DRAFT,
-        },
+        { id: item.id, status: BacklogItemStatus.DRAFT },
         updateData,
         db,
       );
@@ -129,7 +142,7 @@ export class ProgramBBacklogService {
         throw new ConflictException('Only draft backlog items may be updated');
       }
 
-      const updatedItem = await this.backlogRepository.findUnique(
+      const updatedItem = await this.backlogRepository.findDetailUnique(
         { id: item.id },
         db,
       );
@@ -138,14 +151,14 @@ export class ProgramBBacklogService {
         throw new NotFoundException('Backlog item not found');
       }
 
-      return updatedItem;
+      return this.toBacklogItemDto(updatedItem);
     }, this.backlogLifecycleTransactionOptions);
   }
 
   async remove(
     id: string,
     user: AuthenticatedUserContext,
-  ): Promise<BacklogItem> {
+  ): Promise<ProgramBBacklogItemDto> {
     const organization = await this.ensureActiveOrganizationMember(user);
     const item = await this.getItemForOrganizationOrThrow(id, organization.id);
 
@@ -160,7 +173,7 @@ export class ProgramBBacklogService {
         throw new ConflictException('Only draft backlog items may be deleted');
       }
 
-      return item;
+      return this.toBacklogItemDto(item);
     }, this.backlogLifecycleTransactionOptions);
   }
 
@@ -173,7 +186,7 @@ export class ProgramBBacklogService {
     const pagination = resolvePagination(query);
 
     const [items, total] = await Promise.all([
-      this.backlogRepository.findMany({
+      this.backlogRepository.findDetails({
         where,
         orderBy: this.buildListOrderBy(query),
         skip: pagination.skip,
@@ -183,27 +196,87 @@ export class ProgramBBacklogService {
     ]);
 
     return {
-      data: items,
+      data: items.map((item) => this.toBacklogItemDto(item)),
       meta: buildPaginationMeta(total, pagination.page, pagination.limit),
     };
   }
 
-  async findOne(id: string): Promise<BacklogItem | null> {
-    return this.backlogRepository.findUnique({ id });
+  async listPublished(
+    query: GetProgramBBacklogQueryDto,
+    user: AuthenticatedUserContext,
+  ): Promise<GetProgramBBacklogResponseDto> {
+    this.ensureActiveStudent(user);
+
+    const pagination = resolvePagination(query);
+    const normalizedQuery = query.q?.trim();
+    const where: Prisma.BacklogItemWhereInput = {
+      status: BacklogItemStatus.PUBLISHED,
+      ...(normalizedQuery
+        ? {
+            OR: [
+              {
+                title: {
+                  contains: normalizedQuery,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                description: {
+                  contains: normalizedQuery,
+                  mode: 'insensitive',
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      this.backlogRepository.findDetails({
+        where,
+        orderBy: this.buildListOrderBy(query),
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      this.backlogRepository.count(where),
+    ]);
+
+    return {
+      data: items.map((item) => this.toBacklogItemDto(item)),
+      meta: buildPaginationMeta(total, pagination.page, pagination.limit),
+    };
+  }
+
+  async findOne(id: string): Promise<ProgramBBacklogDetailView | null> {
+    return this.backlogRepository.findDetailUnique({ id });
+  }
+
+  async findPublishedById(
+    id: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramBBacklogItemDto> {
+    this.ensureActiveStudent(user);
+    const item = await this.backlogRepository.findDetailUnique({ id });
+
+    if (!item || item.status !== BacklogItemStatus.PUBLISHED) {
+      throw new NotFoundException('Backlog item not found');
+    }
+
+    return this.toBacklogItemDto(item);
   }
 
   async assignProductOwner(
     id: string,
     dto: AssignProductOwnerDto,
     user: AuthenticatedUserContext,
-  ): Promise<BacklogItem> {
+  ): Promise<ProgramBBacklogItemDto> {
     const isAdmin =
       user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
 
-    let item: BacklogItem;
+    let item: ProgramBBacklogDetailView;
 
     if (isAdmin) {
-      const found = await this.backlogRepository.findUnique({ id });
+      const found = await this.backlogRepository.findDetailUnique({ id });
       if (!found) {
         throw new NotFoundException('Backlog item not found');
       }
@@ -230,48 +303,34 @@ export class ProgramBBacklogService {
         {
           id: item.id,
           status: {
-            in: [BacklogItemStatus.DRAFT, BacklogItemStatus.PUBLISHED],
+            in: [
+              BacklogItemStatus.DRAFT,
+              BacklogItemStatus.PUBLISHED,
+              BacklogItemStatus.IN_PAIRING,
+            ],
           },
         },
         { productOwnerUserId: dto.productOwnerUserId },
         db,
       );
 
-      const updatedItem = await this.backlogRepository.findUnique(
+      const updatedItem = await this.backlogRepository.findDetailUnique(
         { id: item.id },
         db,
       );
-
-      if (result.count === 0) {
-        if (!updatedItem) {
-          throw new NotFoundException('Backlog item not found');
-        }
-        throw new ConflictException(
-          'Product Owner cannot be assigned to an archived backlog item',
-        );
-      }
 
       if (!updatedItem) {
         throw new NotFoundException('Backlog item not found');
       }
 
-      return updatedItem;
+      if (result.count === 0) {
+        throw new ConflictException(
+          'Product Owner cannot be assigned in the current backlog state',
+        );
+      }
+
+      return this.toBacklogItemDto(updatedItem);
     }, this.backlogLifecycleTransactionOptions);
-  }
-
-  assertProductOwnerOrAdmin(
-    actor: AuthenticatedUserContext,
-    item: BacklogItem,
-  ): void {
-    if (actor.role === UserRole.ADMIN || actor.role === UserRole.SUPER_ADMIN) {
-      return;
-    }
-
-    if (actor.id === item.productOwnerUserId) {
-      return;
-    }
-
-    throw new ForbiddenException();
   }
 
   async listCandidates(backlogItemId: string, user: AuthenticatedUserContext) {
@@ -286,7 +345,7 @@ export class ProgramBBacklogService {
   async publish(
     id: string,
     user: AuthenticatedUserContext,
-  ): Promise<BacklogItem> {
+  ): Promise<ProgramBBacklogItemDto> {
     const organization = await this.ensureActiveOrganizationMember(user);
 
     return this.backlogRepository.transaction(async (db) => {
@@ -311,10 +370,7 @@ export class ProgramBBacklogService {
       );
 
       const result = await this.backlogRepository.updateMany(
-        {
-          id: item.id,
-          status: BacklogItemStatus.DRAFT,
-        },
+        { id: item.id, status: BacklogItemStatus.DRAFT },
         { status: BacklogItemStatus.PUBLISHED },
         db,
       );
@@ -325,7 +381,7 @@ export class ProgramBBacklogService {
         );
       }
 
-      const publishedItem = await this.backlogRepository.findUnique(
+      const publishedItem = await this.backlogRepository.findDetailUnique(
         { id: item.id },
         db,
       );
@@ -334,14 +390,14 @@ export class ProgramBBacklogService {
         throw new NotFoundException('Backlog item not found');
       }
 
-      return publishedItem;
+      return this.toBacklogItemDto(publishedItem);
     }, this.backlogLifecycleTransactionOptions);
   }
 
   async archive(
     id: string,
     user: AuthenticatedUserContext,
-  ): Promise<BacklogItem> {
+  ): Promise<ProgramBBacklogItemDto> {
     const organization = await this.ensureActiveOrganizationMember(user);
     const item = await this.getItemForOrganizationOrThrow(id, organization.id);
 
@@ -372,7 +428,7 @@ export class ProgramBBacklogService {
         );
       }
 
-      const archivedItem = await this.backlogRepository.findUnique(
+      const archivedItem = await this.backlogRepository.findDetailUnique(
         { id: item.id },
         db,
       );
@@ -381,7 +437,7 @@ export class ProgramBBacklogService {
         throw new NotFoundException('Backlog item not found');
       }
 
-      return archivedItem;
+      return this.toBacklogItemDto(archivedItem);
     }, this.backlogLifecycleTransactionOptions);
   }
 
@@ -434,6 +490,14 @@ export class ProgramBBacklogService {
       if (result.count === 0) {
         throw new ConflictException(
           'Only submitted candidates may be shortlisted',
+        );
+      }
+
+      if (backlogItem.status === BacklogItemStatus.PUBLISHED) {
+        await this.backlogRepository.update(
+          { id: backlogItem.id },
+          { status: BacklogItemStatus.IN_PAIRING },
+          db,
         );
       }
 
@@ -513,9 +577,7 @@ export class ProgramBBacklogService {
         await this.teamApplicationRepository.updateMany(
           {
             backlogItemId: backlogItem.id,
-            id: {
-              not: candidate.id,
-            },
+            id: { not: candidate.id },
             status: {
               in: [
                 ProgramBTeamApplicationStatus.SUBMITTED,
@@ -531,6 +593,14 @@ export class ProgramBBacklogService {
           },
           db,
         );
+
+        if (backlogItem.status === BacklogItemStatus.PUBLISHED) {
+          await this.backlogRepository.update(
+            { id: backlogItem.id },
+            { status: BacklogItemStatus.IN_PAIRING },
+            db,
+          );
+        }
 
         return this.getCandidateForBacklogOrThrow(
           backlogItem.id,
@@ -621,7 +691,7 @@ export class ProgramBBacklogService {
     backlogItemId: string,
     applicationId: string,
     user: AuthenticatedUserContext,
-  ): Promise<ProgramBProject> {
+  ) {
     const organization = await this.ensureActiveOrganizationMember(user);
 
     try {
@@ -689,6 +759,9 @@ export class ProgramBBacklogService {
             teamApplicationId: candidate.id,
             teamId: candidate.teamId,
             productOwnerUserId: backlogItem.productOwnerUserId,
+            mentorUserId: null,
+            mentorAssignedAt: null,
+            mentorAssignedById: null,
           },
           db,
         );
@@ -696,6 +769,12 @@ export class ProgramBBacklogService {
         await this.teamApplicationRepository.update(
           { id: candidate.id },
           { status: ProgramBTeamApplicationStatus.PROJECT_CREATED },
+          db,
+        );
+
+        await this.backlogRepository.update(
+          { id: backlogItem.id },
+          { status: BacklogItemStatus.ASSIGNED },
           db,
         );
 
@@ -721,6 +800,141 @@ export class ProgramBBacklogService {
     }
   }
 
+  async createBacklogDocumentUpload(
+    backlogItemId: string,
+    dto: CreateProgramBBacklogDocumentUploadDto,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramBBacklogDocumentUploadDto> {
+    const organization = await this.ensureActiveOrganizationMember(user);
+    const item = await this.getItemForOrganizationOrThrow(
+      backlogItemId,
+      organization.id,
+    );
+
+    if (item.status === BacklogItemStatus.ARCHIVED) {
+      throw new ConflictException('Archived backlog items are read-only');
+    }
+
+    const upload = await this.filesService.requestUpload(user, {
+      filename: dto.filename,
+      mimeType: dto.mimeType,
+      size: dto.size,
+      visibility: FileVisibility.PRIVATE,
+      purpose: 'program-b-backlog-document',
+      entityType: 'ProgramBBacklogDocument',
+      entityId: backlogItemId,
+    });
+
+    const document = await this.createBacklogDocumentWithNextVersion(
+      backlogItemId,
+      upload.fileId,
+      dto,
+      user.id,
+    );
+
+    return {
+      documentId: document.id,
+      fileId: upload.fileId,
+      uploadUrl: upload.uploadUrl,
+      expiresAt: upload.expiresAt,
+    };
+  }
+
+  async completeBacklogDocumentUpload(
+    backlogItemId: string,
+    documentId: string,
+    dto: CompleteProgramBDocumentUploadDto,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramBBacklogDocumentDto> {
+    const organization = await this.ensureActiveOrganizationMember(user);
+    await this.getItemForOrganizationOrThrow(backlogItemId, organization.id);
+
+    const document = await this.getBacklogDocumentOrThrow(
+      backlogItemId,
+      documentId,
+    );
+
+    await this.filesService.completeUpload(user, {
+      fileId: document.uploadedFile.id,
+      size: dto.size,
+      checksum: dto.checksum,
+    });
+
+    const completedDocument = await this.getBacklogDocumentOrThrow(
+      backlogItemId,
+      documentId,
+    );
+
+    return this.toBacklogDocumentDto(completedDocument);
+  }
+
+  async listBacklogDocuments(
+    backlogItemId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramBBacklogDocumentDto[]> {
+    const item = await this.ensureBacklogReadAccess(backlogItemId, user);
+    const documents =
+      await this.backlogRepository.listBacklogDocuments(backlogItemId);
+
+    return documents
+      .filter((document) => this.canReadBacklogDocument(item, document, user))
+      .map((document) => this.toBacklogDocumentDto(document));
+  }
+
+  async requestBacklogDocumentDownload(
+    backlogItemId: string,
+    documentId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramBDocumentDownloadDto> {
+    const item = await this.ensureBacklogReadAccess(backlogItemId, user);
+    const document = await this.getBacklogDocumentOrThrow(
+      backlogItemId,
+      documentId,
+    );
+
+    if (!this.canReadBacklogDocument(item, document, user)) {
+      throw new ForbiddenException();
+    }
+
+    if (document.uploadedFile.status !== UploadStatus.UPLOADED) {
+      throw new ConflictException('Document is not available for reading yet');
+    }
+
+    const downloadUrl = await this.storageService.createPresignedDownloadUrl({
+      key: document.uploadedFile.key,
+      filename: document.uploadedFile.originalName,
+      disposition: 'attachment',
+    });
+
+    return {
+      documentId: document.id,
+      downloadUrl,
+    };
+  }
+
+  assertProductOwnerOrAdmin(
+    actor: AuthenticatedUserContext,
+    item: ProgramBBacklogDetailView,
+  ): void {
+    if (actor.role === UserRole.ADMIN || actor.role === UserRole.SUPER_ADMIN) {
+      return;
+    }
+
+    if (actor.id === item.productOwnerUserId) {
+      return;
+    }
+
+    throw new ForbiddenException();
+  }
+
+  private ensureActiveStudent(user: AuthenticatedUserContext): void {
+    if (user.role !== UserRole.STUDENT || user.status !== UserStatus.ACTIVE) {
+      throw new ForbiddenException(
+        'Only active student users may browse published backlog items',
+      );
+    }
+  }
+
   private async ensureActiveOrganizationMember(user: AuthenticatedUserContext) {
     if (!user.organizationId || user.status !== UserStatus.ACTIVE) {
       throw new ForbiddenException(
@@ -741,12 +955,55 @@ export class ProgramBBacklogService {
     return organization;
   }
 
+  private async ensureBacklogReadAccess(
+    backlogItemId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramBBacklogDetailView> {
+    const item = await this.backlogRepository.findDetailUnique({
+      id: backlogItemId,
+    });
+
+    if (!item) {
+      throw new NotFoundException('Backlog item not found');
+    }
+
+    if (
+      user.role === UserRole.ADMIN ||
+      user.role === UserRole.SUPER_ADMIN ||
+      user.role === UserRole.EVALUATOR
+    ) {
+      return item;
+    }
+
+    if (
+      (user.role === UserRole.COMPANY_OWNER ||
+        user.role === UserRole.COMPANY_EMPLOYEE) &&
+      user.organizationId === item.organizationId &&
+      user.status === UserStatus.ACTIVE
+    ) {
+      return item;
+    }
+
+    if (user.role === UserRole.STUDENT && user.status === UserStatus.ACTIVE) {
+      if (item.status !== BacklogItemStatus.PUBLISHED) {
+        throw new NotFoundException('Backlog item not found');
+      }
+
+      return item;
+    }
+
+    throw new ForbiddenException();
+  }
+
   private async getItemForOrganizationOrThrow(
     itemId: string,
     organizationId: string,
     db?: PrismaDbClient,
-  ): Promise<BacklogItem> {
-    const item = await this.backlogRepository.findUnique({ id: itemId }, db);
+  ): Promise<ProgramBBacklogDetailView> {
+    const item = await this.backlogRepository.findDetailUnique(
+      { id: itemId },
+      db,
+    );
 
     if (!item) {
       throw new NotFoundException('Backlog item not found');
@@ -757,6 +1014,103 @@ export class ProgramBBacklogService {
     }
 
     return item;
+  }
+
+  private async getBacklogDocumentOrThrow(
+    backlogItemId: string,
+    documentId: string,
+    db?: PrismaDbClient,
+  ) {
+    const document = await this.backlogRepository.findBacklogDocumentById(
+      documentId,
+      db,
+    );
+
+    if (!document || document.backlogItemId !== backlogItemId) {
+      throw new NotFoundException('Program B backlog document not found');
+    }
+
+    return document;
+  }
+
+  private async createBacklogDocumentWithNextVersion(
+    backlogItemId: string,
+    uploadedFileId: string,
+    dto: CreateProgramBBacklogDocumentUploadDto,
+    createdById: string,
+  ) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await this.backlogRepository.transaction(async (db) => {
+          const currentDocuments =
+            await this.backlogRepository.listBacklogDocuments(
+              backlogItemId,
+              db,
+            );
+          const version =
+            Math.max(
+              0,
+              ...currentDocuments
+                .filter((document) => document.category === dto.category)
+                .map((document) => document.version),
+            ) + 1;
+
+          return this.backlogRepository.createBacklogDocument(
+            {
+              backlogItemId,
+              uploadedFileId,
+              category: dto.category,
+              visibility: dto.visibility,
+              version,
+              createdById,
+            },
+            db,
+          );
+        }, this.backlogLifecycleTransactionOptions);
+      } catch (error) {
+        if (attempt === 0 && isPrismaUniqueConstraintError(error)) {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    throw new ConflictException(
+      'Could not assign a unique document version for this category',
+    );
+  }
+
+  private canReadBacklogDocument(
+    item: ProgramBBacklogDetailView,
+    document: {
+      visibility: string;
+    },
+    user: AuthenticatedUserContext,
+  ): boolean {
+    if (
+      user.role === UserRole.ADMIN ||
+      user.role === UserRole.SUPER_ADMIN ||
+      user.role === UserRole.EVALUATOR
+    ) {
+      return true;
+    }
+
+    if (
+      user.role === UserRole.COMPANY_OWNER ||
+      user.role === UserRole.COMPANY_EMPLOYEE
+    ) {
+      return user.organizationId === item.organizationId;
+    }
+
+    if (user.role === UserRole.STUDENT) {
+      return (
+        item.status === BacklogItemStatus.PUBLISHED &&
+        document.visibility === 'PARTICIPANTS'
+      );
+    }
+
+    return false;
   }
 
   private async getCandidateForBacklogOrThrow(
@@ -773,19 +1127,24 @@ export class ProgramBBacklogService {
       throw new NotFoundException('Program B candidate application not found');
     }
 
-    return candidate;
+    return candidate as ProgramBTeamApplication;
   }
 
-  private ensureCandidateDecisionsAllowed(backlogItem: BacklogItem): void {
+  private ensureCandidateDecisionsAllowed(
+    backlogItem: ProgramBBacklogDetailView,
+  ): void {
     if (backlogItem.status === BacklogItemStatus.ARCHIVED) {
       throw new ConflictException(
         'Archived backlog items do not accept candidate decisions',
       );
     }
 
-    if (backlogItem.status !== BacklogItemStatus.PUBLISHED) {
+    if (
+      backlogItem.status !== BacklogItemStatus.PUBLISHED &&
+      backlogItem.status !== BacklogItemStatus.IN_PAIRING
+    ) {
       throw new ConflictException(
-        'Only published backlog items accept candidate decisions',
+        'Only published or pairing backlog items accept candidate decisions',
       );
     }
   }
@@ -846,7 +1205,7 @@ export class ProgramBBacklogService {
     }
   }
 
-  private ensurePublishReadiness(item: BacklogItem): void {
+  private ensurePublishReadiness(item: ProgramBBacklogDetailView): void {
     if (!item.title?.trim()) {
       throw new BadRequestException('Title is required for publish');
     }
@@ -905,5 +1264,57 @@ export class ProgramBBacklogService {
     query: GetProgramBBacklogQueryDto,
   ): Prisma.BacklogItemOrderByWithRelationInput[] {
     return buildOrderBy(query.sort, query.order, [{ id: 'asc' }]);
+  }
+
+  private toBacklogDocumentDto(document: {
+    id: string;
+    category: unknown;
+    visibility: unknown;
+    version: number;
+    createdAt: Date;
+    uploadedFile: {
+      id: string;
+      originalName: string;
+      mimeType: string;
+      size: number;
+      status: UploadStatus;
+      uploadedAt: Date | null;
+    };
+  }): ProgramBBacklogDocumentDto {
+    return {
+      id: document.id,
+      fileId: document.uploadedFile.id,
+      category: document.category as never,
+      visibility: document.visibility as never,
+      name: document.uploadedFile.originalName,
+      mimeType: document.uploadedFile.mimeType,
+      size: document.uploadedFile.size,
+      status: document.uploadedFile.status as never,
+      version: document.version,
+      uploadedAt: document.uploadedFile.uploadedAt ?? undefined,
+      createdAt: document.createdAt,
+    };
+  }
+
+  private toBacklogItemDto(
+    item: ProgramBBacklogDetailView,
+  ): ProgramBBacklogItemDto {
+    return {
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      budget: item.budget,
+      expectedOutcomes: item.expectedOutcomes,
+      productOwnerUserId: item.productOwnerUserId,
+      organizationId: item.organizationId,
+      organization: item.organization,
+      status: item.status,
+      productOwner: item.productOwner ?? null,
+      documents: item.documents.map((document) =>
+        this.toBacklogDocumentDto(document),
+      ),
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    };
   }
 }

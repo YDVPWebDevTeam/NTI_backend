@@ -147,6 +147,41 @@ export const ListMyProgramBBacklogItemsApi = () =>
     ],
   });
 
+export const ListPublishedProgramBBacklogItemsApi = () =>
+  createApiDecorator({
+    summary: 'List published Program B backlog items',
+    description:
+      'Returns paginated published Program B backlog items available to authenticated students.',
+    successResponse: {
+      status: 200,
+      type: GetProgramBBacklogResponseDto,
+      description: 'Published backlog items were retrieved successfully.',
+    },
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ApiQuery({
+        name: 'q',
+        required: false,
+        description:
+          'Case-insensitive substring filter for title or description.',
+      }),
+      ...createPaginationQueryDecorators({
+        sortValues: BACKLOG_SORT_VALUES,
+        sortDescription: 'Sortable published backlog fields.',
+        defaultSort: 'updatedAt',
+        defaultOrder: 'desc',
+      }),
+    ],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Query parameters are invalid.' }),
+      ApiForbiddenResponse({
+        description:
+          'Only active student users may view published backlog items.',
+      }),
+    ],
+  });
+
 export const PublishProgramBBacklogItemApi = () =>
   createApiDecorator({
     summary: 'Publish Program B backlog item',

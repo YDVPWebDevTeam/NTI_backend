@@ -7,6 +7,7 @@ export {
   DeleteProgramBBacklogItemApi,
   ListProgramBBacklogCandidatesApi,
   ListMyProgramBBacklogItemsApi,
+  ListPublishedProgramBBacklogItemsApi,
   PublishProgramBBacklogItemApi,
   RejectProgramBBacklogCandidateApi,
   ShortlistProgramBBacklogCandidateApi,

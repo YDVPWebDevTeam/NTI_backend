@@ -94,13 +94,13 @@ export class ApplicationEvaluationsRepository extends BaseRepository<
     return (db ?? this.prisma.client).applicationEvaluation.count({
       where: {
         applicationId,
-        scores: {
-          every: {
-            criterionCode: {
-              in: requiredCriterionCodes,
+        AND: requiredCriterionCodes.map((criterionCode) => ({
+          scores: {
+            some: {
+              criterionCode,
             },
           },
-        },
+        })),
       },
     });
   }

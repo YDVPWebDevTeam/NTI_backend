@@ -1,6 +1,7 @@
 export {
   AcceptProgramBBacklogCandidateApi,
   ArchiveProgramBBacklogItemApi,
+  AssignProductOwnerApi,
   CreateProgramBProjectFromCandidateApi,
   CreateProgramBBacklogItemApi,
   DeleteProgramBBacklogItemApi,

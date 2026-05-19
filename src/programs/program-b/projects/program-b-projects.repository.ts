@@ -268,9 +268,13 @@ export class ProgramBProjectsRepository {
       user.role === UserRole.COMPANY_OWNER ||
       user.role === UserRole.COMPANY_EMPLOYEE
     ) {
+      if (!user.organizationId) {
+        return { OR: [] };
+      }
+
       return {
         backlogItem: {
-          organizationId: user.organizationId ?? undefined,
+          organizationId: user.organizationId,
         },
       };
     }

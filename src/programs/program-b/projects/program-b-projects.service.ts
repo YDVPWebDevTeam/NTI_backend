@@ -15,10 +15,11 @@ import {
   UserRole,
   UserStatus,
 } from 'generated/prisma/enums';
+import { isPrismaUniqueConstraintError } from '../../../common/prisma/prisma-error.utils';
 import type { AuthenticatedUserContext } from '../../../common/types/auth-user-context.type';
 import type { PrismaDbClient } from '../../../infrastructure/database';
 import { R2StorageService } from '../../../infrastructure/storage';
-import { FilesService } from '../../../files/files.service';
+import { FilesService } from '../../../files';
 import { UserRepository } from '../../../user/user.repository';
 import { CompleteProgramBDocumentUploadDto } from '../backlog/dto/complete-program-b-document-upload.dto';
 import { ProgramBDocumentDownloadDto } from '../backlog/dto/program-b-backlog-document.dto';
@@ -87,7 +88,7 @@ export class ProgramBProjectsService {
     this.ensureProjectReadable(project, user);
     const milestones = await this.projectsRepository.listMilestones(projectId);
 
-    return milestones;
+    return milestones.map((milestone) => this.toMilestoneDto(milestone));
   }
 
   async createMilestone(
@@ -268,24 +269,12 @@ export class ProgramBProjectsService {
       entityId: projectId,
     });
 
-    const currentDocuments =
-      await this.projectsRepository.listProjectDocuments(projectId);
-    const version =
-      Math.max(
-        0,
-        ...currentDocuments
-          .filter((document) => document.category === dto.category)
-          .map((document) => document.version),
-      ) + 1;
-
-    const document = await this.projectsRepository.createProjectDocument({
+    const document = await this.createProjectDocumentWithNextVersion(
       projectId,
-      uploadedFileId: upload.fileId,
-      category: dto.category,
-      visibility: dto.visibility,
-      version,
-      createdById: user.id,
-    });
+      upload.fileId,
+      dto,
+      user.id,
+    );
 
     return {
       documentId: document.id,
@@ -768,13 +757,58 @@ export class ProgramBProjectsService {
     project: ProgramBProjectExecutionView,
     db: PrismaDbClient,
   ): Promise<void> {
-    if (String(project.backlogItem.status) === 'ASSIGNED') {
+    if (project.backlogItem.status === BacklogItemStatus.ASSIGNED) {
       await this.projectsRepository.updateBacklogStatusForProject(
         project.backlogItemId,
-        'IN_REALIZATION' as BacklogItemStatus,
+        BacklogItemStatus.IN_REALIZATION,
         db,
       );
     }
+  }
+
+  private async createProjectDocumentWithNextVersion(
+    projectId: string,
+    uploadedFileId: string,
+    dto: CreateProgramBProjectDocumentUploadDto,
+    createdById: string,
+  ) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await this.projectsRepository.transaction(async (db) => {
+          const currentDocuments =
+            await this.projectsRepository.listProjectDocuments(projectId, db);
+          const version =
+            Math.max(
+              0,
+              ...currentDocuments
+                .filter((document) => document.category === dto.category)
+                .map((document) => document.version),
+            ) + 1;
+
+          return this.projectsRepository.createProjectDocument(
+            {
+              projectId,
+              uploadedFileId,
+              category: dto.category,
+              visibility: dto.visibility,
+              version,
+              createdById,
+            },
+            db,
+          );
+        }, this.projectWriteTransactionOptions);
+      } catch (error) {
+        if (attempt === 0 && isPrismaUniqueConstraintError(error)) {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    throw new ConflictException(
+      'Could not assign a unique document version for this category',
+    );
   }
 
   private buildMilestoneUpdateData(
@@ -842,6 +876,42 @@ export class ProgramBProjectsService {
       version: document.version,
       uploadedAt: document.uploadedFile.uploadedAt ?? undefined,
       createdAt: document.createdAt,
+    };
+  }
+
+  private toMilestoneDto(milestone: {
+    id: string;
+    title: string;
+    description: string | null;
+    dueAt: Date | null;
+    status: ProgramBMilestoneStatus;
+    createdAt: Date;
+    updatedAt: Date;
+  }): ProgramBMilestoneDto {
+    return {
+      id: milestone.id,
+      title: milestone.title,
+      description: milestone.description ?? undefined,
+      dueAt: milestone.dueAt ?? undefined,
+      status: milestone.status,
+      createdAt: milestone.createdAt,
+      updatedAt: milestone.updatedAt,
+    };
+  }
+
+  private toPoReviewDto(review: {
+    id: string;
+    decision: ProgramBPoReviewDto['decision'];
+    comment: string | null;
+    authorUser: ProgramBPoReviewDto['author'];
+    createdAt: Date;
+  }): ProgramBPoReviewDto {
+    return {
+      id: review.id,
+      decision: review.decision,
+      comment: review.comment ?? undefined,
+      author: review.authorUser,
+      createdAt: review.createdAt,
     };
   }
 
@@ -914,20 +984,18 @@ export class ProgramBProjectsService {
       },
       acceptedByCompanyAt: project.acceptedByCompanyAt ?? undefined,
       acceptedByNtiAt: project.acceptedByNtiAt ?? undefined,
-      milestones: project.milestones ?? [],
+      milestones: (project.milestones ?? []).map((milestone) =>
+        this.toMilestoneDto(milestone),
+      ),
       mentoringNotes: (project.mentoringNotes ?? []).map((note) => ({
         id: note.id,
         note: note.note,
         author: note.authorUser,
         createdAt: note.createdAt,
       })),
-      poReviews: (project.poReviews ?? []).map((review) => ({
-        id: review.id,
-        decision: review.decision,
-        comment: review.comment ?? undefined,
-        author: review.authorUser,
-        createdAt: review.createdAt,
-      })),
+      poReviews: (project.poReviews ?? []).map((review) =>
+        this.toPoReviewDto(review),
+      ),
       documents: (project.documents ?? []).map((document) =>
         this.toProjectDocumentDto(document as never),
       ),

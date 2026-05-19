@@ -825,24 +825,12 @@ export class ProgramBBacklogService {
       entityId: backlogItemId,
     });
 
-    const currentDocuments =
-      await this.backlogRepository.listBacklogDocuments(backlogItemId);
-    const version =
-      Math.max(
-        0,
-        ...currentDocuments
-          .filter((document) => document.category === dto.category)
-          .map((document) => document.version),
-      ) + 1;
-
-    const document = await this.backlogRepository.createBacklogDocument({
+    const document = await this.createBacklogDocumentWithNextVersion(
       backlogItemId,
-      uploadedFileId: upload.fileId,
-      category: dto.category,
-      visibility: dto.visibility,
-      version,
-      createdById: user.id,
-    });
+      upload.fileId,
+      dto,
+      user.id,
+    );
 
     return {
       documentId: document.id,
@@ -1043,6 +1031,54 @@ export class ProgramBBacklogService {
     }
 
     return document;
+  }
+
+  private async createBacklogDocumentWithNextVersion(
+    backlogItemId: string,
+    uploadedFileId: string,
+    dto: CreateProgramBBacklogDocumentUploadDto,
+    createdById: string,
+  ) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await this.backlogRepository.transaction(async (db) => {
+          const currentDocuments =
+            await this.backlogRepository.listBacklogDocuments(
+              backlogItemId,
+              db,
+            );
+          const version =
+            Math.max(
+              0,
+              ...currentDocuments
+                .filter((document) => document.category === dto.category)
+                .map((document) => document.version),
+            ) + 1;
+
+          return this.backlogRepository.createBacklogDocument(
+            {
+              backlogItemId,
+              uploadedFileId,
+              category: dto.category,
+              visibility: dto.visibility,
+              version,
+              createdById,
+            },
+            db,
+          );
+        }, this.backlogLifecycleTransactionOptions);
+      } catch (error) {
+        if (attempt === 0 && isPrismaUniqueConstraintError(error)) {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    throw new ConflictException(
+      'Could not assign a unique document version for this category',
+    );
   }
 
   private canReadBacklogDocument(

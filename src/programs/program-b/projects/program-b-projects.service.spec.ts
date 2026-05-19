@@ -19,6 +19,14 @@ jest.mock('@prisma/client', () => ({}), { virtual: true });
 jest.mock(
   'generated/prisma/enums',
   () => ({
+    BacklogItemStatus: {
+      ASSIGNED: 'ASSIGNED',
+      IN_REALIZATION: 'IN_REALIZATION',
+      CLOSED: 'CLOSED',
+    },
+    FileVisibility: {
+      PRIVATE: 'PRIVATE',
+    },
     ProgramBMilestoneStatus: {
       PLANNED: 'PLANNED',
       IN_PROGRESS: 'IN_PROGRESS',
@@ -49,6 +57,10 @@ jest.mock(
       ACTIVE: 'ACTIVE',
       SUSPENDED: 'SUSPENDED',
     },
+    UploadStatus: {
+      PENDING: 'PENDING',
+      UPLOADED: 'UPLOADED',
+    },
   }),
   { virtual: true },
 );
@@ -59,9 +71,12 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import {
+  BacklogItemStatus,
+  FileVisibility,
   ProgramBMilestoneStatus,
   ProgramBPoDecision,
   ProgramBProjectStatus,
+  UploadStatus,
   UserRole,
   UserStatus,
 } from 'generated/prisma/enums';
@@ -95,6 +110,13 @@ describe('ProgramBProjectsService', () => {
 
   let userRepository: {
     findActiveOrganizationMember: jest.Mock;
+  };
+  let filesService: {
+    requestUpload: jest.Mock;
+    completeUpload: jest.Mock;
+  };
+  let storageService: {
+    createPresignedDownloadUrl: jest.Mock;
   };
 
   const companyUser = {
@@ -147,7 +169,7 @@ describe('ProgramBProjectsService', () => {
     backlogItem: {
       id: 'backlog-1',
       organizationId: 'org-1',
-      status: 'ASSIGNED',
+      status: BacklogItemStatus.ASSIGNED,
     },
     application: {
       id: 'application-1',
@@ -194,12 +216,12 @@ describe('ProgramBProjectsService', () => {
       }),
     };
 
-    const filesService = {
+    filesService = {
       requestUpload: jest.fn(),
       completeUpload: jest.fn(),
     };
 
-    const storageService = {
+    storageService = {
       createPresignedDownloadUrl: jest.fn(),
     };
 
@@ -271,6 +293,159 @@ describe('ProgramBProjectsService', () => {
     );
 
     expect(result).toBe(milestone);
+  });
+
+  it('maps milestone responses to the DTO shape', async () => {
+    projectsRepository.listMilestones.mockResolvedValue([
+      {
+        id: 'milestone-1',
+        projectId: 'project-1',
+        title: 'Prototype',
+        description: null,
+        dueAt: null,
+        status: ProgramBMilestoneStatus.PLANNED,
+        createdAt: new Date('2026-05-17T10:00:00.000Z'),
+        updatedAt: new Date('2026-05-17T10:00:00.000Z'),
+      },
+    ]);
+
+    await expect(
+      service.listMilestones('project-1', admin as never),
+    ).resolves.toEqual([
+      {
+        id: 'milestone-1',
+        title: 'Prototype',
+        description: undefined,
+        dueAt: undefined,
+        status: ProgramBMilestoneStatus.PLANNED,
+        createdAt: new Date('2026-05-17T10:00:00.000Z'),
+        updatedAt: new Date('2026-05-17T10:00:00.000Z'),
+      },
+    ]);
+  });
+
+  it('creates a project document upload with the next category version', async () => {
+    filesService.requestUpload.mockResolvedValue({
+      fileId: 'file-1',
+      uploadUrl: 'https://upload.example.com',
+      expiresAt: new Date('2026-05-18T10:00:00.000Z'),
+    });
+    projectsRepository.listProjectDocuments.mockResolvedValue([
+      { category: 'OUTPUT', version: 1 },
+      { category: 'OUTPUT', version: 2 },
+      { category: 'OTHER', version: 99 },
+    ]);
+    projectsRepository.createProjectDocument.mockResolvedValue({
+      id: 'document-1',
+    });
+
+    const result = await service.createDocumentUpload(
+      'project-1',
+      {
+        filename: 'report.pdf',
+        mimeType: 'application/pdf',
+        size: 1024,
+        category: 'OUTPUT' as never,
+        visibility: 'PARTICIPANTS' as never,
+      },
+      companyUser as never,
+    );
+
+    expect(filesService.requestUpload).toHaveBeenCalledWith(
+      companyUser,
+      expect.objectContaining({
+        visibility: FileVisibility.PRIVATE,
+      }),
+    );
+    expect(projectsRepository.createProjectDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'project-1',
+        uploadedFileId: 'file-1',
+        category: 'OUTPUT',
+        version: 3,
+        createdById: companyUser.id,
+      }),
+      { tx: 'db-client' },
+    );
+    expect(result.documentId).toBe('document-1');
+  });
+
+  it('completes a project document upload and returns the mapped document', async () => {
+    projectsRepository.findProjectDocumentById
+      .mockResolvedValueOnce({
+        id: 'document-1',
+        projectId: 'project-1',
+        category: 'OUTPUT',
+        visibility: 'PARTICIPANTS',
+        version: 1,
+        createdAt: new Date('2026-05-17T10:00:00.000Z'),
+        uploadedFile: {
+          id: 'file-1',
+          originalName: 'report.pdf',
+          mimeType: 'application/pdf',
+          size: 1024,
+          status: UploadStatus.PENDING,
+          uploadedAt: null,
+        },
+      })
+      .mockResolvedValueOnce({
+        id: 'document-1',
+        projectId: 'project-1',
+        category: 'OUTPUT',
+        visibility: 'PARTICIPANTS',
+        version: 1,
+        createdAt: new Date('2026-05-17T10:00:00.000Z'),
+        uploadedFile: {
+          id: 'file-1',
+          originalName: 'report.pdf',
+          mimeType: 'application/pdf',
+          size: 1024,
+          status: UploadStatus.UPLOADED,
+          uploadedAt: new Date('2026-05-17T10:10:00.000Z'),
+        },
+      });
+
+    const result = await service.completeDocumentUpload(
+      'project-1',
+      'document-1',
+      { size: 1024, checksum: 'abc123' },
+      companyUser as never,
+    );
+
+    expect(filesService.completeUpload).toHaveBeenCalledWith(companyUser, {
+      fileId: 'file-1',
+      size: 1024,
+      checksum: 'abc123',
+    });
+    expect(result.status).toBe(UploadStatus.UPLOADED);
+  });
+
+  it('rejects project document download before the upload is completed', async () => {
+    projectsRepository.findProjectDocumentById.mockResolvedValue({
+      id: 'document-1',
+      projectId: 'project-1',
+      category: 'OUTPUT',
+      visibility: 'PARTICIPANTS',
+      version: 1,
+      createdAt: new Date('2026-05-17T10:00:00.000Z'),
+      uploadedFile: {
+        id: 'file-1',
+        key: 'uploads/file-1',
+        originalName: 'report.pdf',
+        mimeType: 'application/pdf',
+        size: 1024,
+        status: UploadStatus.PENDING,
+        uploadedAt: null,
+      },
+    });
+
+    await expect(
+      service.requestDocumentDownload(
+        'project-1',
+        'document-1',
+        companyUser as never,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('rejects company employees who are not active organization members', async () => {

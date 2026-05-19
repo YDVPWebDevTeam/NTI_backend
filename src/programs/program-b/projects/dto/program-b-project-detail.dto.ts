@@ -1,5 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ProgramBProjectStatus } from 'generated/prisma/enums';
+import {
+  ProgramBMilestoneStatus,
+  ProgramBPoDecision,
+  ProgramBProjectStatus,
+} from 'generated/prisma/enums';
 import {
   ProgramBBacklogItemDto,
   ProgramBBacklogUserSummaryDto,
@@ -62,8 +66,8 @@ export class ProgramBMilestoneDto {
   @ApiPropertyOptional()
   dueAt?: Date | null;
 
-  @ApiProperty()
-  status!: string;
+  @ApiProperty({ enum: ProgramBMilestoneStatus })
+  status!: ProgramBMilestoneStatus;
 
   @ApiProperty()
   createdAt!: Date;
@@ -90,8 +94,8 @@ export class ProgramBPoReviewDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
 
-  @ApiProperty()
-  decision!: string;
+  @ApiProperty({ enum: ProgramBPoDecision })
+  decision!: ProgramBPoDecision;
 
   @ApiPropertyOptional()
   comment?: string | null;

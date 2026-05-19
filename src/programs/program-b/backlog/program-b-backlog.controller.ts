@@ -28,6 +28,7 @@ import {
   DeleteProgramBBacklogItemApi,
   ListMyProgramBBacklogItemsApi,
   ListProgramBBacklogCandidatesApi,
+  ListPublishedProgramBBacklogItemsApi,
   PublishProgramBBacklogItemApi,
   RejectProgramBBacklogCandidateApi,
   ShortlistProgramBBacklogCandidateApi,
@@ -74,7 +75,7 @@ export class ProgramBBacklogController {
     return this.backlogService.create(dto, user);
   }
 
-  @ListMyProgramBBacklogItemsApi()
+  @ListPublishedProgramBBacklogItemsApi()
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.STUDENT)

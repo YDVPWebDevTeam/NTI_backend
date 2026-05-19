@@ -524,6 +524,15 @@ export class ApplicationsService {
       this.needsInfoTransactionOptions,
     );
 
+    if (updatedApplication.call.type === ProgramType.PROGRAM_A) {
+      await this.sendProgramAApplicationEmail(
+        updatedApplication,
+        targetStatus === ApplicationStatus.APPROVED
+          ? EMAIL_JOBS.APPLICATION_APPROVED
+          : EMAIL_JOBS.APPLICATION_REJECTED,
+      );
+    }
+
     return this.toDetailDto(updatedApplication);
   }
 

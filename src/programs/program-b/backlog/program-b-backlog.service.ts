@@ -237,16 +237,19 @@ export class ProgramBBacklogService {
         db,
       );
 
-      if (result.count === 0) {
-        throw new ConflictException(
-          'Product Owner cannot be assigned to an archived backlog item',
-        );
-      }
-
       const updatedItem = await this.backlogRepository.findUnique(
         { id: item.id },
         db,
       );
+
+      if (result.count === 0) {
+        if (!updatedItem) {
+          throw new NotFoundException('Backlog item not found');
+        }
+        throw new ConflictException(
+          'Product Owner cannot be assigned to an archived backlog item',
+        );
+      }
 
       if (!updatedItem) {
         throw new NotFoundException('Backlog item not found');

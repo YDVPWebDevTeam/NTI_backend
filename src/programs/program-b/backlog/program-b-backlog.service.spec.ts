@@ -977,9 +977,14 @@ describe('ProgramBBacklogService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('throws ConflictException on race condition when item is archived during transaction', async () => {
+    it('throws ConflictException when item is archived concurrently during transaction', async () => {
       organizationRepository.findUnique.mockResolvedValue(activeOrganization);
-      backlogRepository.findUnique.mockResolvedValue(draftItem);
+      backlogRepository.findUnique
+        .mockResolvedValueOnce(draftItem)
+        .mockResolvedValueOnce({
+          ...draftItem,
+          status: BacklogItemStatus.ARCHIVED,
+        });
       userRepository.findUnique.mockResolvedValue(targetUser);
       userRepository.findActiveOrganizationMember.mockResolvedValue(targetUser);
       backlogRepository.updateMany.mockResolvedValue({ count: 0 });
@@ -991,6 +996,24 @@ describe('ProgramBBacklogService', () => {
           owner as never,
         ),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('throws NotFoundException when item is deleted concurrently during transaction', async () => {
+      organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+      backlogRepository.findUnique
+        .mockResolvedValueOnce(draftItem)
+        .mockResolvedValueOnce(null);
+      userRepository.findUnique.mockResolvedValue(targetUser);
+      userRepository.findActiveOrganizationMember.mockResolvedValue(targetUser);
+      backlogRepository.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.assignProductOwner(
+          'item-1',
+          { productOwnerUserId: 'po-user-1' },
+          owner as never,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 

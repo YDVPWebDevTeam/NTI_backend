@@ -21,6 +21,7 @@ import {
   UpdateAcademicInformationApi,
   UpdateProfessionalSkillsApi,
 } from './api-docs';
+import { CompleteStudentProfileDto } from './dto/complete-student-profile.dto';
 import { GetMyStudentProfileResponseDto } from './dto/student-profile.dto';
 import { UpdateAcademicInformationDto } from './dto/update-academic-information.dto';
 import { UpdateProfessionalSkillsDto } from './dto/update-professional-skills.dto';
@@ -64,7 +65,8 @@ export class StudentProfileController {
   @HttpCode(HttpStatus.OK)
   completeProfile(
     @GetUserContext() authUser: AuthenticatedUserContext,
+    @Body() dto: CompleteStudentProfileDto,
   ): Promise<GetMyStudentProfileResponseDto> {
-    return this.service.completeProfile(authUser);
+    return this.service.completeProfile(authUser, dto);
   }
 }

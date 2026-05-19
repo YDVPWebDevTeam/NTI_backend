@@ -288,6 +288,67 @@ describe('TeamService', () => {
     });
   });
 
+  it('renames an existing personal team when a custom name is provided', async () => {
+    teamRepository.findActiveByUserId.mockResolvedValueOnce([
+      {
+        id: 'team-1',
+        name: 'Test Student Team',
+        leaderId: 'user-1',
+        updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+        lockedAt: null,
+        archivedAt: null,
+        members: [
+          {
+            userId: 'user-1',
+            teamId: 'team-1',
+            user: {
+              id: 'user-1',
+              firstName: 'Team',
+              lastName: 'Leader',
+              email: 'leader@example.com',
+              role: 'STUDENT',
+              status: 'ACTIVE',
+              isEmailConfirmed: true,
+              isAdminConfirmed: false,
+              organizationId: null,
+              createdAt: new Date('2026-04-20T10:00:00.000Z'),
+              updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+            },
+          },
+        ],
+        leader: {
+          id: 'user-1',
+          firstName: 'Team',
+          lastName: 'Leader',
+          email: 'leader@example.com',
+          role: 'STUDENT',
+          status: 'ACTIVE',
+          isEmailConfirmed: true,
+          isAdminConfirmed: false,
+          organizationId: null,
+          createdAt: new Date('2026-04-20T10:00:00.000Z'),
+          updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+        },
+      },
+    ]);
+
+    await service.ensurePersonalTeamForUser(
+      {
+        id: 'user-1',
+        email: 'a@example.com',
+        role: 'STUDENT',
+        status: 'ACTIVE',
+      } as AuthenticatedUserContext,
+      'Launch Crew',
+    );
+
+    expect(teamRepository.update).toHaveBeenCalledWith(
+      { id: 'team-1' },
+      { name: 'Launch Crew' },
+      transactionClient,
+    );
+  });
+
   it('throws when multiple active teams are associated with the user', async () => {
     teamRepository.findActiveByUserId.mockResolvedValueOnce([
       {

@@ -95,11 +95,16 @@ describe('ProgramBBacklogService', () => {
 
   let backlogRepository: {
     create: jest.Mock;
-    findUnique: jest.Mock;
+    findUnique: jest.Mock<Promise<unknown>, unknown[]>;
+    findDetailUnique: jest.Mock<Promise<unknown>, unknown[]>;
     update: jest.Mock;
     updateMany: jest.Mock;
     deleteDraftById: jest.Mock;
-    findMany: jest.Mock;
+    findMany: jest.Mock<Promise<unknown>, unknown[]>;
+    findDetails: jest.Mock<Promise<unknown>, unknown[]>;
+    listBacklogDocuments: jest.Mock;
+    findBacklogDocumentById: jest.Mock;
+    createBacklogDocument: jest.Mock;
     count: jest.Mock;
     transaction: jest.Mock;
   };
@@ -173,6 +178,16 @@ describe('ProgramBBacklogService', () => {
     expectedOutcomes: 'Faster onboarding',
     productOwnerUserId: 'employee-1',
     status: BacklogItemStatus.DRAFT,
+    organization: {
+      id: 'org-1',
+      name: 'Org 1',
+    },
+    documents: [],
+    productOwner: {
+      id: 'employee-1',
+      firstName: 'Emp',
+      lastName: 'Loyee',
+    },
     createdAt: new Date('2026-05-05T10:00:00.000Z'),
     updatedAt: new Date('2026-05-05T10:00:00.000Z'),
   };
@@ -204,11 +219,20 @@ describe('ProgramBBacklogService', () => {
   beforeEach(() => {
     backlogRepository = {
       create: jest.fn(),
-      findUnique: jest.fn(),
+      findUnique: jest.fn<Promise<unknown>, unknown[]>(),
+      findDetailUnique: jest.fn<Promise<unknown>, unknown[]>((...args) =>
+        backlogRepository.findUnique(...args),
+      ),
       update: jest.fn(),
       updateMany: jest.fn(),
       deleteDraftById: jest.fn(),
-      findMany: jest.fn(),
+      findMany: jest.fn<Promise<unknown>, unknown[]>(),
+      findDetails: jest.fn<Promise<unknown>, unknown[]>((...args) =>
+        backlogRepository.findMany(...args),
+      ),
+      listBacklogDocuments: jest.fn(),
+      findBacklogDocumentById: jest.fn(),
+      createBacklogDocument: jest.fn(),
       count: jest.fn(),
       transaction: jest.fn((fn: (db: object) => Promise<unknown>) => fn({})),
     };
@@ -236,12 +260,23 @@ describe('ProgramBBacklogService', () => {
       createProject: jest.fn(),
     };
 
+    const filesService = {
+      requestUpload: jest.fn(),
+      completeUpload: jest.fn(),
+    };
+
+    const storageService = {
+      createPresignedDownloadUrl: jest.fn(),
+    };
+
     service = new ProgramBBacklogService(
       backlogRepository as never,
       organizationRepository as never,
       userRepository as never,
       teamApplicationRepository as never,
       projectsRepository as never,
+      filesService as never,
+      storageService as never,
     );
   });
 
@@ -251,6 +286,7 @@ describe('ProgramBBacklogService', () => {
       id: 'employee-1',
     });
     backlogRepository.create.mockResolvedValue(draftItem);
+    backlogRepository.findDetailUnique.mockResolvedValue(draftItem);
 
     const result = await service.create(
       {

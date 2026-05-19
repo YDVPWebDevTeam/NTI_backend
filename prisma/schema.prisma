@@ -52,6 +52,10 @@ enum ProgramType {
 enum BacklogItemStatus {
   DRAFT
   PUBLISHED
+  IN_PAIRING
+  ASSIGNED
+  IN_REALIZATION
+  CLOSED
   ARCHIVED
 }
 
@@ -186,6 +190,24 @@ enum ProgramBPoDecision {
   CHANGES_REQUESTED
 }
 
+enum ProgramBBacklogDocumentCategory {
+  TECHNICAL_SPECIFICATION
+  SUPPORTING
+  OTHER
+}
+
+enum ProgramBProjectDocumentCategory {
+  OUTPUT
+  FINAL_PRESENTATION
+  DELIVERABLE
+  OTHER
+}
+
+enum ProgramBDocumentVisibility {
+  INTERNAL
+  PARTICIPANTS
+}
+
 model User {
   id                 String  @id @default(uuid())
   firstName          String
@@ -220,19 +242,21 @@ model User {
   uploads                       UploadedFile[]
   organizationDocumentsUploaded OrganizationDocument[] @relation("OrganizationDocumentUploadedBy")
 
-  applicationsCreated             Application[]               @relation("ApplicationCreatedBy")
-  assignedProgramAApplications    Application[]               @relation("ApplicationAssignedMentor")
-  applicationEvaluations          ApplicationEvaluation[]     @relation("ApplicationEvaluationEvaluator")
-  applicationDecisions            Application[]               @relation("ApplicationDecisionBy")
-  programAMentorAssignmentsMade   Application[]               @relation("ApplicationMentorAssignedBy")
-  updatedApplicationSections      ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
-  applicationSectionHistories     ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
-  applicationDocumentsCreated     ApplicationDocument[]       @relation("ApplicationDocumentCreatedBy")
-  applicationDocumentsForMember   ApplicationDocument[]       @relation("ApplicationDocumentMember")
-  productOwnerForBacklogItems     BacklogItem[]               @relation("BacklogItemProductOwner")
-  productOwnerForProgramBProjects ProgramBProject[]           @relation("ProgramBProjectProductOwner")
-  programBMentoringNotesAuthored  ProgramBMentoringNote[]     @relation("ProgramBMentoringNoteAuthor")
-  programBPoReviewsAuthored       ProgramBPoReview[]          @relation("ProgramBPoReviewAuthor")
+  applicationsCreated              Application[]               @relation("ApplicationCreatedBy")
+  assignedProgramAApplications     Application[]               @relation("ApplicationAssignedMentor")
+  applicationEvaluations           ApplicationEvaluation[]     @relation("ApplicationEvaluationEvaluator")
+  applicationDecisions             Application[]               @relation("ApplicationDecisionBy")
+  programAMentorAssignmentsMade    Application[]               @relation("ApplicationMentorAssignedBy")
+  updatedApplicationSections       ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
+  applicationSectionHistories      ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
+  applicationDocumentsCreated      ApplicationDocument[]       @relation("ApplicationDocumentCreatedBy")
+  applicationDocumentsForMember    ApplicationDocument[]       @relation("ApplicationDocumentMember")
+  productOwnerForBacklogItems      BacklogItem[]               @relation("BacklogItemProductOwner")
+  productOwnerForProgramBProjects  ProgramBProject[]           @relation("ProgramBProjectProductOwner")
+  assignedProgramBProjectsAsMentor ProgramBProject[]           @relation("ProgramBProjectMentor")
+  programBMentorAssignmentsMade    ProgramBProject[]           @relation("ProgramBProjectMentorAssignedBy")
+  programBMentoringNotesAuthored   ProgramBMentoringNote[]     @relation("ProgramBMentoringNoteAuthor")
+  programBPoReviewsAuthored        ProgramBPoReview[]          @relation("ProgramBPoReviewAuthor")
 
   needsInfoItemsCreated           NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
   needsInfoItemsResolved          NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
@@ -244,6 +268,8 @@ model User {
   updatedAt                  DateTime                    @updatedAt
   programBTeamApplications   ProgramBTeamApplication[]
   programBTeamApplicationCvs ProgramBTeamApplicationCv[]
+  programBBacklogDocuments   ProgramBBacklogDocument[]
+  programBProjectDocuments   ProgramBProjectDocument[]
 
   @@index([organizationId])
   @@index([role, status])
@@ -278,6 +304,8 @@ model UploadedFile {
   cvFor                      StudentProfile[]            @relation("StudentCvFile")
   applicationDocuments       ApplicationDocument[]
   programBTeamApplications   ProgramBTeamApplication[]
+  programBBacklogDocuments   ProgramBBacklogDocument[]
+  programBProjectDocuments   ProgramBProjectDocument[]
   programBTeamApplicationCvs ProgramBTeamApplicationCv[]
 
   @@index([ownerId, status])
@@ -533,6 +561,7 @@ model BacklogItem {
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
   programBTeamApplications ProgramBTeamApplication[]
+  documents                ProgramBBacklogDocument[]
 
   @@index([organizationId])
   @@index([status])
@@ -710,6 +739,13 @@ model ProgramBProject {
   productOwnerUserId String
   productOwnerUser   User   @relation("ProgramBProjectProductOwner", fields: [productOwnerUserId], references: [id], onDelete: Restrict)
 
+  mentorUserId String?
+  mentorUser   User?   @relation("ProgramBProjectMentor", fields: [mentorUserId], references: [id], onDelete: SetNull)
+
+  mentorAssignedAt   DateTime?
+  mentorAssignedById String?
+  mentorAssignedBy   User?     @relation("ProgramBProjectMentorAssignedBy", fields: [mentorAssignedById], references: [id], onDelete: SetNull)
+
   status ProgramBProjectStatus @default(ACTIVE)
 
   acceptedByCompanyAt DateTime?
@@ -721,12 +757,15 @@ model ProgramBProject {
   milestones     ProgramBMilestone[]
   mentoringNotes ProgramBMentoringNote[]
   poReviews      ProgramBPoReview[]
+  documents      ProgramBProjectDocument[]
 
   @@index([teamId])
   @@index([backlogItemId])
   @@index([applicationId])
   @@index([teamApplicationId])
   @@index([productOwnerUserId])
+  @@index([mentorUserId])
+  @@index([mentorAssignedById])
   @@index([status])
 }
 
@@ -746,6 +785,54 @@ model ProgramBMilestone {
 
   @@index([projectId, createdAt])
   @@index([projectId, status])
+}
+
+model ProgramBBacklogDocument {
+  id String @id @default(uuid())
+
+  backlogItemId String
+  backlogItem   BacklogItem @relation(fields: [backlogItemId], references: [id], onDelete: Cascade)
+
+  uploadedFileId String
+  uploadedFile   UploadedFile @relation(fields: [uploadedFileId], references: [id], onDelete: Cascade)
+
+  category   ProgramBBacklogDocumentCategory
+  visibility ProgramBDocumentVisibility      @default(PARTICIPANTS)
+  version    Int                             @default(1)
+  isActive   Boolean                         @default(true)
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([backlogItemId, category, isActive])
+  @@index([uploadedFileId])
+}
+
+model ProgramBProjectDocument {
+  id String @id @default(uuid())
+
+  projectId String
+  project   ProgramBProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  uploadedFileId String
+  uploadedFile   UploadedFile @relation(fields: [uploadedFileId], references: [id], onDelete: Cascade)
+
+  category   ProgramBProjectDocumentCategory
+  visibility ProgramBDocumentVisibility      @default(PARTICIPANTS)
+  version    Int                             @default(1)
+  isActive   Boolean                         @default(true)
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, category, isActive])
+  @@index([uploadedFileId])
 }
 
 model ProgramBMentoringNote {

@@ -74,11 +74,21 @@ describe('ProgramBProjectsService', () => {
   let projectsRepository: {
     transaction: jest.Mock;
     findProjectForExecution: jest.Mock;
+    findProjectDetail: jest.Mock;
+    listProjectsForUser: jest.Mock;
+    listMilestones: jest.Mock;
     createMilestone: jest.Mock;
     updateMilestoneForProject: jest.Mock;
     findMilestoneForProject: jest.Mock;
+    listMentoringNotes: jest.Mock;
     createMentoringNote: jest.Mock;
+    listPoReviews: jest.Mock;
     createPoReview: jest.Mock;
+    listProjectDocuments: jest.Mock;
+    findProjectDocumentById: jest.Mock;
+    createProjectDocument: jest.Mock;
+    updateProject: jest.Mock;
+    updateBacklogStatusForProject: jest.Mock;
     acceptProjectByCompany: jest.Mock;
     acceptProjectByNti: jest.Mock;
   };
@@ -126,6 +136,9 @@ describe('ProgramBProjectsService', () => {
     teamApplicationId: null,
     teamId: 'team-1',
     productOwnerUserId: 'po-1',
+    mentorUserId: 'mentor-1',
+    mentorAssignedAt: null,
+    mentorAssignedById: null,
     status: ProgramBProjectStatus.ACTIVE,
     acceptedByCompanyAt: null,
     acceptedByNtiAt: null,
@@ -134,6 +147,7 @@ describe('ProgramBProjectsService', () => {
     backlogItem: {
       id: 'backlog-1',
       organizationId: 'org-1',
+      status: 'ASSIGNED',
     },
     application: {
       id: 'application-1',
@@ -155,11 +169,21 @@ describe('ProgramBProjectsService', () => {
         fn({ tx: 'db-client' }),
       ),
       findProjectForExecution: jest.fn().mockResolvedValue(activeProject),
+      findProjectDetail: jest.fn().mockResolvedValue(activeProject),
+      listProjectsForUser: jest.fn().mockResolvedValue([]),
+      listMilestones: jest.fn().mockResolvedValue([]),
       createMilestone: jest.fn(),
       updateMilestoneForProject: jest.fn(),
       findMilestoneForProject: jest.fn(),
+      listMentoringNotes: jest.fn().mockResolvedValue([]),
       createMentoringNote: jest.fn(),
+      listPoReviews: jest.fn().mockResolvedValue([]),
       createPoReview: jest.fn(),
+      listProjectDocuments: jest.fn().mockResolvedValue([]),
+      findProjectDocumentById: jest.fn(),
+      createProjectDocument: jest.fn(),
+      updateProject: jest.fn(),
+      updateBacklogStatusForProject: jest.fn(),
       acceptProjectByCompany: jest.fn(),
       acceptProjectByNti: jest.fn(),
     };
@@ -170,9 +194,20 @@ describe('ProgramBProjectsService', () => {
       }),
     };
 
+    const filesService = {
+      requestUpload: jest.fn(),
+      completeUpload: jest.fn(),
+    };
+
+    const storageService = {
+      createPresignedDownloadUrl: jest.fn(),
+    };
+
     service = new ProgramBProjectsService(
       projectsRepository as never,
       userRepository as never,
+      filesService as never,
+      storageService as never,
     );
   });
 
@@ -529,11 +564,21 @@ describe('ProgramBProjectsService', () => {
   });
 
   it('keeps the project open after only one final acceptance', async () => {
-    projectsRepository.acceptProjectByCompany.mockResolvedValue({
+    const companyAcceptedProject = {
       ...activeProject,
       acceptedByCompanyAt: new Date('2026-05-17T11:00:00.000Z'),
       status: ProgramBProjectStatus.ACTIVE,
-    });
+    };
+
+    projectsRepository.acceptProjectByCompany.mockResolvedValue(
+      companyAcceptedProject,
+    );
+    projectsRepository.findProjectForExecution
+      .mockResolvedValueOnce(activeProject)
+      .mockResolvedValueOnce(companyAcceptedProject);
+    projectsRepository.findProjectDetail.mockResolvedValue(
+      companyAcceptedProject,
+    );
 
     const result = await service.recordFinalAcceptance(
       'project-1',
@@ -557,15 +602,20 @@ describe('ProgramBProjectsService', () => {
       acceptedByCompanyAt: new Date('2026-05-17T11:00:00.000Z'),
     };
 
+    const closedProjectDetail = {
+      ...companyAcceptedProject,
+      acceptedByNtiAt: new Date('2026-05-17T12:00:00.000Z'),
+      status: ProgramBProjectStatus.CLOSED,
+    };
+
     projectsRepository.findProjectForExecution.mockResolvedValue(
       companyAcceptedProject,
     );
 
-    projectsRepository.acceptProjectByNti.mockResolvedValue({
-      ...companyAcceptedProject,
-      acceptedByNtiAt: new Date('2026-05-17T12:00:00.000Z'),
-      status: ProgramBProjectStatus.CLOSED,
-    });
+    projectsRepository.acceptProjectByNti.mockResolvedValue(
+      closedProjectDetail,
+    );
+    projectsRepository.findProjectDetail.mockResolvedValue(closedProjectDetail);
 
     const result = await service.recordFinalAcceptance(
       'project-1',
@@ -592,6 +642,7 @@ describe('ProgramBProjectsService', () => {
     projectsRepository.findProjectForExecution.mockResolvedValue(
       acceptedProject,
     );
+    projectsRepository.findProjectDetail.mockResolvedValue(acceptedProject);
 
     const result = await service.recordFinalAcceptance(
       'project-1',
@@ -601,7 +652,10 @@ describe('ProgramBProjectsService', () => {
 
     expect(projectsRepository.acceptProjectByCompany).not.toHaveBeenCalled();
     expect(projectsRepository.acceptProjectByNti).not.toHaveBeenCalled();
-    expect(result).toBe(acceptedProject);
+    expect(result.acceptedByCompanyAt).toEqual(
+      acceptedProject.acceptedByCompanyAt,
+    );
+    expect(result.id).toBe(acceptedProject.id);
   });
 
   it('rejects non-idempotent final acceptance after closure', async () => {

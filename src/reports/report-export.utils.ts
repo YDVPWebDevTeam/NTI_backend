@@ -6,11 +6,13 @@ type ZipEntry = {
 };
 
 function escapeCsvValue(value: string): string {
-  if (/[",\n\r]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
+  const sanitizedValue = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+
+  if (/[",\n\r]/.test(sanitizedValue)) {
+    return `"${sanitizedValue.replace(/"/g, '""')}"`;
   }
 
-  return value;
+  return sanitizedValue;
 }
 
 function escapeXml(value: string): string {

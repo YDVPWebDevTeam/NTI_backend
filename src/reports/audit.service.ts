@@ -10,9 +10,13 @@ import {
   type ReportFormat,
 } from './reports.constants';
 
-function toJsonValue(value: unknown): Prisma.InputJsonValue {
+function toJsonValue(value: unknown): Prisma.InputJsonValue | null {
   if (value === null) {
-    return 'null';
+    return null;
+  }
+
+  if (value === undefined) {
+    return null;
   }
 
   if (
@@ -23,17 +27,31 @@ function toJsonValue(value: unknown): Prisma.InputJsonValue {
     return value;
   }
 
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
   if (Array.isArray(value)) {
     return value.map((item) => toJsonValue(item));
   }
 
   if (value && typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, toJsonValue(item)]),
+      Object.entries(value).flatMap(([key, item]) => {
+        if (item === undefined) {
+          return [];
+        }
+
+        return [[key, toJsonValue(item)]];
+      }),
     );
   }
 
-  return JSON.stringify(value);
+  return null;
 }
 
 type RecordReportExportRequestedInput = {

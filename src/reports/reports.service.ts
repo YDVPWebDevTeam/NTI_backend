@@ -31,6 +31,8 @@ import { ReportsDashboardDto } from './dto/reports-dashboard.dto';
 import { AuditService } from './audit.service';
 import { ReportExportJobsService } from './report-export-jobs.service';
 import {
+  REPORT_EXPORT_ACTION,
+  REPORT_EXPORT_ENTITY_TYPE,
   REPORT_EXPORT_SYNC_THRESHOLD,
   type ReportFormat,
 } from './reports.constants';
@@ -297,8 +299,8 @@ export class ReportsService {
     ensureAdminRole(actor.role);
     const events = await this.auditService.listExportAuditEvents({
       createdAt: this.buildDateRangeFilter(query.dateFrom, query.dateTo),
-      action: 'REPORT_EXPORT_REQUESTED',
-      entityType: 'REPORT_EXPORT',
+      action: REPORT_EXPORT_ACTION,
+      entityType: REPORT_EXPORT_ENTITY_TYPE,
     });
 
     const headers = [

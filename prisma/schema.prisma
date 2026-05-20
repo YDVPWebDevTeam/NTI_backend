@@ -233,6 +233,7 @@ model User {
   productOwnerForProgramBProjects ProgramBProject[]           @relation("ProgramBProjectProductOwner")
   programBMentoringNotesAuthored  ProgramBMentoringNote[]     @relation("ProgramBMentoringNoteAuthor")
   programBPoReviewsAuthored       ProgramBPoReview[]          @relation("ProgramBPoReviewAuthor")
+  auditEvents                     AuditEvent[]                @relation("AuditEventActor")
 
   needsInfoItemsCreated           NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
   needsInfoItemsResolved          NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
@@ -951,6 +952,24 @@ model SystemInvitation {
 
   @@index([status, expiresAt, email])
   @@index([email, roleToAssign, status, expiresAt])
+}
+
+model AuditEvent {
+  id String @id @default(uuid())
+
+  actorUserId String
+  actorUser   User   @relation("AuditEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json
+
+  createdAt DateTime @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
 }
 
 model University {

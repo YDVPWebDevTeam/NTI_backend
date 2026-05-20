@@ -22,6 +22,7 @@ import { ProgramBProjectsModule } from './programs/program-b/projects/program-b-
 import { ProgramBTeamApplicationModule } from './programs/program-b/team-application/program-b-team-application.module';
 import { StudentProfileModule } from './student-profile';
 import { ApplicationsModule } from './applications';
+import { ReportsModule } from './reports/reports.module';
 
 const queueProcessorProviders =
   process.env.RUN_QUEUE_PROCESSORS === 'true'
@@ -57,6 +58,7 @@ const queueProcessorProviders =
     FilesModule,
     StudentProfileModule,
     ApplicationsModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService, ...queueProcessorProviders],

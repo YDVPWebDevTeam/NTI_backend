@@ -1,5 +1,25 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BacklogItemStatus } from 'generated/prisma/enums';
+import { ProgramBBacklogDocumentDto } from './program-b-backlog-document.dto';
+
+export class ProgramBBacklogOrganizationSummaryDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty()
+  name!: string;
+}
+
+export class ProgramBBacklogUserSummaryDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty()
+  firstName!: string;
+
+  @ApiProperty()
+  lastName!: string;
+}
 
 export class ProgramBBacklogItemDto {
   @ApiProperty({
@@ -47,11 +67,28 @@ export class ProgramBBacklogItemDto {
   })
   organizationId!: string;
 
+  @ApiPropertyOptional({
+    type: ProgramBBacklogOrganizationSummaryDto,
+    nullable: true,
+  })
+  organization?: ProgramBBacklogOrganizationSummaryDto | null;
+
   @ApiProperty({
     description: 'Backlog lifecycle status.',
     enum: BacklogItemStatus,
   })
   status!: BacklogItemStatus;
+
+  @ApiPropertyOptional({
+    type: ProgramBBacklogUserSummaryDto,
+    nullable: true,
+  })
+  productOwner?: ProgramBBacklogUserSummaryDto | null;
+
+  @ApiProperty({
+    type: [ProgramBBacklogDocumentDto],
+  })
+  documents!: ProgramBBacklogDocumentDto[];
 
   @ApiProperty({
     description: 'When the backlog item was created.',

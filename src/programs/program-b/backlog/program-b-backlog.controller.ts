@@ -12,7 +12,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { UserRole } from 'generated/prisma/enums';
 import { GetUserContext } from '../../../auth/decorators/get-user-context.decorator';
 import { Roles } from '../../../auth/decorators/roles.decorator';
@@ -26,8 +26,9 @@ import {
   CreateProgramBProjectFromCandidateApi,
   CreateProgramBBacklogItemApi,
   DeleteProgramBBacklogItemApi,
-  ListProgramBBacklogCandidatesApi,
   ListMyProgramBBacklogItemsApi,
+  ListProgramBBacklogCandidatesApi,
+  ListPublishedProgramBBacklogItemsApi,
   PublishProgramBBacklogItemApi,
   RejectProgramBBacklogCandidateApi,
   ShortlistProgramBBacklogCandidateApi,
@@ -38,9 +39,16 @@ import {
   toProgramBProjectDto,
 } from '../projects/dto/program-b-project.dto';
 import { AssignProductOwnerDto } from './dto/assign-product-owner.dto';
+import { CompleteProgramBDocumentUploadDto } from './dto/complete-program-b-document-upload.dto';
+import { CreateProgramBBacklogDocumentUploadDto } from './dto/create-program-b-backlog-document-upload.dto';
 import { CreateProgramBBacklogItemDto } from './dto/create-program-b-backlog-item.dto';
 import { GetProgramBBacklogQueryDto } from './dto/get-program-b-backlog-query.dto';
 import { GetProgramBBacklogResponseDto } from './dto/get-program-b-backlog-response.dto';
+import {
+  ProgramBBacklogDocumentDto,
+  ProgramBBacklogDocumentUploadDto,
+  ProgramBDocumentDownloadDto,
+} from './dto/program-b-backlog-document.dto';
 import { ProgramBBacklogCandidatesResponseDto } from './dto/program-b-backlog-candidates-response.dto';
 import { ProgramBCandidateDecisionDto } from './dto/program-b-candidate-decision.dto';
 import { ProgramBBacklogItemDto } from './dto/program-b-backlog-item.dto';
@@ -65,6 +73,39 @@ export class ProgramBBacklogController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ProgramBBacklogItemDto> {
     return this.backlogService.create(dto, user);
+  }
+
+  @ListPublishedProgramBBacklogItemsApi()
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT)
+  listPublished(
+    @Query() query: GetProgramBBacklogQueryDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<GetProgramBBacklogResponseDto> {
+    return this.backlogService.listPublished(query, user);
+  }
+
+  @ListMyProgramBBacklogItemsApi()
+  @Get('my')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE)
+  listMy(
+    @Query() query: GetProgramBBacklogQueryDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<GetProgramBBacklogResponseDto> {
+    return this.backlogService.listMy(query, user);
+  }
+
+  @ApiOkResponse({ type: ProgramBBacklogItemDto })
+  @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT)
+  findPublishedById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ProgramBBacklogItemDto> {
+    return this.backlogService.findPublishedById(id, user);
   }
 
   @UpdateProgramBBacklogItemApi()
@@ -103,17 +144,6 @@ export class ProgramBBacklogController {
     return this.backlogService.remove(id, user);
   }
 
-  @ListMyProgramBBacklogItemsApi()
-  @Get('my')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE)
-  listMy(
-    @Query() query: GetProgramBBacklogQueryDto,
-    @GetUserContext() user: AuthenticatedUserContext,
-  ): Promise<GetProgramBBacklogResponseDto> {
-    return this.backlogService.listMy(query, user);
-  }
-
   @PublishProgramBBacklogItemApi()
   @Post(':id/publish')
   @HttpCode(HttpStatus.OK)
@@ -136,6 +166,77 @@ export class ProgramBBacklogController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ProgramBBacklogItemDto> {
     return this.backlogService.archive(id, user);
+  }
+
+  @ApiOkResponse({ type: ProgramBBacklogDocumentUploadDto })
+  @Post(':id/documents/upload')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE)
+  createDocumentUpload(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateProgramBBacklogDocumentUploadDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ProgramBBacklogDocumentUploadDto> {
+    return this.backlogService.createBacklogDocumentUpload(id, dto, user);
+  }
+
+  @ApiOkResponse({ type: ProgramBBacklogDocumentDto })
+  @Post(':id/documents/:documentId/complete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE)
+  completeDocumentUpload(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+    @Body() dto: CompleteProgramBDocumentUploadDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ProgramBBacklogDocumentDto> {
+    return this.backlogService.completeBacklogDocumentUpload(
+      id,
+      documentId,
+      dto,
+      user,
+    );
+  }
+
+  @ApiOkResponse({ type: [ProgramBBacklogDocumentDto] })
+  @Get(':id/documents')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    UserRole.STUDENT,
+    UserRole.COMPANY_OWNER,
+    UserRole.COMPANY_EMPLOYEE,
+    UserRole.ADMIN,
+    UserRole.SUPER_ADMIN,
+    UserRole.EVALUATOR,
+  )
+  listDocuments(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ProgramBBacklogDocumentDto[]> {
+    return this.backlogService.listBacklogDocuments(id, user);
+  }
+
+  @ApiOkResponse({ type: ProgramBDocumentDownloadDto })
+  @Post(':id/documents/:documentId/download')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    UserRole.STUDENT,
+    UserRole.COMPANY_OWNER,
+    UserRole.COMPANY_EMPLOYEE,
+    UserRole.ADMIN,
+    UserRole.SUPER_ADMIN,
+    UserRole.EVALUATOR,
+  )
+  requestDocumentDownload(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ProgramBDocumentDownloadDto> {
+    return this.backlogService.requestBacklogDocumentDownload(
+      id,
+      documentId,
+      user,
+    );
   }
 
   @ListProgramBBacklogCandidatesApi()
@@ -171,7 +272,7 @@ export class ProgramBBacklogController {
       user,
     );
 
-    return toProgramBTeamApplicationResponseDto(application);
+    return toProgramBTeamApplicationResponseDto(application as never);
   }
 
   @Post(':id/candidates/:applicationId/accept')
@@ -192,7 +293,7 @@ export class ProgramBBacklogController {
       user,
     );
 
-    return toProgramBTeamApplicationResponseDto(application);
+    return toProgramBTeamApplicationResponseDto(application as never);
   }
 
   @Post(':id/candidates/:applicationId/reject')
@@ -213,7 +314,7 @@ export class ProgramBBacklogController {
       user,
     );
 
-    return toProgramBTeamApplicationResponseDto(application);
+    return toProgramBTeamApplicationResponseDto(application as never);
   }
 
   @Post(':id/candidates/:applicationId/create-project')

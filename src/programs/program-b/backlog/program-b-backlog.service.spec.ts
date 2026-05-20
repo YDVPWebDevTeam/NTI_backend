@@ -20,7 +20,11 @@ jest.mock(
     BacklogItemStatus: {
       DRAFT: 'DRAFT',
       PUBLISHED: 'PUBLISHED',
+      IN_PAIRING: 'IN_PAIRING',
       ARCHIVED: 'ARCHIVED',
+    },
+    FileVisibility: {
+      PRIVATE: 'PRIVATE',
     },
     OrganizationStatus: {
       PENDING: 'PENDING',
@@ -42,10 +46,16 @@ jest.mock(
       PROJECT_CREATED: 'PROJECT_CREATED',
     },
     UserRole: {
+      STUDENT: 'STUDENT',
       COMPANY_OWNER: 'COMPANY_OWNER',
       COMPANY_EMPLOYEE: 'COMPANY_EMPLOYEE',
+      EVALUATOR: 'EVALUATOR',
       ADMIN: 'ADMIN',
       SUPER_ADMIN: 'SUPER_ADMIN',
+    },
+    UploadStatus: {
+      PENDING: 'PENDING',
+      UPLOADED: 'UPLOADED',
     },
   }),
   { virtual: true },
@@ -83,8 +93,10 @@ import {
 } from '@nestjs/common';
 import {
   BacklogItemStatus,
+  FileVisibility,
   OrganizationStatus,
   ProgramBTeamApplicationStatus,
+  UploadStatus,
   UserRole,
   UserStatus,
 } from 'generated/prisma/enums';
@@ -95,11 +107,16 @@ describe('ProgramBBacklogService', () => {
 
   let backlogRepository: {
     create: jest.Mock;
-    findUnique: jest.Mock;
+    findUnique: jest.Mock<Promise<unknown>, unknown[]>;
+    findDetailUnique: jest.Mock<Promise<unknown>, unknown[]>;
     update: jest.Mock;
     updateMany: jest.Mock;
     deleteDraftById: jest.Mock;
-    findMany: jest.Mock;
+    findMany: jest.Mock<Promise<unknown>, unknown[]>;
+    findDetails: jest.Mock<Promise<unknown>, unknown[]>;
+    listBacklogDocuments: jest.Mock;
+    findBacklogDocumentById: jest.Mock;
+    createBacklogDocument: jest.Mock;
     count: jest.Mock;
     transaction: jest.Mock;
   };
@@ -126,6 +143,13 @@ describe('ProgramBBacklogService', () => {
     findProjectByTeamApplicationId: jest.Mock;
     createProject: jest.Mock;
   };
+  let filesService: {
+    requestUpload: jest.Mock;
+    completeUpload: jest.Mock;
+  };
+  let storageService: {
+    createPresignedDownloadUrl: jest.Mock;
+  };
 
   const owner = {
     id: 'owner-1',
@@ -147,6 +171,14 @@ describe('ProgramBBacklogService', () => {
     id: 'admin-1',
     email: 'admin@example.com',
     role: UserRole.ADMIN,
+    status: 'ACTIVE',
+    organizationId: null,
+  } as const;
+
+  const student = {
+    id: 'student-1',
+    email: 'student@example.com',
+    role: UserRole.STUDENT,
     status: 'ACTIVE',
     organizationId: null,
   } as const;
@@ -173,6 +205,16 @@ describe('ProgramBBacklogService', () => {
     expectedOutcomes: 'Faster onboarding',
     productOwnerUserId: 'employee-1',
     status: BacklogItemStatus.DRAFT,
+    organization: {
+      id: 'org-1',
+      name: 'Org 1',
+    },
+    documents: [],
+    productOwner: {
+      id: 'employee-1',
+      firstName: 'Emp',
+      lastName: 'Loyee',
+    },
     createdAt: new Date('2026-05-05T10:00:00.000Z'),
     updatedAt: new Date('2026-05-05T10:00:00.000Z'),
   };
@@ -204,11 +246,20 @@ describe('ProgramBBacklogService', () => {
   beforeEach(() => {
     backlogRepository = {
       create: jest.fn(),
-      findUnique: jest.fn(),
+      findUnique: jest.fn<Promise<unknown>, unknown[]>(),
+      findDetailUnique: jest.fn<Promise<unknown>, unknown[]>((...args) =>
+        backlogRepository.findUnique(...args),
+      ),
       update: jest.fn(),
       updateMany: jest.fn(),
       deleteDraftById: jest.fn(),
-      findMany: jest.fn(),
+      findMany: jest.fn<Promise<unknown>, unknown[]>(),
+      findDetails: jest.fn<Promise<unknown>, unknown[]>((...args) =>
+        backlogRepository.findMany(...args),
+      ),
+      listBacklogDocuments: jest.fn(),
+      findBacklogDocumentById: jest.fn(),
+      createBacklogDocument: jest.fn(),
       count: jest.fn(),
       transaction: jest.fn((fn: (db: object) => Promise<unknown>) => fn({})),
     };
@@ -236,12 +287,23 @@ describe('ProgramBBacklogService', () => {
       createProject: jest.fn(),
     };
 
+    filesService = {
+      requestUpload: jest.fn(),
+      completeUpload: jest.fn(),
+    };
+
+    storageService = {
+      createPresignedDownloadUrl: jest.fn(),
+    };
+
     service = new ProgramBBacklogService(
       backlogRepository as never,
       organizationRepository as never,
       userRepository as never,
       teamApplicationRepository as never,
       projectsRepository as never,
+      filesService as never,
+      storageService as never,
     );
   });
 
@@ -251,6 +313,7 @@ describe('ProgramBBacklogService', () => {
       id: 'employee-1',
     });
     backlogRepository.create.mockResolvedValue(draftItem);
+    backlogRepository.findDetailUnique.mockResolvedValue(draftItem);
 
     const result = await service.create(
       {
@@ -300,6 +363,124 @@ describe('ProgramBBacklogService', () => {
         { ...owner, status: UserStatus.PENDING } as never,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('creates a backlog document upload with the next category version', async () => {
+    organizationRepository.findUnique.mockResolvedValue(activeOrganization);
+    backlogRepository.findDetailUnique.mockResolvedValue({
+      ...draftItem,
+      status: BacklogItemStatus.DRAFT,
+    });
+    filesService.requestUpload.mockResolvedValue({
+      fileId: 'file-1',
+      uploadUrl: 'https://upload.example.com',
+      expiresAt: new Date('2026-05-18T10:00:00.000Z'),
+    });
+    backlogRepository.listBacklogDocuments.mockResolvedValue([
+      { category: 'OTHER', version: 1 },
+      { category: 'OTHER', version: 2 },
+      { category: 'SUPPORTING', version: 4 },
+    ]);
+    backlogRepository.createBacklogDocument.mockResolvedValue({
+      id: 'document-1',
+    });
+
+    const result = await service.createBacklogDocumentUpload(
+      'item-1',
+      {
+        filename: 'brief.pdf',
+        mimeType: 'application/pdf',
+        size: 2048,
+        category: 'OTHER' as never,
+        visibility: 'PARTICIPANTS' as never,
+      },
+      owner as never,
+    );
+
+    expect(filesService.requestUpload).toHaveBeenCalledWith(
+      owner,
+      expect.objectContaining({
+        visibility: FileVisibility.PRIVATE,
+      }),
+    );
+    expect(backlogRepository.createBacklogDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backlogItemId: 'item-1',
+        uploadedFileId: 'file-1',
+        version: 3,
+        createdById: owner.id,
+      }),
+      {},
+    );
+    expect(result.documentId).toBe('document-1');
+  });
+
+  it('returns only participant-visible backlog documents to students', async () => {
+    backlogRepository.findDetailUnique.mockResolvedValue(publishedItem);
+    backlogRepository.listBacklogDocuments.mockResolvedValue([
+      {
+        id: 'document-1',
+        category: 'OTHER',
+        visibility: 'PARTICIPANTS',
+        version: 1,
+        createdAt: new Date('2026-05-17T10:00:00.000Z'),
+        uploadedFile: {
+          id: 'file-1',
+          originalName: 'public.pdf',
+          mimeType: 'application/pdf',
+          size: 100,
+          status: UploadStatus.UPLOADED,
+          uploadedAt: new Date('2026-05-17T10:10:00.000Z'),
+        },
+      },
+      {
+        id: 'document-2',
+        category: 'OTHER',
+        visibility: 'INTERNAL',
+        version: 2,
+        createdAt: new Date('2026-05-17T10:00:00.000Z'),
+        uploadedFile: {
+          id: 'file-2',
+          originalName: 'internal.pdf',
+          mimeType: 'application/pdf',
+          size: 100,
+          status: UploadStatus.UPLOADED,
+          uploadedAt: new Date('2026-05-17T10:10:00.000Z'),
+        },
+      },
+    ]);
+
+    await expect(
+      service.listBacklogDocuments('item-1', student as never),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 'document-1',
+        fileId: 'file-1',
+      }),
+    ]);
+  });
+
+  it('rejects backlog document download before the upload is completed', async () => {
+    backlogRepository.findDetailUnique.mockResolvedValue(publishedItem);
+    backlogRepository.findBacklogDocumentById.mockResolvedValue({
+      id: 'document-1',
+      backlogItemId: 'item-1',
+      visibility: 'PARTICIPANTS',
+      uploadedFile: {
+        id: 'file-1',
+        key: 'uploads/file-1',
+        originalName: 'brief.pdf',
+        status: UploadStatus.PENDING,
+      },
+    });
+
+    await expect(
+      service.requestBacklogDocumentDownload(
+        'item-1',
+        'document-1',
+        student as never,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('rejects create when product owner is not in the same organization', async () => {

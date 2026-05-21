@@ -7,6 +7,8 @@ import { PdfCoreModule } from './infrastructure/pdf';
 import { QueueModule } from './infrastructure/queue';
 import { EmailProcessor } from './infrastructure/queue/processors/email.processor';
 import { PdfProcessor } from './infrastructure/queue/processors/pdf.processor';
+import { ReportsModule } from './reports/reports.module';
+import { ReportExportProcessor } from './reports/processors/report-export.processor';
 
 @Module({
   imports: [
@@ -16,7 +18,8 @@ import { PdfProcessor } from './infrastructure/queue/processors/pdf.processor';
     QueueModule,
     MailerModule,
     PdfCoreModule,
+    ReportsModule,
   ],
-  providers: [EmailProcessor, PdfProcessor],
+  providers: [EmailProcessor, PdfProcessor, ReportExportProcessor],
 })
 export class WorkerModule {}

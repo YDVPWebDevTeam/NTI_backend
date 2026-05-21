@@ -190,6 +190,13 @@ export class FilesService {
     authUser: AuthenticatedUserContext,
     input: CreateServerGeneratedFileInput,
   ): Promise<UploadedFileDto> {
+    return this.createServerGeneratedFileForOwner(authUser.id, input);
+  }
+
+  async createServerGeneratedFileForOwner(
+    ownerId: string,
+    input: CreateServerGeneratedFileInput,
+  ): Promise<UploadedFileDto> {
     const requestUploadDto: RequestUploadDto = {
       filename: input.filename,
       mimeType: input.mimeType,
@@ -200,13 +207,13 @@ export class FilesService {
       entityId: input.entityId,
     };
 
-    this.validateUploadPolicy(requestUploadDto);
+    this.validateServerGeneratedUploadPolicy(requestUploadDto);
 
-    const key = this.buildStorageKey(authUser.id, requestUploadDto);
+    const key = this.buildStorageKey(ownerId, requestUploadDto);
     const visibility = input.visibility ?? FileVisibility.PRIVATE;
 
     const file = await this.filesRepository.create({
-      ownerId: authUser.id,
+      ownerId,
       key,
       originalName: input.filename,
       mimeType: input.mimeType,
@@ -225,7 +232,7 @@ export class FilesService {
         contentType: input.mimeType,
         metadata: {
           fileId: file.id,
-          ownerId: authUser.id,
+          ownerId,
           source: 'server-generated',
         },
       });
@@ -303,6 +310,21 @@ export class FilesService {
 
     if (!allowedMimeTypes.includes(dto.mimeType)) {
       throw new BadRequestException('File type is not allowed');
+    }
+
+    if (
+      dto.visibility === FileVisibility.PUBLIC &&
+      !this.configService.r2PublicBaseUrl
+    ) {
+      throw new BadRequestException(
+        'Public file uploads require R2_PUBLIC_BASE_URL to be configured',
+      );
+    }
+  }
+
+  private validateServerGeneratedUploadPolicy(dto: RequestUploadDto): void {
+    if (dto.size > this.configService.fileUploadMaxSizeBytes) {
+      throw new PayloadTooLargeException('File is too large');
     }
 
     if (

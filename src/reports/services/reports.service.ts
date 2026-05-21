@@ -5,48 +5,48 @@ import {
   Logger,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { type Prisma } from '../../generated/prisma/client';
+import { type Prisma } from '../../../generated/prisma/client';
 import {
   ApplicationStatus,
   ProgramBTeamApplicationStatus,
   ProgramType,
-} from '../../generated/prisma/enums';
-import { ensureAdminRole } from '../auth/admin-role.helper';
+} from '../../../generated/prisma/enums';
+import { ensureAdminRole } from '../../auth/admin-role.helper';
 import {
   buildPaginationMeta,
   resolvePagination,
   resolveSortOrder,
-} from '../common/pagination';
-import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import { PdfService } from '../infrastructure/pdf/pdf.service';
-import { ApplicationsReportResponseDto } from './dto/applications-report-response.dto';
-import { ApplicationsReportQueryDto } from './dto/applications-report-query.dto';
-import { AuditExportQueryDto } from './dto/audit-export-query.dto';
-import { ExportJobStatusDto } from './dto/export-job-status.dto';
-import { ProgramBReportQueryDto } from './dto/program-b-report-query.dto';
-import { ProgramBReportResponseDto } from './dto/program-b-report-response.dto';
-import { ReportExportAcceptedDto } from './dto/report-export-accepted.dto';
-import { ReportExportQueryDto } from './dto/report-export-query.dto';
-import { ReportsDashboardDto } from './dto/reports-dashboard.dto';
+} from '../../common/pagination';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import {
+  QueueService,
+  REPORT_EXPORT_JOBS,
+  type ReportExportQueuedQuery,
+} from '../../infrastructure/queue';
+import { ApplicationsReportResponseDto } from '../dto/applications-report-response.dto';
+import { ApplicationsReportQueryDto } from '../dto/applications-report-query.dto';
+import { AuditExportQueryDto } from '../dto/audit-export-query.dto';
+import { ExportJobStatusDto } from '../dto/export-job-status.dto';
+import { ProgramBReportQueryDto } from '../dto/program-b-report-query.dto';
+import { ProgramBReportResponseDto } from '../dto/program-b-report-response.dto';
+import { ReportExportAcceptedDto } from '../dto/report-export-accepted.dto';
+import { ReportExportQueryDto } from '../dto/report-export-query.dto';
+import { ReportsDashboardDto } from '../dto/reports-dashboard.dto';
+import { ReportsRepository } from '../repositories/reports.repository';
 import { AuditService } from './audit.service';
+import {
+  ReportFileRendererService,
+  type ReportFilePayload,
+} from './report-file-renderer.service';
 import { ReportExportJobsService } from './report-export-jobs.service';
 import {
   REPORT_EXPORT_ACTION,
   REPORT_EXPORT_ENTITY_TYPE,
   REPORT_EXPORT_SYNC_THRESHOLD,
-  type ReportFormat,
-} from './reports.constants';
-import { ReportsRepository } from './reports.repository';
-import {
-  buildCsvBuffer,
-  buildXlsxBuffer,
-  escapeHtml,
-} from './report-export.utils';
+} from '../reports.constants';
 
-type FilePayload = {
-  buffer: Buffer;
-  contentType: string;
-  fileName: string;
+type ExportJobDownloadPayload = {
+  downloadUrl: string;
 };
 
 type ApplicationsExportRow = {
@@ -80,6 +80,7 @@ type ProgramBExportRow = {
 @Injectable()
 export class ReportsService {
   private readonly logger = new Logger(ReportsService.name);
+  private readonly auditExportMaxWindowDays = 31;
 
   private readonly applicationsColumns = [
     ['id', 'ID'],
@@ -112,8 +113,9 @@ export class ReportsService {
   constructor(
     private readonly reportsRepository: ReportsRepository,
     private readonly auditService: AuditService,
-    private readonly pdfService: PdfService,
+    private readonly reportFileRenderer: ReportFileRendererService,
     private readonly exportJobsService: ReportExportJobsService,
+    private readonly queueService: QueueService,
   ) {}
 
   getDashboard(actor: AuthenticatedUserContext): Promise<ReportsDashboardDto> {
@@ -214,25 +216,15 @@ export class ReportsService {
   async exportReport(
     actor: AuthenticatedUserContext,
     query: ReportExportQueryDto,
-  ): Promise<FilePayload | ReportExportAcceptedDto> {
+  ): Promise<ReportFilePayload | ReportExportAcceptedDto> {
     ensureAdminRole(actor.role);
     this.validateExportQuery(query);
-
-    if (
-      query.dataset === 'program-b' &&
-      query.programType &&
-      query.programType !== ProgramType.PROGRAM_B
-    ) {
-      throw new BadRequestException(
-        'programType=PROGRAM_A is not supported for program-b exports',
-      );
-    }
 
     const filters = this.buildExportFiltersSummary(query);
     const rowCount = await this.countDatasetRows(query);
 
     if (rowCount > REPORT_EXPORT_SYNC_THRESHOLD) {
-      const job = this.exportJobsService.createJob(
+      const job = await this.exportJobsService.createJob(
         actor,
         query.dataset,
         query.format,
@@ -248,14 +240,7 @@ export class ReportsService {
         filters,
       });
 
-      void this.processAsyncExport(job.id, actor, query).catch(
-        (error: unknown) => {
-          const message =
-            error instanceof Error ? error.message : 'Export failed';
-          this.logger.error(`Async export job "${job.id}" failed: ${message}`);
-          this.exportJobsService.markFailed(job.id, message);
-        },
-      );
+      await this.enqueueAsyncExport(job.id, query);
 
       return { exportJobId: job.id };
     }
@@ -275,19 +260,19 @@ export class ReportsService {
     return file;
   }
 
-  getExportJobStatus(
+  async getExportJobStatus(
     actor: AuthenticatedUserContext,
     id: string,
-  ): ExportJobStatusDto {
+  ): Promise<ExportJobStatusDto> {
     ensureAdminRole(actor.role);
     return this.exportJobsService.getStatus(actor, id);
   }
 
-  downloadExportJob(
+  async downloadExportJob(
     actor: AuthenticatedUserContext,
     id: string,
     token: string,
-  ): FilePayload {
+  ): Promise<ExportJobDownloadPayload> {
     ensureAdminRole(actor.role);
     return this.exportJobsService.resolveDownload(actor, id, token);
   }
@@ -295,10 +280,14 @@ export class ReportsService {
   async exportAuditPdf(
     actor: AuthenticatedUserContext,
     query: AuditExportQueryDto,
-  ): Promise<FilePayload> {
+  ): Promise<ReportFilePayload> {
     ensureAdminRole(actor.role);
+    const createdAt = this.buildRequiredAuditExportDateRange(
+      query.dateFrom,
+      query.dateTo,
+    );
     const events = await this.auditService.listExportAuditEvents({
-      createdAt: this.buildDateRangeFilter(query.dateFrom, query.dateTo),
+      createdAt,
       action: REPORT_EXPORT_ACTION,
       entityType: REPORT_EXPORT_ENTITY_TYPE,
     });
@@ -328,7 +317,7 @@ export class ReportsService {
       ];
     });
 
-    const buffer = await this.renderPdfTable(
+    const buffer = await this.reportFileRenderer.renderPdfBuffer(
       'Report Export Audit',
       headers,
       rows,
@@ -341,22 +330,26 @@ export class ReportsService {
     };
   }
 
-  private async processAsyncExport(
+  async executeAsyncExportJob(
     jobId: string,
-    actor: AuthenticatedUserContext,
     query: ReportExportQueryDto,
   ): Promise<void> {
-    this.exportJobsService.markProcessing(jobId);
+    this.validateExportQuery(query);
+    await this.exportJobsService.markProcessing(jobId);
     const file = await this.buildExportFile(query);
-    this.exportJobsService.markCompleted(jobId, file);
+    await this.exportJobsService.markCompleted(jobId, file);
+  }
+
+  failAsyncExportJob(jobId: string, errorMessage: string): Promise<void> {
+    return this.exportJobsService.markFailed(jobId, errorMessage);
   }
 
   private async buildExportFile(
     query: ReportExportQueryDto,
-  ): Promise<FilePayload> {
+  ): Promise<ReportFilePayload> {
     if (query.dataset === 'applications') {
       const rows = await this.getApplicationExportRows(query);
-      return this.renderDatasetFile(
+      return this.reportFileRenderer.renderFile(
         'applications-report',
         'Applications Report',
         this.applicationsColumns.map(([, label]) => label),
@@ -370,7 +363,7 @@ export class ReportsService {
     }
 
     const rows = await this.getProgramBExportRows(query);
-    return this.renderDatasetFile(
+    return this.reportFileRenderer.renderFile(
       'program-b-report',
       'Program B Report',
       this.programBColumns.map(([, label]) => label),
@@ -381,71 +374,6 @@ export class ReportsService {
       ),
       query.format,
     );
-  }
-
-  private async renderDatasetFile(
-    fileBaseName: string,
-    title: string,
-    headers: string[],
-    rows: string[][],
-    format: ReportFormat,
-  ): Promise<FilePayload> {
-    switch (format) {
-      case 'csv':
-        return {
-          buffer: buildCsvBuffer(headers, rows),
-          contentType: 'text/csv; charset=utf-8',
-          fileName: this.buildFileName(fileBaseName, 'csv'),
-        };
-      case 'xlsx':
-        return {
-          buffer: buildXlsxBuffer(title, headers, rows),
-          contentType:
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          fileName: this.buildFileName(fileBaseName, 'xlsx'),
-        };
-      case 'pdf':
-        return {
-          buffer: await this.renderPdfTable(title, headers, rows),
-          contentType: 'application/pdf',
-          fileName: this.buildFileName(fileBaseName, 'pdf'),
-        };
-      default:
-        throw new InternalServerErrorException('Unsupported export format');
-    }
-  }
-
-  private async renderPdfTable(
-    title: string,
-    headers: string[],
-    rows: string[][],
-  ): Promise<Buffer> {
-    const html = [
-      '<!DOCTYPE html><html><head><meta charset="utf-8" />',
-      '<style>',
-      'body{font-family:Arial,sans-serif;color:#111;font-size:11px;}',
-      'h1{font-size:20px;margin:0 0 16px;}',
-      'table{width:100%;border-collapse:collapse;table-layout:fixed;}',
-      'th,td{border:1px solid #d4d4d8;padding:6px;vertical-align:top;word-break:break-word;}',
-      'th{background:#f4f4f5;text-align:left;}',
-      'tbody tr:nth-child(even){background:#fafafa;}',
-      '</style></head><body>',
-      `<h1>${escapeHtml(title)}</h1>`,
-      '<table><thead><tr>',
-      headers.map((header) => `<th>${escapeHtml(header)}</th>`).join(''),
-      '</tr></thead><tbody>',
-      rows
-        .map(
-          (row) =>
-            `<tr>${row
-              .map((cell) => `<td>${escapeHtml(cell)}</td>`)
-              .join('')}</tr>`,
-        )
-        .join(''),
-      '</tbody></table></body></html>',
-    ].join('');
-
-    return this.pdfService.generateFromHtml({ html });
   }
 
   private async countDatasetRows(query: ReportExportQueryDto): Promise<number> {
@@ -568,6 +496,36 @@ export class ReportsService {
     return range ? { createdAt: range } : {};
   }
 
+  private buildRequiredAuditExportDateRange(
+    dateFrom?: string,
+    dateTo?: string,
+  ): { gte?: Date; lte?: Date } {
+    if (!dateFrom || !dateTo) {
+      throw new BadRequestException(
+        'dateFrom and dateTo are required for audit export',
+      );
+    }
+
+    const range = this.buildDateRangeFilter(dateFrom, dateTo);
+
+    if (!range?.gte || !range.lte) {
+      throw new BadRequestException(
+        'dateFrom and dateTo are required for audit export',
+      );
+    }
+
+    const windowMs = range.lte.getTime() - range.gte.getTime();
+    const maxWindowMs = this.auditExportMaxWindowDays * 24 * 60 * 60 * 1000;
+
+    if (windowMs > maxWindowMs) {
+      throw new BadRequestException(
+        `audit export date range must not exceed ${this.auditExportMaxWindowDays} days`,
+      );
+    }
+
+    return range;
+  }
+
   private buildDateRangeFilter(
     dateFrom?: string,
     dateTo?: string,
@@ -613,6 +571,8 @@ export class ReportsService {
   }
 
   private validateExportQuery(query: ReportExportQueryDto): void {
+    this.assertSupportedExportQuery(query);
+
     const sort = query.sort ?? 'createdAt';
 
     if (query.dataset === 'applications') {
@@ -627,6 +587,60 @@ export class ReportsService {
     if (query.status) {
       this.resolveProgramBStatus(query.status);
     }
+  }
+
+  private assertSupportedExportQuery(query: ReportExportQueryDto): void {
+    if (
+      query.dataset === 'program-b' &&
+      query.programType &&
+      query.programType !== ProgramType.PROGRAM_B
+    ) {
+      throw new BadRequestException(
+        'programType=PROGRAM_A is not supported for program-b exports',
+      );
+    }
+  }
+
+  private async enqueueAsyncExport(
+    exportJobId: string,
+    query: ReportExportQueryDto,
+  ): Promise<void> {
+    try {
+      await this.queueService.addReportExport(
+        REPORT_EXPORT_JOBS.GENERATE,
+        {
+          exportJobId,
+          query: this.toQueuedExportQuery(query),
+        },
+        {
+          jobId: exportJobId,
+        },
+      );
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to enqueue export job';
+
+      this.logger.error(
+        `Failed to enqueue export job "${exportJobId}": ${message}`,
+      );
+      await this.exportJobsService.markFailed(exportJobId, message);
+      throw new InternalServerErrorException('Failed to schedule export job');
+    }
+  }
+
+  private toQueuedExportQuery(
+    query: ReportExportQueryDto,
+  ): ReportExportQueuedQuery {
+    return {
+      dataset: query.dataset,
+      format: query.format,
+      dateFrom: query.dateFrom,
+      dateTo: query.dateTo,
+      programType: query.programType,
+      status: query.status,
+      sort: query.sort,
+      order: query.order,
+    };
   }
 
   private resolveApplicationsStatus(status: string): ApplicationStatus {

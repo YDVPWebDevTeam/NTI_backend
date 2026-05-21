@@ -242,23 +242,24 @@ model User {
   uploads                       UploadedFile[]
   organizationDocumentsUploaded OrganizationDocument[] @relation("OrganizationDocumentUploadedBy")
 
-  applicationsCreated             Application[]               @relation("ApplicationCreatedBy")
-  assignedProgramAApplications    Application[]               @relation("ApplicationAssignedMentor")
-  applicationEvaluations          ApplicationEvaluation[]     @relation("ApplicationEvaluationEvaluator")
-  applicationDecisions            Application[]               @relation("ApplicationDecisionBy")
-  programAMentorAssignmentsMade   Application[]               @relation("ApplicationMentorAssignedBy")
-  updatedApplicationSections      ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
-  applicationSectionHistories     ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
-  applicationDocumentsCreated     ApplicationDocument[]       @relation("ApplicationDocumentCreatedBy")
-  applicationDocumentsForMember   ApplicationDocument[]       @relation("ApplicationDocumentMember")
-  productOwnerForBacklogItems     BacklogItem[]               @relation("BacklogItemProductOwner")
-  productOwnerForProgramBProjects ProgramBProject[]           @relation("ProgramBProjectProductOwner")
-  programBMentoringNotesAuthored  ProgramBMentoringNote[]     @relation("ProgramBMentoringNoteAuthor")
-  programBPoReviewsAuthored       ProgramBPoReview[]          @relation("ProgramBPoReviewAuthor")
-  auditEvents                     AuditEvent[]                @relation("AuditEventActor")
+  applicationsCreated              Application[]               @relation("ApplicationCreatedBy")
+  assignedProgramAApplications     Application[]               @relation("ApplicationAssignedMentor")
+  applicationEvaluations           ApplicationEvaluation[]     @relation("ApplicationEvaluationEvaluator")
+  applicationDecisions             Application[]               @relation("ApplicationDecisionBy")
+  programAMentorAssignmentsMade    Application[]               @relation("ApplicationMentorAssignedBy")
+  updatedApplicationSections       ApplicationSection[]        @relation("ApplicationSectionUpdatedBy")
+  applicationSectionHistories      ApplicationSectionHistory[] @relation("SectionHistorySavedBy")
+  applicationDocumentsCreated      ApplicationDocument[]       @relation("ApplicationDocumentCreatedBy")
+  applicationDocumentsForMember    ApplicationDocument[]       @relation("ApplicationDocumentMember")
+  productOwnerForBacklogItems      BacklogItem[]               @relation("BacklogItemProductOwner")
+  productOwnerForProgramBProjects  ProgramBProject[]           @relation("ProgramBProjectProductOwner")
+  programBMentoringNotesAuthored   ProgramBMentoringNote[]     @relation("ProgramBMentoringNoteAuthor")
+  programBPoReviewsAuthored        ProgramBPoReview[]          @relation("ProgramBPoReviewAuthor")
+  auditEvents                      AuditEvent[]                @relation("AuditEventActor")
+  requestedReportExportJobs        ReportExportJob[]           @relation("ReportExportJobRequestedBy")
   assignedProgramBProjectsAsMentor ProgramBProject[]           @relation("ProgramBProjectMentor")
   programBMentorAssignmentsMade    ProgramBProject[]           @relation("ProgramBProjectMentorAssignedBy")
- 
+
   needsInfoItemsCreated           NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
   needsInfoItemsResolved          NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
   needsInfoRepliesCreated         NeedsInfoReply[]         @relation("NeedsInfoReplyCreatedBy")
@@ -308,6 +309,7 @@ model UploadedFile {
   programBBacklogDocuments   ProgramBBacklogDocument[]
   programBProjectDocuments   ProgramBProjectDocument[]
   programBTeamApplicationCvs ProgramBTeamApplicationCv[]
+  reportExportJobs           ReportExportJob[]
 
   @@index([ownerId, status])
   @@index([status, uploadUrlExpiresAt])
@@ -1059,6 +1061,32 @@ model AuditEvent {
   @@index([actorUserId, createdAt])
   @@index([action, createdAt])
   @@index([entityType, entityId])
+}
+
+model ReportExportJob {
+  id String @id
+
+  requestedByUserId String
+  requestedByUser   User   @relation("ReportExportJobRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+
+  dataset String
+  format  String
+  status  String
+
+  completedAt  DateTime?
+  errorMessage String?
+
+  uploadedFileId String?
+  uploadedFile   UploadedFile? @relation(fields: [uploadedFileId], references: [id], onDelete: SetNull)
+
+  downloadTokenHash      String?
+  downloadTokenExpiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([requestedByUserId, createdAt])
+  @@index([status, createdAt])
 }
 
 model University {

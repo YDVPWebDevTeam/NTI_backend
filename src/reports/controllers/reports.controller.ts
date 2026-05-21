@@ -9,12 +9,12 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
-import { UserRole } from '../../generated/prisma/enums';
-import { GetUserContext } from '../auth/decorators/get-user-context.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
+import { UserRole } from '../../../generated/prisma/enums';
+import { GetUserContext } from '../../auth/decorators/get-user-context.decorator';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import {
   DownloadExportJobApi,
   ExportAuditPdfApi,
@@ -23,13 +23,13 @@ import {
   GetExportJobStatusApi,
   GetProgramBReportApi,
   GetReportsDashboardApi,
-} from './api-docs';
-import { ApplicationsReportQueryDto } from './dto/applications-report-query.dto';
-import { AuditExportQueryDto } from './dto/audit-export-query.dto';
-import { ProgramBReportQueryDto } from './dto/program-b-report-query.dto';
-import { ReportExportAcceptedDto } from './dto/report-export-accepted.dto';
-import { ReportExportQueryDto } from './dto/report-export-query.dto';
-import { ReportsService } from './reports.service';
+} from '../api-docs';
+import { ApplicationsReportQueryDto } from '../dto/applications-report-query.dto';
+import { AuditExportQueryDto } from '../dto/audit-export-query.dto';
+import { ProgramBReportQueryDto } from '../dto/program-b-report-query.dto';
+import { ReportExportAcceptedDto } from '../dto/report-export-accepted.dto';
+import { ReportExportQueryDto } from '../dto/report-export-query.dto';
+import { ReportsService } from '../services/reports.service';
 
 @ApiTags('Reports')
 @Controller('reports')
@@ -90,14 +90,18 @@ export class ReportsController {
 
   @DownloadExportJobApi()
   @Get('export-jobs/:id/download')
-  downloadExportJob(
+  async downloadExportJob(
     @GetUserContext() actor: AuthenticatedUserContext,
     @Param('id', ParseUUIDPipe) id: string,
     @Query('token') token: string,
     @Res() reply: FastifyReply,
-  ): void {
-    const result = this.reportsService.downloadExportJob(actor, id, token);
-    this.sendFile(reply, result);
+  ): Promise<void> {
+    const result = await this.reportsService.downloadExportJob(
+      actor,
+      id,
+      token,
+    );
+    reply.redirect(result.downloadUrl);
   }
 
   @ExportAuditPdfApi()

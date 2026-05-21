@@ -1,44 +1,73 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '../../generated/prisma/client';
+import { Prisma } from '../../../generated/prisma/client';
 import {
   CallStatus,
   ProgramBProjectStatus,
-} from '../../generated/prisma/enums';
-import { PrismaService } from '../infrastructure/database/prisma.service';
+} from '../../../generated/prisma/enums';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
+
+const applicationsReportSelect = {
+  id: true,
+  status: true,
+  submittedAt: true,
+  decidedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  call: {
+    select: {
+      type: true,
+      title: true,
+    },
+  },
+  team: {
+    select: {
+      name: true,
+    },
+  },
+  createdBy: {
+    select: {
+      email: true,
+    },
+  },
+} satisfies Prisma.ApplicationSelect;
+
+const programBReportSelect = {
+  id: true,
+  status: true,
+  submittedAt: true,
+  shortlistedAt: true,
+  acceptedAt: true,
+  rejectedAt: true,
+  withdrawnAt: true,
+  createdAt: true,
+  backlogItem: {
+    select: {
+      title: true,
+      organization: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  },
+  team: {
+    select: {
+      name: true,
+    },
+  },
+  createdBy: {
+    select: {
+      email: true,
+    },
+  },
+} satisfies Prisma.ProgramBTeamApplicationSelect;
 
 export type ApplicationsReportRecord = Prisma.ApplicationGetPayload<{
-  select: {
-    id: true;
-    status: true;
-    submittedAt: true;
-    decidedAt: true;
-    createdAt: true;
-    updatedAt: true;
-    call: { select: { type: true; title: true } };
-    team: { select: { name: true } };
-    createdBy: { select: { email: true } };
-  };
+  select: typeof applicationsReportSelect;
 }>;
 
 export type ProgramBReportRecord = Prisma.ProgramBTeamApplicationGetPayload<{
-  select: {
-    id: true;
-    status: true;
-    submittedAt: true;
-    shortlistedAt: true;
-    acceptedAt: true;
-    rejectedAt: true;
-    withdrawnAt: true;
-    createdAt: true;
-    backlogItem: {
-      select: {
-        title: true;
-        organization: { select: { name: true } };
-      };
-    };
-    team: { select: { name: true } };
-    createdBy: { select: { email: true } };
-  };
+  select: typeof programBReportSelect;
 }>;
 
 @Injectable()
@@ -112,30 +141,7 @@ export class ReportsRepository {
       orderBy: args.orderBy,
       skip: args.skip,
       take: args.take,
-      select: {
-        id: true,
-        status: true,
-        submittedAt: true,
-        decidedAt: true,
-        createdAt: true,
-        updatedAt: true,
-        call: {
-          select: {
-            type: true,
-            title: true,
-          },
-        },
-        team: {
-          select: {
-            name: true,
-          },
-        },
-        createdBy: {
-          select: {
-            email: true,
-          },
-        },
-      },
+      select: applicationsReportSelect,
     });
   }
 
@@ -156,36 +162,7 @@ export class ReportsRepository {
       orderBy: args.orderBy,
       skip: args.skip,
       take: args.take,
-      select: {
-        id: true,
-        status: true,
-        submittedAt: true,
-        shortlistedAt: true,
-        acceptedAt: true,
-        rejectedAt: true,
-        withdrawnAt: true,
-        createdAt: true,
-        backlogItem: {
-          select: {
-            title: true,
-            organization: {
-              select: {
-                name: true,
-              },
-            },
-          },
-        },
-        team: {
-          select: {
-            name: true,
-          },
-        },
-        createdBy: {
-          select: {
-            email: true,
-          },
-        },
-      },
+      select: programBReportSelect,
     });
   }
 }

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '../../generated/prisma/client';
-import { BaseRepository, PrismaDbClient } from '../infrastructure/database';
-import { PrismaService } from '../infrastructure/database/prisma.service';
+import type { Prisma } from '../../../generated/prisma/client';
+import { BaseRepository, PrismaDbClient } from '../../infrastructure/database';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 const auditEventWithActorSelect = {
   id: true,

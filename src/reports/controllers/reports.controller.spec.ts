@@ -1,9 +1,5 @@
-jest.mock('./reports.service', () => ({
-  ReportsService: class ReportsService {},
-}));
-
 import { ReportsController } from './reports.controller';
-import { ReportsService } from './reports.service';
+import { ReportsService } from '../services/reports.service';
 
 describe('ReportsController', () => {
   let controller: ReportsController;
@@ -24,10 +20,8 @@ describe('ReportsController', () => {
       getProgramBReport: jest.fn().mockResolvedValue({}),
       exportReport: jest.fn(),
       getExportJobStatus: jest.fn().mockReturnValue({ id: 'job-1' }),
-      downloadExportJob: jest.fn().mockReturnValue({
-        buffer: Buffer.from('file'),
-        contentType: 'text/csv',
-        fileName: 'report.csv',
+      downloadExportJob: jest.fn().mockResolvedValue({
+        downloadUrl: 'https://r2.example.com/report.csv',
       }),
       exportAuditPdf: jest.fn().mockResolvedValue({
         buffer: Buffer.from('pdf'),
@@ -56,5 +50,27 @@ describe('ReportsController', () => {
 
     expect(reply.status).toHaveBeenCalledWith(202);
     expect(reply.send).toHaveBeenCalledWith({ exportJobId: 'job-1' });
+  });
+
+  it('redirects async export downloads to storage', async () => {
+    const reply = {
+      redirect: jest.fn(),
+    };
+
+    await controller.downloadExportJob(
+      { id: 'admin-1', role: 'ADMIN' } as never,
+      'job-1',
+      'token-1',
+      reply as never,
+    );
+
+    expect(reportsService.downloadExportJob).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'admin-1' }),
+      'job-1',
+      'token-1',
+    );
+    expect(reply.redirect).toHaveBeenCalledWith(
+      'https://r2.example.com/report.csv',
+    );
   });
 });

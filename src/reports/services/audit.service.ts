@@ -1,14 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { Prisma } from '../../generated/prisma/client';
-import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import { AuditRepository, type AuditEventWithActor } from './audit.repository';
+import type { Prisma } from '../../../generated/prisma/client';
+import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import {
+  AuditRepository,
+  type AuditEventWithActor,
+} from '../repositories/audit.repository';
 import {
   REPORT_EXPORT_ACTION,
   REPORT_EXPORT_ENTITY_TYPE,
   type ReportDataset,
   type ReportFormat,
-} from './reports.constants';
+} from '../reports.constants';
 
 function toJsonValue(value: unknown): Prisma.InputJsonValue | null {
   if (value === null) {

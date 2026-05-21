@@ -13,14 +13,18 @@ describe('ReportsService', () => {
     recordReportExportRequested: jest.Mock;
     listExportAuditEvents: jest.Mock;
   };
-  let pdfService: {
-    generateFromHtml: jest.Mock;
+  let reportFileRenderer: {
+    renderFile: jest.Mock;
+    renderPdfBuffer: jest.Mock;
   };
   let exportJobsService: {
     createJob: jest.Mock;
     markProcessing: jest.Mock;
     markCompleted: jest.Mock;
     markFailed: jest.Mock;
+  };
+  let queueService: {
+    addReportExport: jest.Mock;
   };
 
   beforeEach(() => {
@@ -34,21 +38,30 @@ describe('ReportsService', () => {
       recordReportExportRequested: jest.fn().mockResolvedValue('entity-1'),
       listExportAuditEvents: jest.fn(),
     };
-    pdfService = {
-      generateFromHtml: jest.fn().mockResolvedValue(Buffer.from('pdf')),
+    reportFileRenderer = {
+      renderFile: jest.fn().mockResolvedValue({
+        buffer: Buffer.from('csv'),
+        contentType: 'text/csv; charset=utf-8',
+        fileName: 'report.csv',
+      }),
+      renderPdfBuffer: jest.fn().mockResolvedValue(Buffer.from('pdf')),
     };
     exportJobsService = {
-      createJob: jest.fn().mockReturnValue({ id: 'job-1' }),
-      markProcessing: jest.fn(),
-      markCompleted: jest.fn(),
-      markFailed: jest.fn(),
+      createJob: jest.fn().mockResolvedValue({ id: 'job-1' }),
+      markProcessing: jest.fn().mockResolvedValue(undefined),
+      markCompleted: jest.fn().mockResolvedValue(undefined),
+      markFailed: jest.fn().mockResolvedValue(undefined),
+    };
+    queueService = {
+      addReportExport: jest.fn().mockResolvedValue(undefined),
     };
 
     service = new ReportsService(
       reportsRepository as never,
       auditService as never,
-      pdfService as never,
+      reportFileRenderer as never,
       exportJobsService as never,
+      queueService as never,
     );
   });
 
@@ -99,6 +112,29 @@ describe('ReportsService', () => {
 
     expect(result).toEqual({ exportJobId: 'job-1' });
     expect(exportJobsService.createJob).toHaveBeenCalled();
+    const queueCall = queueService.addReportExport.mock.calls[0] as
+      | [
+          string,
+          { exportJobId: string; query: Record<string, unknown> },
+          { jobId: string },
+        ]
+      | undefined;
+
+    expect(queueCall?.[0]).toBe('generate');
+    expect(queueCall?.[1]).toEqual({
+      exportJobId: 'job-1',
+      query: {
+        dataset: 'applications',
+        format: 'csv',
+        dateFrom: undefined,
+        dateTo: undefined,
+        order: undefined,
+        programType: undefined,
+        sort: undefined,
+        status: undefined,
+      },
+    });
+    expect(queueCall?.[2]).toEqual({ jobId: 'job-1' });
     expect(auditService.recordReportExportRequested).toHaveBeenCalledWith(
       expect.objectContaining({
         mode: 'async',
@@ -178,5 +214,26 @@ describe('ReportsService', () => {
         orderBy: [{ submittedAt: 'asc' }, { id: 'asc' }],
       }),
     );
+  });
+
+  it('requires an explicit date range for audit export pdf', async () => {
+    await expect(
+      service.exportAuditPdf(
+        { id: 'admin-1', role: 'ADMIN' } as never,
+        {} as never,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects audit export pdf ranges longer than 31 days', async () => {
+    await expect(
+      service.exportAuditPdf(
+        { id: 'admin-1', role: 'ADMIN' } as never,
+        {
+          dateFrom: '2026-01-01T00:00:00.000Z',
+          dateTo: '2026-02-15T00:00:00.000Z',
+        } as never,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

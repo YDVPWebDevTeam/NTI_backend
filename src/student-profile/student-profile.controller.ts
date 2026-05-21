@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Patch,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { UserRole } from '../../generated/prisma/enums';
 import { GetUserContext } from '../auth/decorators/get-user-context.decorator';
@@ -16,12 +7,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import {
-  CompleteProfileApi,
   GetMyProfileApi,
   UpdateAcademicInformationApi,
   UpdateProfessionalSkillsApi,
 } from './api-docs';
-import { CompleteStudentProfileDto } from './dto/complete-student-profile.dto';
 import { GetMyStudentProfileResponseDto } from './dto/student-profile.dto';
 import { UpdateAcademicInformationDto } from './dto/update-academic-information.dto';
 import { UpdateProfessionalSkillsDto } from './dto/update-professional-skills.dto';
@@ -58,15 +47,5 @@ export class StudentProfileController {
     @Body() dto: UpdateProfessionalSkillsDto,
   ): Promise<GetMyStudentProfileResponseDto> {
     return this.service.updateProfessionalSkills(authUser, dto);
-  }
-
-  @CompleteProfileApi()
-  @Post('me/complete')
-  @HttpCode(HttpStatus.OK)
-  completeProfile(
-    @GetUserContext() authUser: AuthenticatedUserContext,
-    @Body() dto: CompleteStudentProfileDto,
-  ): Promise<GetMyStudentProfileResponseDto> {
-    return this.service.completeProfile(authUser, dto);
   }
 }

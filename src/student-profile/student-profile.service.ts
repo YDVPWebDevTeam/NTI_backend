@@ -7,8 +7,6 @@ import {
 import { UploadStatus } from '../../generated/prisma/enums';
 import { EligibilitySignalsService } from '../applications/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import { TeamService } from '../team/team.service';
-import { CompleteStudentProfileDto } from './dto/complete-student-profile.dto';
 import { GetMyStudentProfileResponseDto } from './dto/student-profile.dto';
 import { UpdateAcademicInformationDto } from './dto/update-academic-information.dto';
 import { UpdateProfessionalSkillsDto } from './dto/update-professional-skills.dto';
@@ -23,7 +21,6 @@ export class StudentProfileService {
   constructor(
     private readonly repository: StudentProfileRepository,
     private readonly eligibilitySignalsService: EligibilitySignalsService,
-    private readonly teamService: TeamService,
   ) {}
 
   async getMyProfile(
@@ -99,13 +96,11 @@ export class StudentProfileService {
       );
     }
 
-    const { teamName, ...profileUpdate } = dto;
-
     const profile = await this.repository.transaction(async (db) => {
       try {
         return await this.repository.replaceProfessionalSkills(
           authUser.id,
-          profileUpdate,
+          dto,
           db,
         );
       } catch (error) {
@@ -119,73 +114,7 @@ export class StudentProfileService {
       }
     });
 
-    await this.ensureStandaloneStudentTeam(authUser, profile, teamName);
-
     return this.toMyProfileResponse(profile);
-  }
-
-  async completeProfile(
-    authUser: AuthenticatedUserContext,
-    dto: CompleteStudentProfileDto,
-  ): Promise<GetMyStudentProfileResponseDto> {
-    const profile = await this.repository.findByUserIdWithRelations(
-      authUser.id,
-    );
-
-    if (!profile) {
-      throw new UnprocessableEntityException('Profile is incomplete');
-    }
-
-    const academicCompleted = this.isAcademicCompleted(profile);
-    const professionalCompleted = this.isProfessionalCompleted(profile);
-
-    if (!academicCompleted || !professionalCompleted) {
-      throw new UnprocessableEntityException('Profile is incomplete');
-    }
-
-    const completedProfile = await this.repository.markCompleted(authUser.id);
-
-    await this.ensureStandaloneStudentTeam(
-      authUser,
-      completedProfile,
-      dto.teamName,
-    );
-
-    return this.toMyProfileResponse(completedProfile);
-  }
-
-  private async ensureStandaloneStudentTeam(
-    authUser: AuthenticatedUserContext,
-    profile: StudentProfileWithRelations,
-    requestedTeamName?: string,
-  ): Promise<void> {
-    if (
-      !this.isAcademicCompleted(profile) ||
-      !this.isProfessionalCompleted(profile)
-    ) {
-      return;
-    }
-
-    await this.teamService.ensurePersonalTeamForUser(
-      authUser,
-      this.resolvePersonalTeamName(profile, requestedTeamName),
-    );
-  }
-
-  private resolvePersonalTeamName(
-    profile: StudentProfileWithRelations,
-    requestedTeamName?: string,
-  ): string {
-    const trimmedTeamName = requestedTeamName?.trim();
-
-    if (trimmedTeamName) {
-      return trimmedTeamName;
-    }
-
-    return this.buildDefaultTeamName(
-      profile.user.firstName,
-      profile.user.lastName,
-    );
   }
 
   private async validateAcademicHierarchy(
@@ -289,7 +218,6 @@ export class StudentProfileService {
         portfolioUrl: profile.portfolioUrl ?? undefined,
         bio: profile.bio ?? undefined,
         cvFileId: profile.cvFileId ?? undefined,
-        profileCompletedAt: profile.profileCompletedAt?.toISOString(),
       },
       skills: profile.skills.map((skill) => ({
         id: skill.id,
@@ -309,7 +237,9 @@ export class StudentProfileService {
       completion: {
         academicInformationCompleted: this.isAcademicCompleted(profile),
         professionalSkillsCompleted: this.isProfessionalCompleted(profile),
-        profileCompleted: profile.profileCompletedAt !== null,
+        profileCompleted:
+          this.isAcademicCompleted(profile) &&
+          this.isProfessionalCompleted(profile),
       },
     };
   }
@@ -337,9 +267,5 @@ export class StudentProfileService {
 
   private isProfileNotFoundError(error: unknown): boolean {
     return error instanceof ProfileNotFoundError;
-  }
-
-  private buildDefaultTeamName(firstName: string, lastName: string): string {
-    return `${firstName} ${lastName} Team`;
   }
 }

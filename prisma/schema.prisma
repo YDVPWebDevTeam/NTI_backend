@@ -1129,7 +1129,6 @@ model StudentProfile {
   academicEvidenceFile   UploadedFile? @relation("StudentAcademicEvidence", fields: [academicEvidenceFileId], references: [id], onDelete: SetNull)
 
   academicDeclarationAcceptedAt DateTime?
-  profileCompletedAt            DateTime?
 
   focusAreas     StudentFocusArea[]
   preferredRoles StudentPreferredRole[]
@@ -1153,7 +1152,6 @@ model StudentProfile {
   @@index([facultyId])
   @@index([specializationId])
   @@index([degreeLevel, studyYear])
-  @@index([profileCompletedAt])
 }
 
 model StudentSkill {

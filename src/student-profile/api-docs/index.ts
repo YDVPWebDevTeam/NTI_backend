@@ -1,4 +1,3 @@
-export { CompleteProfileApi } from './student-profile-api-docs.decorators';
 export { GetFacultiesApi } from './student-profile-api-docs.decorators';
 export { GetMyProfileApi } from './student-profile-api-docs.decorators';
 export { GetSpecializationsApi } from './student-profile-api-docs.decorators';

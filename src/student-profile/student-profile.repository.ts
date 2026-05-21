@@ -290,20 +290,6 @@ export class StudentProfileRepository extends BaseRepository<
     return this.findByUserIdWithRelationsOrThrow(userId, client);
   }
 
-  async markCompleted(
-    userId: string,
-    db?: PrismaDbClient,
-  ): Promise<StudentProfileWithRelations> {
-    await (db ?? this.prisma.client).studentProfile.update({
-      where: { userId },
-      data: {
-        profileCompletedAt: new Date(),
-      },
-    });
-
-    return this.findByUserIdWithRelationsOrThrow(userId, db);
-  }
-
   private async findByUserIdWithRelationsOrThrow(
     userId: string,
     db?: PrismaDbClient,

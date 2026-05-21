@@ -28,6 +28,7 @@ import { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto
 import { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
 import {
   assertProgramASectionKey,
+  PROGRAM_A_SECTION_KEYS,
   validateProgramASectionPayload,
 } from './program-a/program-a-application-sections.contract';
 import { ApplicationSectionsRulesService } from './rules/application-sections-rules.service';
@@ -109,7 +110,7 @@ export class ApplicationSectionsService {
         );
       }
 
-      validateProgramASectionPayload(
+      this.assertSectionStructure(
         key,
         dto.valueJson as unknown as Record<string, unknown>,
       );
@@ -263,11 +264,6 @@ export class ApplicationSectionsService {
   private toHistoryDto(
     row: ApplicationSectionHistory,
   ): ApplicationSectionHistoryDto {
-    this.assertSectionStructure(
-      APPLICATION_SECTION_KEYS.PROFILE,
-      row.valueJson as Record<string, unknown>,
-    );
-
     return {
       id: row.id,
       sectionId: row.sectionId,
@@ -286,7 +282,6 @@ export class ApplicationSectionsService {
 
     const valueJson = (activeHistory?.valueJson ??
       row.valueJson) as unknown as Record<string, unknown>;
-    this.assertSectionStructure(row.key, valueJson);
 
     return {
       id: row.id,
@@ -306,19 +301,30 @@ export class ApplicationSectionsService {
   ): void {
     this.assertSectionKey(key);
 
-    switch (key) {
-      case APPLICATION_SECTION_KEYS.PROFILE:
-        this.assertProfileSectionValue(valueJson);
-        return;
+    if (key === APPLICATION_SECTION_KEYS.PROFILE) {
+      this.assertProfileSectionValue(valueJson);
+      return;
     }
+
+    validateProgramASectionPayload(key, valueJson);
   }
 
   private assertSectionKey(key: string): asserts key is ApplicationSectionKey {
-    if (key !== APPLICATION_SECTION_KEYS.PROFILE) {
-      throw new BadRequestException(
-        `Unsupported application section key: ${key}`,
-      );
+    if (key === APPLICATION_SECTION_KEYS.PROFILE) {
+      return;
     }
+
+    if (
+      PROGRAM_A_SECTION_KEYS.includes(
+        key as (typeof PROGRAM_A_SECTION_KEYS)[number],
+      )
+    ) {
+      return;
+    }
+
+    throw new BadRequestException(
+      `Unsupported application section key: ${key}`,
+    );
   }
 
   private assertProfileSectionValue(

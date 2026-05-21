@@ -155,6 +155,33 @@ describe('ApplicationsService', () => {
     ],
   };
 
+  const completeProgramASections = [
+    {
+      key: 'idea_overview',
+      activeVersion: 1,
+    },
+    {
+      key: 'category_and_stack',
+      activeVersion: 1,
+    },
+    {
+      key: 'team_setup',
+      activeVersion: 1,
+    },
+    {
+      key: 'execution_plan',
+      activeVersion: 1,
+    },
+    {
+      key: 'business_case',
+      activeVersion: 1,
+    },
+    {
+      key: 'risks',
+      activeVersion: 1,
+    },
+  ];
+
   const workflowApplication = {
     id: 'application-1',
     callId: 'call-1',
@@ -170,6 +197,7 @@ describe('ApplicationsService', () => {
     call: mockCall,
     team: mockTeam,
     documents: [],
+    sections: [],
     mentorUserId: null,
     mentorAssignedAt: null,
     mentorAssignedById: null,
@@ -609,6 +637,7 @@ describe('ApplicationsService', () => {
   it('submits a complete draft application and locks the team', async () => {
     applicationsRepository.findByIdForWorkflow.mockResolvedValue({
       ...workflowApplication,
+      sections: completeProgramASections,
       documents: [
         {
           id: 'doc-1',
@@ -691,7 +720,7 @@ describe('ApplicationsService', () => {
     expect(result.status).toBe(ApplicationStatus.SUBMITTED);
   });
 
-  it('rejects submit when Program A application is incomplete', async () => {
+  it('rejects submit when Program A application is missing required sections', async () => {
     applicationsRepository.findByIdForWorkflow.mockResolvedValue(
       workflowApplication,
     );
@@ -705,6 +734,24 @@ describe('ApplicationsService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('rejects submit when Program A application is missing required documents', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      sections: completeProgramASections,
+      documents: [],
+    });
+
+    await expect(
+      service.submit('application-1', {
+        id: 'user-1',
+        email: 'lead@example.com',
+        role: UserRole.STUDENT,
+      } as never),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(applicationsRepository.submitDraft).not.toHaveBeenCalled();
+  });
+
   it('lists public calls with pagination and optional type filter', async () => {
     callsRepository.findPublicMany.mockResolvedValue([
       {
@@ -716,6 +763,10 @@ describe('ApplicationsService', () => {
         closesAt: null,
         createdAt: new Date('2026-05-01T00:00:00.000Z'),
         updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+        requiredDocumentTypes: [],
+        eligibilityRuleConfigs: [],
+        programACategories: [],
+        programAStackTags: [],
       },
     ]);
     callsRepository.countPublic.mockResolvedValue(1);
@@ -784,12 +835,86 @@ describe('ApplicationsService', () => {
       closesAt: null,
       createdAt: new Date('2026-05-01T00:00:00.000Z'),
       updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+      requiredDocumentTypes: [],
+      eligibilityRuleConfigs: [],
+      programACategories: [],
+      programAStackTags: [],
     });
-
     const result = await service.findPublicCallById('call-1');
 
     expect(callsRepository.findPublicById).toHaveBeenCalledWith('call-1');
     expect(result.type).toBe(ProgramType.PROGRAM_B);
+  });
+
+  it('returns Program A public call metadata', async () => {
+    callsRepository.findPublicById.mockResolvedValue({
+      id: 'call-1',
+      title: 'Program A Call',
+      type: ProgramType.PROGRAM_A,
+      status: CallStatus.OPEN,
+      opensAt: null,
+      closesAt: null,
+      createdAt: new Date('2026-05-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+      requiredDocumentTypes: [
+        {
+          id: 'req-1',
+          documentType: DocumentType.BUDGET,
+          isRequired: true,
+        },
+      ],
+      eligibilityRuleConfigs: [
+        {
+          code: 'TEAM_SIZE_MIN',
+          threshold: '3',
+        },
+        {
+          code: 'TRANSFERRED_SUBJECTS_MAX',
+          threshold: '0',
+        },
+        {
+          code: 'PROFILE_SUBJECTS_AVERAGE_MAX',
+          threshold: '2',
+        },
+      ],
+      programACategories: [
+        {
+          value: 'ai_data',
+          label: 'AI & Data',
+        },
+      ],
+      programAStackTags: [
+        {
+          value: 'nestjs',
+          label: 'NestJS',
+        },
+      ],
+    });
+
+    const result = await service.findPublicCallById('call-1');
+
+    expect(result.requiredDocumentTypes).toEqual([
+      {
+        id: 'req-1',
+        documentType: DocumentType.BUDGET,
+        isRequired: true,
+      },
+    ]);
+    expect(result.minTeamSize).toBe(3);
+    expect(result.maxTransferredSubjects).toBe(0);
+    expect(result.maxProfileSubjectsAverage).toBe(2);
+    expect(result.categories).toEqual([
+      {
+        value: 'ai_data',
+        label: 'AI & Data',
+      },
+    ]);
+    expect(result.stackTags).toEqual([
+      {
+        value: 'nestjs',
+        label: 'NestJS',
+      },
+    ]);
   });
 
   it('throws not found when public call cannot be exposed', async () => {

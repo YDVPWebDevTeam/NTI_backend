@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,6 +9,7 @@ import type {
   ApplicationSectionHistory,
   Prisma,
 } from '../../generated/prisma/client';
+import { ProgramType } from '../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { PrismaDbClient } from '../infrastructure/database';
 import { ApplicationSectionsRepository } from './application-sections.repository';
@@ -16,6 +18,10 @@ import { ApplicationSectionDto } from './dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from './dto/application-section-history.dto';
 import { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
 import { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
+import {
+  isProgramASectionKey,
+  validateProgramASectionPayload,
+} from './program-a/program-a-application-sections.contract';
 import { ApplicationSectionsRulesService } from './rules/application-sections-rules.service';
 
 @Injectable()
@@ -43,14 +49,20 @@ export class ApplicationSectionsService {
       await this.sectionsRepository.findByApplicationId(applicationId);
 
     const activePairs = sections
-      .filter((s) => s.activeVersion !== null)
-      .map((s) => ({ sectionId: s.id, version: s.activeVersion as number }));
+      .filter((section) => section.activeVersion !== null)
+      .map((section) => ({
+        sectionId: section.id,
+        version: section.activeVersion as number,
+      }));
 
     const historyEntries =
       await this.sectionsRepository.findHistoryEntriesBulk(activePairs);
 
     const historyMap = new Map(
-      historyEntries.map((h) => [`${h.sectionId}:${h.version}`, h]),
+      historyEntries.map((historyEntry) => [
+        `${historyEntry.sectionId}:${historyEntry.version}`,
+        historyEntry,
+      ]),
     );
 
     return sections.map((section) => {
@@ -82,7 +94,14 @@ export class ApplicationSectionsService {
 
       this.sectionsRules.assertApplicationIsDraft(application.status);
       this.sectionsRules.assertWriteAccess(application, user);
-      this.assertSectionStructure(key, dto.valueJson);
+
+      if (application.call.type !== ProgramType.PROGRAM_A) {
+        throw new ConflictException(
+          'Application sections are currently supported only for Program A applications',
+        );
+      }
+
+      validateProgramASectionPayload(key, dto.valueJson);
 
       const section = await this.sectionsRepository.upsertSection(
         applicationId,
@@ -124,6 +143,10 @@ export class ApplicationSectionsService {
 
     this.sectionsRules.assertAdminAccess(user);
 
+    if (application.call.type === ProgramType.PROGRAM_A) {
+      this.assertKnownProgramASectionKey(key);
+    }
+
     const section = await this.sectionsRepository.findByApplicationIdAndKey(
       applicationId,
       key,
@@ -158,6 +181,10 @@ export class ApplicationSectionsService {
       }
 
       this.sectionsRules.assertAdminAccess(user);
+
+      if (application.call.type === ProgramType.PROGRAM_A) {
+        this.assertKnownProgramASectionKey(key);
+      }
 
       const section = await this.sectionsRepository.findByApplicationIdAndKey(
         applicationId,
@@ -200,6 +227,14 @@ export class ApplicationSectionsService {
 
       return this.toSectionDto(updatedSection, db);
     });
+  }
+
+  private assertKnownProgramASectionKey(key: string): void {
+    if (!isProgramASectionKey(key)) {
+      throw new BadRequestException(
+        `Unsupported Program A section key: ${key}`,
+      );
+    }
   }
 
   private async toSectionDto(
@@ -245,28 +280,5 @@ export class ApplicationSectionsService {
       updatedById: row.updatedById,
       updatedAt: row.updatedAt,
     };
-  }
-
-  private assertSectionStructure(
-    key: string,
-    valueJson: Record<string, unknown>,
-  ): void {
-    const validator = this.getSectionStructureValidator(key);
-
-    if (!validator) {
-      return;
-    }
-
-    validator(valueJson);
-  }
-
-  private getSectionStructureValidator(
-    key: string,
-  ): ((valueJson: Record<string, unknown>) => void) | null {
-    switch (key) {
-      default:
-        // TODO: add per-section JSON schema validators once section shapes are finalized.
-        return null;
-    }
   }
 }

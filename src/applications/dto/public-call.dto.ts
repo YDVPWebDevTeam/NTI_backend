@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CallStatus, ProgramType } from '../../../generated/prisma/enums';
+import { RequiredDocumentTypeDto } from './required-document-type.dto';
+import { ProgramACallOptionDto } from './program-a-call-option.dto';
 
 export class PublicCallDto {
   @ApiProperty({
@@ -50,4 +52,22 @@ export class PublicCallDto {
     format: 'date-time',
   })
   updatedAt!: Date;
+
+  @ApiProperty({ type: [RequiredDocumentTypeDto] })
+  requiredDocumentTypes!: RequiredDocumentTypeDto[];
+
+  @ApiPropertyOptional({ example: 3, nullable: true })
+  minTeamSize!: number | null;
+
+  @ApiPropertyOptional({ example: 0, nullable: true })
+  maxTransferredSubjects!: number | null;
+
+  @ApiPropertyOptional({ example: 2, nullable: true })
+  maxProfileSubjectsAverage!: number | null;
+
+  @ApiProperty({ type: [ProgramACallOptionDto] })
+  categories!: ProgramACallOptionDto[];
+
+  @ApiProperty({ type: [ProgramACallOptionDto] })
+  stackTags!: ProgramACallOptionDto[];
 }

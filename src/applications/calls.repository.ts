@@ -16,6 +16,15 @@ export type AdminCallRecord = Prisma.CallGetPayload<{
   select: ReturnType<CallsRepository['adminCallSelect']>;
 }>;
 
+export type PublicCallRecord = Prisma.CallGetPayload<{
+  select: ReturnType<CallsRepository['publicCallSelect']>;
+}>;
+
+type ProgramACallOptionInput = {
+  value: string;
+  label: string;
+};
+
 @Injectable()
 export class CallsRepository extends BaseRepository<
   Call,
@@ -92,6 +101,8 @@ export class CallsRepository extends BaseRepository<
         code: string;
         threshold: string;
       }>;
+      categories?: ProgramACallOptionInput[];
+      stackTags?: ProgramACallOptionInput[];
     },
     db?: PrismaDbClient,
   ): Promise<AdminCallRecord> {
@@ -119,6 +130,26 @@ export class CallsRepository extends BaseRepository<
               },
             }
           : {}),
+        ...(data.categories
+          ? {
+              programACategories: {
+                create: data.categories.map((category) => ({
+                  value: category.value,
+                  label: category.label,
+                })),
+              },
+            }
+          : {}),
+        ...(data.stackTags
+          ? {
+              programAStackTags: {
+                create: data.stackTags.map((stackTag) => ({
+                  value: stackTag.value,
+                  label: stackTag.label,
+                })),
+              },
+            }
+          : {}),
       },
       select: this.adminCallSelect(),
     });
@@ -137,6 +168,8 @@ export class CallsRepository extends BaseRepository<
         code: string;
         threshold: string;
       }>;
+      categories?: ProgramACallOptionInput[];
+      stackTags?: ProgramACallOptionInput[];
     },
     db?: PrismaDbClient,
   ): Promise<AdminCallRecord> {
@@ -171,6 +204,28 @@ export class CallsRepository extends BaseRepository<
               },
             }
           : {}),
+        ...(data.categories !== undefined
+          ? {
+              programACategories: {
+                deleteMany: {},
+                create: data.categories.map((category) => ({
+                  value: category.value,
+                  label: category.label,
+                })),
+              },
+            }
+          : {}),
+        ...(data.stackTags !== undefined
+          ? {
+              programAStackTags: {
+                deleteMany: {},
+                create: data.stackTags.map((stackTag) => ({
+                  value: stackTag.value,
+                  label: stackTag.label,
+                })),
+              },
+            }
+          : {}),
       },
       select: this.adminCallSelect(),
     });
@@ -180,21 +235,26 @@ export class CallsRepository extends BaseRepository<
     id: string,
     at: Date,
     db?: PrismaDbClient,
-  ): Promise<Call | null> {
+  ): Promise<PublicCallRecord | null> {
     return (db ?? this.prisma.client).call.findFirst({
       where: {
         id,
         ...this.buildPublicVisibleWhere(at),
       },
+      select: this.publicCallSelect(),
     });
   }
 
-  findPublicById(id: string, db?: PrismaDbClient): Promise<Call | null> {
+  findPublicById(
+    id: string,
+    db?: PrismaDbClient,
+  ): Promise<PublicCallRecord | null> {
     return (db ?? this.prisma.client).call.findFirst({
       where: {
         id,
         status: CallStatus.OPEN,
       },
+      select: this.publicCallSelect(),
     });
   }
 
@@ -206,7 +266,7 @@ export class CallsRepository extends BaseRepository<
       orderBy?: Prisma.CallOrderByWithRelationInput[];
     },
     db?: PrismaDbClient,
-  ): Promise<Call[]> {
+  ): Promise<PublicCallRecord[]> {
     return (db ?? this.prisma.client).call.findMany({
       where: {
         status: CallStatus.OPEN,
@@ -215,6 +275,7 @@ export class CallsRepository extends BaseRepository<
       skip: args.skip,
       take: args.take,
       orderBy: args.orderBy,
+      select: this.publicCallSelect(),
     });
   }
 
@@ -239,7 +300,7 @@ export class CallsRepository extends BaseRepository<
       orderBy?: Prisma.CallOrderByWithRelationInput[];
     },
     db?: PrismaDbClient,
-  ): Promise<Call[]> {
+  ): Promise<PublicCallRecord[]> {
     return (db ?? this.prisma.client).call.findMany({
       where: {
         ...this.buildPublicVisibleWhere(args.now),
@@ -248,6 +309,7 @@ export class CallsRepository extends BaseRepository<
       skip: args.skip,
       take: args.take,
       orderBy: args.orderBy,
+      select: this.publicCallSelect(),
     });
   }
 
@@ -293,6 +355,59 @@ export class CallsRepository extends BaseRepository<
     } as const;
   }
 
+  private publicCallSelect() {
+    return {
+      id: true,
+      type: true,
+      title: true,
+      status: true,
+      opensAt: true,
+      closesAt: true,
+      createdAt: true,
+      updatedAt: true,
+      requiredDocumentTypes: {
+        where: {
+          isRequired: true,
+        },
+        select: {
+          id: true,
+          documentType: true,
+          isRequired: true,
+        },
+        orderBy: {
+          documentType: 'asc',
+        },
+      },
+      eligibilityRuleConfigs: {
+        where: {
+          enabled: true,
+        },
+        select: {
+          code: true,
+          threshold: true,
+        },
+      },
+      programACategories: {
+        select: {
+          value: true,
+          label: true,
+        },
+        orderBy: {
+          label: 'asc',
+        },
+      },
+      programAStackTags: {
+        select: {
+          value: true,
+          label: true,
+        },
+        orderBy: {
+          label: 'asc',
+        },
+      },
+    } as const;
+  }
+
   private adminCallSelect() {
     return {
       id: true,
@@ -323,6 +438,24 @@ export class CallsRepository extends BaseRepository<
         select: {
           code: true,
           threshold: true,
+        },
+      },
+      programACategories: {
+        select: {
+          value: true,
+          label: true,
+        },
+        orderBy: {
+          label: 'asc',
+        },
+      },
+      programAStackTags: {
+        select: {
+          value: true,
+          label: true,
+        },
+        orderBy: {
+          label: 'asc',
         },
       },
     } as const;

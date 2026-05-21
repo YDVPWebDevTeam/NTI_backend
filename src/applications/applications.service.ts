@@ -6,10 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
-import type { Call } from '../../generated/prisma/client';
 import {
   ApplicationDocumentScope,
   ApplicationStatus,
+  CallStatus,
   DocumentType,
   NeedsInfoItemStatus,
   ProgramType,
@@ -73,6 +73,7 @@ import {
   ProgramAMentorshipRepository,
 } from './program-a-mentorship.repository';
 import { CreateApplicationEvaluationDto } from './dto/create-application-evaluation.dto';
+import { REQUIRED_PROGRAM_A_SECTION_KEYS } from './program-a/program-a-application-sections.contract';
 
 type RequiredDocumentSlot = {
   documentType: DocumentType;
@@ -552,6 +553,7 @@ export class ApplicationsService {
         this.ensureApplicationCanBeSubmitted(application);
 
         if (application.call.type === ProgramType.PROGRAM_A) {
+          this.ensureRequiredProgramASectionsComplete(application);
           const completeness = this.buildDocumentCompleteness(application);
 
           if (!completeness.isComplete) {
@@ -1524,6 +1526,26 @@ export class ApplicationsService {
     );
   }
 
+  private ensureRequiredProgramASectionsComplete(
+    application: ApplicationWorkflowView,
+  ): void {
+    const completedKeys = new Set(
+      application.sections
+        .filter((section) => section.activeVersion !== null)
+        .map((section) => section.key),
+    );
+
+    const missingKeys = REQUIRED_PROGRAM_A_SECTION_KEYS.filter(
+      (key) => !completedKeys.has(key),
+    );
+
+    if (missingKeys.length > 0) {
+      throw new ConflictException(
+        `Application is missing required Program A sections: ${missingKeys.join(', ')}`,
+      );
+    }
+  }
+
   private resolveAttachmentSlot(
     application: ApplicationWorkflowView,
     dto: AttachApplicationDocumentDto,
@@ -1829,7 +1851,47 @@ export class ApplicationsService {
     };
   }
 
-  private toPublicCallDto(call: Call): PublicCallDto {
+  private parseNumericConfig(
+    value: string | null | undefined,
+  ): number | undefined {
+    if (value == null || value.trim() === '') {
+      return undefined;
+    }
+
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  private toPublicCallDto(call: {
+    id: string;
+    title: string;
+    type: ProgramType;
+    status: CallStatus;
+    opensAt: Date | null;
+    closesAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+    requiredDocumentTypes?: Array<{
+      id: string;
+      documentType: DocumentType;
+      isRequired: boolean;
+    }>;
+    eligibilityRuleConfigs?: Array<{
+      code: string;
+      threshold: string | null;
+    }>;
+    programACategories?: Array<{
+      value: string;
+      label: string;
+    }>;
+    programAStackTags?: Array<{
+      value: string;
+      label: string;
+    }>;
+  }): PublicCallDto {
+    const eligibilityRuleConfigs = call.eligibilityRuleConfigs ?? [];
+
     return {
       id: call.id,
       title: call.title,
@@ -1837,6 +1899,39 @@ export class ApplicationsService {
       status: call.status,
       opensAt: call.opensAt,
       closesAt: call.closesAt,
+      requiredDocumentTypes: (call.requiredDocumentTypes ?? []).map(
+        (document) => ({
+          id: document.id,
+          documentType: document.documentType,
+          isRequired: document.isRequired,
+        }),
+      ),
+      minTeamSize:
+        this.parseNumericConfig(
+          eligibilityRuleConfigs.find(
+            (config) => config.code === 'TEAM_SIZE_MIN',
+          )?.threshold,
+        ) ?? null,
+      maxTransferredSubjects:
+        this.parseNumericConfig(
+          eligibilityRuleConfigs.find(
+            (config) => config.code === 'TRANSFERRED_SUBJECTS_MAX',
+          )?.threshold,
+        ) ?? null,
+      maxProfileSubjectsAverage:
+        this.parseNumericConfig(
+          eligibilityRuleConfigs.find(
+            (config) => config.code === 'PROFILE_SUBJECTS_AVERAGE_MAX',
+          )?.threshold,
+        ) ?? null,
+      categories: (call.programACategories ?? []).map((category) => ({
+        value: category.value,
+        label: category.label,
+      })),
+      stackTags: (call.programAStackTags ?? []).map((stackTag) => ({
+        value: stackTag.value,
+        label: stackTag.label,
+      })),
       createdAt: call.createdAt,
       updatedAt: call.updatedAt,
     };

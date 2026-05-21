@@ -329,6 +329,12 @@ export class ApplicationsRepository extends BaseRepository<
           createdAt: true,
         },
       },
+      sections: {
+        select: {
+          key: true,
+          activeVersion: true,
+        },
+      },
     } as const;
   }
 

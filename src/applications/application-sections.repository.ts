@@ -34,6 +34,20 @@ export class ApplicationSectionsRepository extends BaseRepository<
     });
   }
 
+  findKeysByApplicationId(
+    applicationId: string,
+    db?: PrismaDbClient,
+  ): Promise<Array<Pick<ApplicationSection, 'key' | 'activeVersion'>>> {
+    return (db ?? this.prisma.client).applicationSection.findMany({
+      where: { applicationId },
+      select: {
+        key: true,
+        activeVersion: true,
+      },
+      orderBy: [{ key: 'asc' }],
+    });
+  }
+
   findByApplicationIdAndKey(
     applicationId: string,
     key: string,

@@ -39,7 +39,7 @@ import {
   ResubmitApplicationApi,
   SetActiveSectionVersionApi,
   SubmitApplicationApi,
-  UpsertApplicationSectionApi,
+  UpsertIdeaOverviewSectionApi,
 } from './api-docs';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationDocumentDto } from './dto/application-document.dto';
@@ -70,7 +70,7 @@ import { PublicCallsQueryDto } from './dto/public-calls-query.dto';
 import { PublicCallsResponseDto } from './dto/public-calls-response.dto';
 import { ResubmitApplicationDto } from './dto/resubmit-application.dto';
 import { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
-import { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
+import { UpsertIdeaOverviewSectionDto } from './dto/upsert-idea-overview-section.dto';
 import { ApplicationSectionsService } from './application-sections.service';
 import { ApplicationsService } from './applications.service';
 
@@ -288,17 +288,20 @@ export class ApplicationsController {
     return this.sectionsService.listSections(applicationId, user);
   }
 
-  @UpsertApplicationSectionApi()
-  @Put(':applicationId/sections/:key')
+  @UpsertIdeaOverviewSectionApi()
+  @Put(':applicationId/sections/idea_overview')
   @UseGuards(JwtAuthGuard)
-  upsertSection(
+  upsertIdeaOverviewSection(
     @Param('applicationId', ParseUUIDPipe) applicationId: string,
-    @Param('key', new ParseEnumPipe(APPLICATION_SECTION_KEYS))
-    key: ApplicationSectionKey,
-    @Body() dto: UpsertApplicationSectionDto,
+    @Body() dto: UpsertIdeaOverviewSectionDto,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ApplicationSectionDto> {
-    return this.sectionsService.upsertSection(applicationId, key, dto, user);
+    return this.sectionsService.upsertSection(
+      applicationId,
+      APPLICATION_SECTION_KEYS.IDEA_OVERVIEW,
+      { valueJson: dto },
+      user,
+    );
   }
 
   @GetSectionHistoryApi()

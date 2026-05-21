@@ -362,6 +362,8 @@ model Call {
   updatedAt              DateTime                @updatedAt
   requiredDocumentTypes  RequiredDocumentType[]
   eligibilityRuleConfigs EligibilityRuleConfig[]
+  programACategories     ProgramACallCategory[]
+  programAStackTags      ProgramACallStackTag[]
 
   @@index([type, status])
   @@index([status, opensAt, closesAt])
@@ -494,6 +496,38 @@ model EligibilityRuleConfig {
   createdAt DateTime @default(now())
 
   @@unique([callId, code])
+}
+
+model ProgramACallCategory {
+  id String @id @default(uuid())
+
+  callId String
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  value String
+  label String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([callId, value])
+  @@index([callId])
+}
+
+model ProgramACallStackTag {
+  id String @id @default(uuid())
+
+  callId String
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  value String
+  label String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([callId, value])
+  @@index([callId])
 }
 
 model ProgramBTeamApplication {

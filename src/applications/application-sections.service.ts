@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,6 +9,7 @@ import type {
   ApplicationSectionHistory,
   Prisma,
 } from '../../generated/prisma/client';
+import { ProgramType } from '../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { PrismaDbClient } from '../infrastructure/database';
 import { ApplicationSectionsRepository } from './application-sections.repository';
@@ -24,6 +26,11 @@ import {
 } from './dto/application-profile-section-value.dto';
 import { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
 import { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
+import {
+  assertProgramASectionKey,
+  PROGRAM_A_SECTION_KEYS,
+  validateProgramASectionPayload,
+} from './program-a/program-a-application-sections.contract';
 import { ApplicationSectionsRulesService } from './rules/application-sections-rules.service';
 
 @Injectable()
@@ -51,14 +58,20 @@ export class ApplicationSectionsService {
       await this.sectionsRepository.findByApplicationId(applicationId);
 
     const activePairs = sections
-      .filter((s) => s.activeVersion !== null)
-      .map((s) => ({ sectionId: s.id, version: s.activeVersion as number }));
+      .filter((section) => section.activeVersion !== null)
+      .map((section) => ({
+        sectionId: section.id,
+        version: section.activeVersion as number,
+      }));
 
     const historyEntries =
       await this.sectionsRepository.findHistoryEntriesBulk(activePairs);
 
     const historyMap = new Map(
-      historyEntries.map((h) => [`${h.sectionId}:${h.version}`, h]),
+      historyEntries.map((historyEntry) => [
+        `${historyEntry.sectionId}:${historyEntry.version}`,
+        historyEntry,
+      ]),
     );
 
     return sections.map((section) => {
@@ -90,6 +103,13 @@ export class ApplicationSectionsService {
 
       this.sectionsRules.assertApplicationIsDraft(application.status);
       this.sectionsRules.assertWriteAccess(application, user);
+
+      if (application.call.type !== ProgramType.PROGRAM_A) {
+        throw new ConflictException(
+          'Application sections are currently supported only for Program A applications',
+        );
+      }
+
       this.assertSectionStructure(
         key,
         dto.valueJson as unknown as Record<string, unknown>,
@@ -135,6 +155,10 @@ export class ApplicationSectionsService {
 
     this.sectionsRules.assertAdminAccess(user);
 
+    if (application.call.type === ProgramType.PROGRAM_A) {
+      this.assertKnownProgramASectionKey(key);
+    }
+
     const section = await this.sectionsRepository.findByApplicationIdAndKey(
       applicationId,
       key,
@@ -169,6 +193,10 @@ export class ApplicationSectionsService {
       }
 
       this.sectionsRules.assertAdminAccess(user);
+
+      if (application.call.type === ProgramType.PROGRAM_A) {
+        this.assertKnownProgramASectionKey(key);
+      }
 
       const section = await this.sectionsRepository.findByApplicationIdAndKey(
         applicationId,
@@ -213,6 +241,10 @@ export class ApplicationSectionsService {
     });
   }
 
+  private assertKnownProgramASectionKey(key: string): void {
+    assertProgramASectionKey(key);
+  }
+
   private async toSectionDto(
     row: ApplicationSection,
     db?: PrismaDbClient,
@@ -232,11 +264,6 @@ export class ApplicationSectionsService {
   private toHistoryDto(
     row: ApplicationSectionHistory,
   ): ApplicationSectionHistoryDto {
-    this.assertSectionStructure(
-      APPLICATION_SECTION_KEYS.PROFILE,
-      row.valueJson as Record<string, unknown>,
-    );
-
     return {
       id: row.id,
       sectionId: row.sectionId,
@@ -255,7 +282,6 @@ export class ApplicationSectionsService {
 
     const valueJson = (activeHistory?.valueJson ??
       row.valueJson) as unknown as Record<string, unknown>;
-    this.assertSectionStructure(row.key, valueJson);
 
     return {
       id: row.id,
@@ -275,19 +301,30 @@ export class ApplicationSectionsService {
   ): void {
     this.assertSectionKey(key);
 
-    switch (key) {
-      case APPLICATION_SECTION_KEYS.PROFILE:
-        this.assertProfileSectionValue(valueJson);
-        return;
+    if (key === APPLICATION_SECTION_KEYS.PROFILE) {
+      this.assertProfileSectionValue(valueJson);
+      return;
     }
+
+    validateProgramASectionPayload(key, valueJson);
   }
 
   private assertSectionKey(key: string): asserts key is ApplicationSectionKey {
-    if (key !== APPLICATION_SECTION_KEYS.PROFILE) {
-      throw new BadRequestException(
-        `Unsupported application section key: ${key}`,
-      );
+    if (key === APPLICATION_SECTION_KEYS.PROFILE) {
+      return;
     }
+
+    if (
+      PROGRAM_A_SECTION_KEYS.includes(
+        key as (typeof PROGRAM_A_SECTION_KEYS)[number],
+      )
+    ) {
+      return;
+    }
+
+    throw new BadRequestException(
+      `Unsupported application section key: ${key}`,
+    );
   }
 
   private assertProfileSectionValue(

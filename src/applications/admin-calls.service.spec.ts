@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   CallStatus,
+  DocumentType,
   ProgramType,
   UserRole,
   UserStatus,
@@ -34,6 +35,7 @@ describe('AdminCallsService', () => {
     status: UserStatus.ACTIVE,
     organizationId: null,
   };
+
   const actorStudent: AuthenticatedUserContext = {
     id: 'student-1',
     email: 'student@example.com',
@@ -54,7 +56,7 @@ describe('AdminCallsService', () => {
     requiredDocumentTypes: [
       {
         id: 'doc-1',
-        documentType: 'CV',
+        documentType: DocumentType.CV,
         isRequired: true,
       },
     ],
@@ -63,6 +65,8 @@ describe('AdminCallsService', () => {
       { code: 'TRANSFERRED_SUBJECTS_MAX', threshold: '0' },
       { code: 'PROFILE_SUBJECTS_AVERAGE_MAX', threshold: '2' },
     ],
+    programACategories: [],
+    programAStackTags: [],
   };
 
   beforeEach(() => {
@@ -87,7 +91,7 @@ describe('AdminCallsService', () => {
       title: '  Spring 2026  ',
       opensAt: '2026-06-01T09:00:00.000Z',
       closesAt: '2026-06-30T17:00:00.000Z',
-      requiredDocumentTypes: ['CV'],
+      requiredDocumentTypes: [DocumentType.CV],
       minTeamSize: 4,
     });
 
@@ -96,14 +100,133 @@ describe('AdminCallsService', () => {
       title: '  Spring 2026  ',
       opensAt: new Date('2026-06-01T09:00:00.000Z'),
       closesAt: new Date('2026-06-30T17:00:00.000Z'),
-      requiredDocumentTypes: ['CV'],
+      requiredDocumentTypes: [DocumentType.CV],
       eligibilityRuleConfigs: [
         { code: 'TEAM_SIZE_MIN', threshold: '4' },
         { code: 'TRANSFERRED_SUBJECTS_MAX', threshold: '0' },
         { code: 'PROFILE_SUBJECTS_AVERAGE_MAX', threshold: '2' },
       ],
+      categories: [],
+      stackTags: [],
     });
     expect(result.status).toBe(CallStatus.DRAFT);
+    expect(result.categories).toEqual([]);
+    expect(result.stackTags).toEqual([]);
+  });
+
+  it('creates Program A calls with categories and stack tags', async () => {
+    callsRepository.createAdminCall.mockResolvedValue({
+      ...baseCall,
+      programACategories: [
+        {
+          value: 'ai_data',
+          label: 'AI & Data',
+        },
+      ],
+      programAStackTags: [
+        {
+          value: 'nestjs',
+          label: 'NestJS',
+        },
+      ],
+    });
+
+    const result = await service.createCall(actorAdmin, {
+      type: ProgramType.PROGRAM_A,
+      title: 'Program A Call',
+      opensAt: '2026-06-01T09:00:00.000Z',
+      closesAt: '2026-06-30T17:00:00.000Z',
+      requiredDocumentTypes: [DocumentType.CV],
+      categories: [
+        {
+          value: 'ai_data',
+          label: 'AI & Data',
+        },
+      ],
+      stackTags: [
+        {
+          value: 'nestjs',
+          label: 'NestJS',
+        },
+      ],
+    });
+
+    expect(callsRepository.createAdminCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categories: [
+          {
+            value: 'ai_data',
+            label: 'AI & Data',
+          },
+        ],
+        stackTags: [
+          {
+            value: 'nestjs',
+            label: 'NestJS',
+          },
+        ],
+      }),
+    );
+    expect(result.categories).toEqual([
+      {
+        value: 'ai_data',
+        label: 'AI & Data',
+      },
+    ]);
+    expect(result.stackTags).toEqual([
+      {
+        value: 'nestjs',
+        label: 'NestJS',
+      },
+    ]);
+  });
+
+  it('rejects duplicate Program A category values', async () => {
+    await expect(
+      service.createCall(actorAdmin, {
+        type: ProgramType.PROGRAM_A,
+        title: 'Program A Call',
+        opensAt: '2026-06-01T09:00:00.000Z',
+        closesAt: '2026-06-30T17:00:00.000Z',
+        requiredDocumentTypes: [DocumentType.CV],
+        categories: [
+          {
+            value: 'ai_data',
+            label: 'AI & Data',
+          },
+          {
+            value: 'ai_data',
+            label: 'AI Duplicate',
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(callsRepository.createAdminCall).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate Program A stack tag values', async () => {
+    await expect(
+      service.createCall(actorAdmin, {
+        type: ProgramType.PROGRAM_A,
+        title: 'Program A Call',
+        opensAt: '2026-06-01T09:00:00.000Z',
+        closesAt: '2026-06-30T17:00:00.000Z',
+        requiredDocumentTypes: [DocumentType.CV],
+        stackTags: [
+          {
+            value: 'nestjs',
+            label: 'NestJS',
+          },
+          {
+            value: 'nestjs',
+            label: 'NestJS Duplicate',
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(callsRepository.createAdminCall).not.toHaveBeenCalled();
   });
 
   it('rejects non-admin call management', async () => {
@@ -140,6 +263,8 @@ describe('AdminCallsService', () => {
         },
       }),
     );
+    expect(result.data[0].categories).toEqual([]);
+    expect(result.data[0].stackTags).toEqual([]);
     expect(result.meta).toMatchObject({
       page: 1,
       limit: 20,
@@ -162,12 +287,29 @@ describe('AdminCallsService', () => {
     expect(callsRepository.updateAdminCall).not.toHaveBeenCalled();
   });
 
-  it('clears required documents when changing a call to PROGRAM_B', async () => {
-    callsRepository.findAdminById.mockResolvedValue(baseCall);
+  it('clears required documents and Program A options when changing a call to PROGRAM_B', async () => {
+    callsRepository.findAdminById.mockResolvedValue({
+      ...baseCall,
+      programACategories: [
+        {
+          value: 'ai_data',
+          label: 'AI & Data',
+        },
+      ],
+      programAStackTags: [
+        {
+          value: 'nestjs',
+          label: 'NestJS',
+        },
+      ],
+    });
     callsRepository.updateAdminCall.mockResolvedValue({
       ...baseCall,
       type: ProgramType.PROGRAM_B,
       requiredDocumentTypes: [],
+      eligibilityRuleConfigs: [],
+      programACategories: [],
+      programAStackTags: [],
     });
 
     const result = await service.updateCall(actorAdmin, 'call-1', {
@@ -181,8 +323,12 @@ describe('AdminCallsService', () => {
       closesAt: new Date('2026-06-30T17:00:00.000Z'),
       requiredDocumentTypes: [],
       eligibilityRuleConfigs: [],
+      categories: [],
+      stackTags: [],
     });
     expect(result.type).toBe(ProgramType.PROGRAM_B);
+    expect(result.categories).toEqual([]);
+    expect(result.stackTags).toEqual([]);
   });
 
   it('returns configured Program A eligibility thresholds', async () => {
@@ -193,6 +339,8 @@ describe('AdminCallsService', () => {
     expect(result.minTeamSize).toBe(3);
     expect(result.maxTransferredSubjects).toBe(0);
     expect(result.maxProfileSubjectsAverage).toBe(2);
+    expect(result.categories).toEqual([]);
+    expect(result.stackTags).toEqual([]);
   });
 
   it('allows archiving only from CLOSED', async () => {

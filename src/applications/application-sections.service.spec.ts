@@ -73,11 +73,18 @@ describe('ApplicationSectionsService', () => {
     },
   };
 
+  const ideaOverviewPayload = {
+    problem: 'Students struggle to find grants',
+    solution: 'A guided application flow',
+    targetUsers: 'Student teams',
+    valueProposition: 'Faster and clearer application submission',
+  };
+
   const baseSection = {
     id: 'section-1',
     applicationId: 'application-1',
-    key: 'profile',
-    valueJson: { name: 'John' },
+    key: 'idea_overview',
+    valueJson: ideaOverviewPayload,
     version: 2,
     activeVersion: null,
     updatedById: 'user-1',
@@ -129,7 +136,7 @@ describe('ApplicationSectionsService', () => {
     } as never);
 
     expect(result).toHaveLength(1);
-    expect(result[0].key).toBe('profile');
+    expect(result[0].key).toBe('idea_overview');
     expect(result[0].version).toBe(2);
     expect(sectionsRepository.findByApplicationId).toHaveBeenCalledWith(
       'application-1',
@@ -230,9 +237,9 @@ describe('ApplicationSectionsService', () => {
 
     const result = await service.upsertSection(
       'application-1',
-      'profile',
+      'idea_overview',
       {
-        valueJson: { name: 'Jane' },
+        valueJson: ideaOverviewPayload,
       },
       {
         id: 'user-1',
@@ -244,15 +251,15 @@ describe('ApplicationSectionsService', () => {
     expect(applicationsRepository.transaction).toHaveBeenCalledTimes(1);
     expect(sectionsRepository.upsertSection).toHaveBeenCalledWith(
       'application-1',
-      'profile',
-      { name: 'Jane' },
+      'idea_overview',
+      ideaOverviewPayload,
       'user-1',
       transactionClient,
     );
     expect(sectionsRepository.createHistoryEntry).toHaveBeenCalledWith(
       'section-1',
       2,
-      { name: 'Jane' },
+      ideaOverviewPayload,
       'user-1',
       transactionClient,
     );
@@ -261,7 +268,7 @@ describe('ApplicationSectionsService', () => {
       2,
       transactionClient,
     );
-    expect(result.key).toBe('profile');
+    expect(result.key).toBe('idea_overview');
   });
 
   it('upsertSection forbids non-lead', async () => {
@@ -283,9 +290,9 @@ describe('ApplicationSectionsService', () => {
     await expect(
       service.upsertSection(
         'application-1',
-        'profile',
+        'idea_overview',
         {
-          valueJson: { name: 'Jane' },
+          valueJson: ideaOverviewPayload,
         },
         {
           id: 'user-2',
@@ -317,9 +324,9 @@ describe('ApplicationSectionsService', () => {
     await expect(
       service.upsertSection(
         'application-1',
-        'profile',
+        'idea_overview',
         {
-          valueJson: { name: 'Jane' },
+          valueJson: ideaOverviewPayload,
         },
         {
           id: 'user-1',
@@ -404,7 +411,7 @@ describe('ApplicationSectionsService', () => {
     });
 
     await expect(
-      service.getSectionHistory('application-1', 'profile', {
+      service.getSectionHistory('application-1', 'idea_overview', {
         id: 'user-2',
         email: 'member@example.com',
         role: UserRole.STUDENT,
@@ -425,7 +432,7 @@ describe('ApplicationSectionsService', () => {
         id: 'history-2',
         sectionId: 'section-1',
         version: 2,
-        valueJson: { name: 'Jane 2' },
+        valueJson: ideaOverviewPayload,
         savedById: 'user-1',
         createdAt: new Date('2026-04-20T12:00:00.000Z'),
       },
@@ -433,17 +440,21 @@ describe('ApplicationSectionsService', () => {
         id: 'history-1',
         sectionId: 'section-1',
         version: 1,
-        valueJson: { name: 'Jane 1' },
+        valueJson: ideaOverviewPayload,
         savedById: 'user-1',
         createdAt: new Date('2026-04-19T12:00:00.000Z'),
       },
     ]);
 
-    const result = await service.getSectionHistory('application-1', 'profile', {
-      id: 'admin-1',
-      email: 'admin@example.com',
-      role: UserRole.ADMIN,
-    } as never);
+    const result = await service.getSectionHistory(
+      'application-1',
+      'idea_overview',
+      {
+        id: 'admin-1',
+        email: 'admin@example.com',
+        role: UserRole.ADMIN,
+      } as never,
+    );
 
     expect(result).toHaveLength(2);
     expect(result[0].version).toBe(2);
@@ -466,11 +477,16 @@ describe('ApplicationSectionsService', () => {
     sectionsRepository.findHistoryEntry.mockResolvedValue(null);
 
     await expect(
-      service.setActiveVersion('application-1', 'profile', { version: 99 }, {
-        id: 'admin-1',
-        email: 'admin@example.com',
-        role: UserRole.ADMIN,
-      } as never),
+      service.setActiveVersion(
+        'application-1',
+        'idea_overview',
+        { version: 99 },
+        {
+          id: 'admin-1',
+          email: 'admin@example.com',
+          role: UserRole.ADMIN,
+        } as never,
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(sectionsRepository.setActiveVersion).not.toHaveBeenCalled();
@@ -486,7 +502,7 @@ describe('ApplicationSectionsService', () => {
       id: 'history-1',
       sectionId: 'section-1',
       version: 1,
-      valueJson: { name: 'Pinned' },
+      valueJson: ideaOverviewPayload,
       savedById: 'user-1',
       createdAt: new Date('2026-04-19T12:00:00.000Z'),
     };
@@ -506,7 +522,7 @@ describe('ApplicationSectionsService', () => {
 
     const result = await service.setActiveVersion(
       'application-1',
-      'profile',
+      'idea_overview',
       { version: 1 },
       {
         id: 'admin-1',
@@ -520,7 +536,7 @@ describe('ApplicationSectionsService', () => {
       1,
       transactionClient,
     );
-    expect(result.valueJson).toEqual({ name: 'Pinned' });
+    expect(result.valueJson).toEqual(ideaOverviewPayload);
   });
 
   it('listSections rejects persisted unsupported section keys', async () => {

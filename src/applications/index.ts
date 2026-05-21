@@ -46,7 +46,7 @@ export {
   StartEvaluationApplicationApi,
   StartApplicationOnboardingApi,
   SubmitApplicationApi,
-  UpsertApplicationSectionApi,
+  UpsertIdeaOverviewSectionApi,
 } from './api-docs';
 export { ApplicationLifecycleTransitionDto } from './dto/application-lifecycle-transition.dto';
 export { ApplicationDetailDto } from './dto/application-detail.dto';
@@ -76,6 +76,7 @@ export { RequiredDocumentsResponseDto } from './dto/required-documents-response.
 export { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
 export { UpdateAdminCallDto } from './dto/update-admin-call.dto';
 export { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
+export { UpsertIdeaOverviewSectionDto } from './dto/upsert-idea-overview-section.dto';
 export { NeedsInfoRepository } from './needs-info.repository';
 export { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
 export { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';

@@ -40,7 +40,7 @@ import { PublicCallsResponseDto } from '../dto/public-calls-response.dto';
 import { RequiredDocumentsResponseDto } from '../dto/required-documents-response.dto';
 import { ResubmitApplicationDto } from '../dto/resubmit-application.dto';
 import { SetActiveSectionVersionDto } from '../dto/set-active-section-version.dto';
-import { UpsertApplicationSectionDto } from '../dto/upsert-application-section.dto';
+import { UpsertIdeaOverviewSectionDto } from '../dto/upsert-idea-overview-section.dto';
 
 export const CreateApplicationApi = () =>
   createApiDecorator({
@@ -389,26 +389,18 @@ export const SubmitApplicationApi = () =>
     ],
   });
 
-export const UpsertApplicationSectionApi = () =>
+export const UpsertIdeaOverviewSectionApi = () =>
   createApiDecorator({
-    summary: 'Upsert application section',
+    summary: 'Upsert idea overview section',
     description:
-      'Creates or updates one application section and stores its history snapshot.',
-    body: UpsertApplicationSectionDto,
+      'Creates or updates the idea overview section and stores its history snapshot.',
+    body: UpsertIdeaOverviewSectionDto,
     successResponse: {
       status: 200,
       type: ApplicationSectionDto,
       description: 'Application section was saved.',
     },
-    extraDecorators: [
-      ApiBearerAuth('access-token'),
-      ApiParam({
-        name: 'key',
-        description: 'Supported application section key.',
-        enum: APPLICATION_SECTION_KEYS,
-        enumName: 'ApplicationSectionKey',
-      }),
-    ],
+    extraDecorators: [ApiBearerAuth('access-token')],
     errors: [
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
       ApiBadRequestResponse({ description: 'Invalid identifiers or payload.' }),

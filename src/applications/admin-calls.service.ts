@@ -24,7 +24,10 @@ import {
   type AdminCallSortField,
 } from './dto/admin-calls-query.dto';
 import { AdminCallsResponseDto } from './dto/admin-calls-response.dto';
-import { CreateAdminCallDto } from './dto/create-admin-call.dto';
+import {
+  CreateAdminCallDto,
+  ProgramACallOptionInputDto,
+} from './dto/create-admin-call.dto';
 import { UpdateAdminCallDto } from './dto/update-admin-call.dto';
 
 type EligibilityRuleConfigView = {
@@ -34,6 +37,11 @@ type EligibilityRuleConfigView = {
 
 type AdminCallWithEligibility = AdminCallRecord & {
   eligibilityRuleConfigs: EligibilityRuleConfigView[];
+};
+
+type ProgramACallOptionInput = {
+  value: string;
+  label: string;
 };
 
 @Injectable()
@@ -55,6 +63,8 @@ export class AdminCallsService {
       closesAt: draftState.closesAt,
       requiredDocumentTypes: draftState.requiredDocumentTypes,
       eligibilityRuleConfigs: draftState.eligibilityRuleConfigs,
+      categories: draftState.categories,
+      stackTags: draftState.stackTags,
     });
 
     return this.toAdminCallDto(call);
@@ -132,6 +142,7 @@ export class AdminCallsService {
       dto.closesAt,
       existingCall.closesAt,
     );
+
     const nextRequiredDocumentTypes =
       nextType === ProgramType.PROGRAM_B
         ? []
@@ -169,6 +180,14 @@ export class AdminCallsService {
         dto,
         existingCall,
       ),
+      categories:
+        dto.categories !== undefined || nextType !== existingCall.type
+          ? this.resolveProgramAOptions(nextType, dto.categories)
+          : undefined,
+      stackTags:
+        dto.stackTags !== undefined || nextType !== existingCall.type
+          ? this.resolveProgramAOptions(nextType, dto.stackTags)
+          : undefined,
     });
 
     return this.toAdminCallDto(updatedCall);
@@ -276,6 +295,8 @@ export class AdminCallsService {
         dto,
         null,
       ),
+      categories: this.resolveProgramAOptions(dto.type, dto.categories),
+      stackTags: this.resolveProgramAOptions(dto.type, dto.stackTags),
     };
   }
 
@@ -326,6 +347,29 @@ export class AdminCallsService {
         threshold: String(maxProfileSubjectsAverage ?? 2),
       },
     ];
+  }
+
+  private resolveProgramAOptions(
+    type: ProgramType,
+    options: ProgramACallOptionInputDto[] | undefined,
+  ): ProgramACallOptionInput[] {
+    if (type !== ProgramType.PROGRAM_A) {
+      return [];
+    }
+
+    const normalizedOptions = options ?? [];
+
+    const values = normalizedOptions.map((option) => option.value);
+    const uniqueValues = new Set(values);
+
+    if (uniqueValues.size !== values.length) {
+      throw new BadRequestException('Program A option values must be unique');
+    }
+
+    return normalizedOptions.map((option) => ({
+      value: option.value,
+      label: option.label,
+    }));
   }
 
   private parseNumericConfig(
@@ -437,6 +481,14 @@ export class AdminCallsService {
             (config) => config.code === 'PROFILE_SUBJECTS_AVERAGE_MAX',
           )?.threshold,
         ) ?? null,
+      categories: call.programACategories.map((category) => ({
+        value: category.value,
+        label: category.label,
+      })),
+      stackTags: call.programAStackTags.map((stackTag) => ({
+        value: stackTag.value,
+        label: stackTag.label,
+      })),
       createdAt: call.createdAt,
       updatedAt: call.updatedAt,
     };

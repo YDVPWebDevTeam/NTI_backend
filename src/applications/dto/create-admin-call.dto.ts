@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayUnique,
   IsArray,
@@ -13,8 +13,29 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import { DocumentType, ProgramType } from '../../../generated/prisma/enums';
+
+export class ProgramACallOptionInputDto {
+  @ApiProperty({ example: 'ai_data' })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  value!: string;
+
+  @ApiProperty({ example: 'AI & Data' })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  label!: string;
+}
 
 export class CreateAdminCallDto {
   @ApiProperty({ enum: ProgramType })
@@ -73,4 +94,46 @@ export class CreateAdminCallDto {
   @Min(1)
   @Max(5)
   maxProfileSubjectsAverage?: number;
+
+  @ApiPropertyOptional({
+    type: [ProgramACallOptionInputDto],
+    example: [
+      {
+        value: 'ai_data',
+        label: 'AI & Data',
+      },
+      {
+        value: 'web_applications',
+        label: 'Web Applications',
+      },
+    ],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProgramACallOptionInputDto)
+  categories?: ProgramACallOptionInputDto[];
+
+  @ApiPropertyOptional({
+    type: [ProgramACallOptionInputDto],
+    example: [
+      {
+        value: 'nestjs',
+        label: 'NestJS',
+      },
+      {
+        value: 'react',
+        label: 'React',
+      },
+      {
+        value: 'postgresql',
+        label: 'PostgreSQL',
+      },
+    ],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProgramACallOptionInputDto)
+  stackTags?: ProgramACallOptionInputDto[];
 }

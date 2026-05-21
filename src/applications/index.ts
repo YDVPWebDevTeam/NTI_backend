@@ -53,6 +53,11 @@ export { ApplicationDetailDto } from './dto/application-detail.dto';
 export { ApplicationDocumentDto } from './dto/application-document.dto';
 export { ApplicationSectionDto } from './dto/application-section.dto';
 export { ApplicationSectionHistoryDto } from './dto/application-section-history.dto';
+export {
+  APPLICATION_SECTION_KEYS,
+  type ApplicationSectionKey,
+} from './dto/application-section-key.constants';
+export { ApplicationProfileSectionValueDto } from './dto/application-profile-section-value.dto';
 export { AssignMentorDto } from './dto/assign-mentor.dto';
 export { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
 export { CreateApplicationDto } from './dto/create-application.dto';

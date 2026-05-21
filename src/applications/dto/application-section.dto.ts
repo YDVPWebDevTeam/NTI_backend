@@ -1,4 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  APPLICATION_SECTION_KEYS,
+  type ApplicationSectionKey,
+} from './application-section-key.constants';
+import { ApplicationProfileSectionValueDto } from './application-profile-section-value.dto';
 
 export class ApplicationSectionDto {
   @ApiProperty({ example: 'f6c90688-c973-40ca-8f3b-c55667cc6f77' })
@@ -7,11 +12,15 @@ export class ApplicationSectionDto {
   @ApiProperty({ example: '87dcb0e9-2f7e-4ab5-b014-d2f1204bc138' })
   applicationId!: string;
 
-  @ApiProperty({ example: 'profile' })
-  key!: string;
+  @ApiProperty({
+    enum: APPLICATION_SECTION_KEYS,
+    enumName: 'ApplicationSectionKey',
+    example: APPLICATION_SECTION_KEYS.PROFILE,
+  })
+  key!: ApplicationSectionKey;
 
-  @ApiProperty({ type: 'object', additionalProperties: true })
-  valueJson!: unknown;
+  @ApiProperty({ type: ApplicationProfileSectionValueDto })
+  valueJson!: ApplicationProfileSectionValueDto;
 
   @ApiProperty({ example: 1 })
   version!: number;

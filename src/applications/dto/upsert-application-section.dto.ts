@@ -1,12 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsObject } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ValidateNested } from 'class-validator';
+import { ApplicationProfileSectionValueDto } from './application-profile-section-value.dto';
 
 export class UpsertApplicationSectionDto {
   @ApiProperty({
-    type: 'object',
-    additionalProperties: true,
-    example: { firstName: 'Jane' },
+    type: ApplicationProfileSectionValueDto,
+    example: { name: 'Team Phoenix' },
   })
-  @IsObject()
-  valueJson!: Record<string, unknown>;
+  @ValidateNested()
+  @Type(() => ApplicationProfileSectionValueDto)
+  valueJson!: ApplicationProfileSectionValueDto;
 }

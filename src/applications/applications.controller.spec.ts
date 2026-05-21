@@ -247,7 +247,7 @@ describe('ApplicationsController', () => {
 
   it('delegates section upsert to the sections service', async () => {
     const user = { id: 'user-1', email: 'lead@example.com' } as never;
-    const dto = { valueJson: { firstName: 'Jane' } } as never;
+    const dto = { valueJson: { name: 'Jane' } } as never;
 
     const result = await controller.upsertSection(
       'application-1',

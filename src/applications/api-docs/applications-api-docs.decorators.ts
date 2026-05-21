@@ -4,6 +4,7 @@ import {
   ApiConflictResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiParam,
   ApiQuery,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -12,6 +13,7 @@ import { createPaginationQueryDecorators } from '../../common/pagination';
 import { createApiDecorator } from '../../infrastructure/api-docs/api-docs-factory';
 import { ApplicationSectionDto } from '../dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from '../dto/application-section-history.dto';
+import { APPLICATION_SECTION_KEYS } from '../dto/application-section-key.constants';
 import { ApplicationLifecycleTransitionDto } from '../dto/application-lifecycle-transition.dto';
 import { AssignMentorDto } from '../dto/assign-mentor.dto';
 import { ApplicationDetailDto } from '../dto/application-detail.dto';
@@ -398,7 +400,15 @@ export const UpsertApplicationSectionApi = () =>
       type: ApplicationSectionDto,
       description: 'Application section was saved.',
     },
-    extraDecorators: [ApiBearerAuth('access-token')],
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ApiParam({
+        name: 'key',
+        description: 'Supported application section key.',
+        enum: APPLICATION_SECTION_KEYS,
+        enumName: 'ApplicationSectionKey',
+      }),
+    ],
     errors: [
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
       ApiBadRequestResponse({ description: 'Invalid identifiers or payload.' }),
@@ -567,9 +577,18 @@ export const GetSectionHistoryApi = () =>
       isArray: true,
       description: 'Section history entries.',
     },
-    extraDecorators: [ApiBearerAuth('access-token')],
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ApiParam({
+        name: 'key',
+        description: 'Supported application section key.',
+        enum: APPLICATION_SECTION_KEYS,
+        enumName: 'ApplicationSectionKey',
+      }),
+    ],
     errors: [
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid identifiers or key.' }),
       ApiForbiddenResponse({ description: 'Admin access required.' }),
       ApiNotFoundResponse({
         description: 'Application or section was not found.',
@@ -637,7 +656,15 @@ export const SetActiveSectionVersionApi = () =>
       type: ApplicationSectionDto,
       description: 'Active section version was updated.',
     },
-    extraDecorators: [ApiBearerAuth('access-token')],
+    extraDecorators: [
+      ApiBearerAuth('access-token'),
+      ApiParam({
+        name: 'key',
+        description: 'Supported application section key.',
+        enum: APPLICATION_SECTION_KEYS,
+        enumName: 'ApplicationSectionKey',
+      }),
+    ],
     errors: [
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
       ApiBadRequestResponse({ description: 'Invalid application id format.' }),

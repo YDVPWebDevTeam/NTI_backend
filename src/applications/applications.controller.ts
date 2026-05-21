@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseEnumPipe,
   ParseUUIDPipe,
   Post,
   Put,
@@ -45,6 +46,10 @@ import { ApplicationDocumentDto } from './dto/application-document.dto';
 import { ApplicationEvaluationDto } from './dto/application-evaluation.dto';
 import { ApplicationSectionDto } from './dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from './dto/application-section-history.dto';
+import {
+  APPLICATION_SECTION_KEYS,
+  type ApplicationSectionKey,
+} from './dto/application-section-key.constants';
 import { AssignMentorDto } from './dto/assign-mentor.dto';
 import { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
 import { CreateApplicationDecisionDto } from './dto/create-application-decision.dto';
@@ -288,7 +293,8 @@ export class ApplicationsController {
   @UseGuards(JwtAuthGuard)
   upsertSection(
     @Param('applicationId', ParseUUIDPipe) applicationId: string,
-    @Param('key') key: string,
+    @Param('key', new ParseEnumPipe(APPLICATION_SECTION_KEYS))
+    key: ApplicationSectionKey,
     @Body() dto: UpsertApplicationSectionDto,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ApplicationSectionDto> {
@@ -300,7 +306,8 @@ export class ApplicationsController {
   @UseGuards(JwtAuthGuard)
   getSectionHistory(
     @Param('applicationId', ParseUUIDPipe) applicationId: string,
-    @Param('key') key: string,
+    @Param('key', new ParseEnumPipe(APPLICATION_SECTION_KEYS))
+    key: ApplicationSectionKey,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ApplicationSectionHistoryDto[]> {
     return this.sectionsService.getSectionHistory(applicationId, key, user);
@@ -311,7 +318,8 @@ export class ApplicationsController {
   @UseGuards(JwtAuthGuard)
   setActiveVersion(
     @Param('applicationId', ParseUUIDPipe) applicationId: string,
-    @Param('key') key: string,
+    @Param('key', new ParseEnumPipe(APPLICATION_SECTION_KEYS))
+    key: ApplicationSectionKey,
     @Body() dto: SetActiveSectionVersionDto,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ApplicationSectionDto> {

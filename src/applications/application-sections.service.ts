@@ -14,6 +14,14 @@ import { ApplicationSectionsRepository } from './application-sections.repository
 import { ApplicationsRepository } from './applications.repository';
 import { ApplicationSectionDto } from './dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from './dto/application-section-history.dto';
+import {
+  APPLICATION_SECTION_KEYS,
+  type ApplicationSectionKey,
+} from './dto/application-section-key.constants';
+import {
+  type ApplicationProfileSectionValue,
+  ApplicationProfileSectionValueDto,
+} from './dto/application-profile-section-value.dto';
 import { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
 import { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
 import { ApplicationSectionsRulesService } from './rules/application-sections-rules.service';
@@ -65,7 +73,7 @@ export class ApplicationSectionsService {
 
   async upsertSection(
     applicationId: string,
-    key: string,
+    key: ApplicationSectionKey,
     dto: UpsertApplicationSectionDto,
     user: AuthenticatedUserContext,
   ): Promise<ApplicationSectionDto> {
@@ -82,12 +90,15 @@ export class ApplicationSectionsService {
 
       this.sectionsRules.assertApplicationIsDraft(application.status);
       this.sectionsRules.assertWriteAccess(application, user);
-      this.assertSectionStructure(key, dto.valueJson);
+      this.assertSectionStructure(
+        key,
+        dto.valueJson as unknown as Record<string, unknown>,
+      );
 
       const section = await this.sectionsRepository.upsertSection(
         applicationId,
         key,
-        dto.valueJson as Prisma.InputJsonValue,
+        dto.valueJson as unknown as Prisma.InputJsonValue,
         user.id,
         db,
       );
@@ -95,7 +106,7 @@ export class ApplicationSectionsService {
       await this.sectionsRepository.createHistoryEntry(
         section.id,
         section.version,
-        dto.valueJson as Prisma.InputJsonValue,
+        dto.valueJson as unknown as Prisma.InputJsonValue,
         user.id,
         db,
       );
@@ -112,7 +123,7 @@ export class ApplicationSectionsService {
 
   async getSectionHistory(
     applicationId: string,
-    key: string,
+    key: ApplicationSectionKey,
     user: AuthenticatedUserContext,
   ): Promise<ApplicationSectionHistoryDto[]> {
     const application =
@@ -142,7 +153,7 @@ export class ApplicationSectionsService {
 
   async setActiveVersion(
     applicationId: string,
-    key: string,
+    key: ApplicationSectionKey,
     dto: SetActiveSectionVersionDto,
     user: AuthenticatedUserContext,
   ): Promise<ApplicationSectionDto> {
@@ -221,11 +232,16 @@ export class ApplicationSectionsService {
   private toHistoryDto(
     row: ApplicationSectionHistory,
   ): ApplicationSectionHistoryDto {
+    this.assertSectionStructure(
+      APPLICATION_SECTION_KEYS.PROFILE,
+      row.valueJson as Record<string, unknown>,
+    );
+
     return {
       id: row.id,
       sectionId: row.sectionId,
       version: row.version,
-      valueJson: row.valueJson,
+      valueJson: row.valueJson as unknown as ApplicationProfileSectionValueDto,
       savedById: row.savedById,
       createdAt: row.createdAt,
     };
@@ -235,11 +251,17 @@ export class ApplicationSectionsService {
     row: ApplicationSection,
     activeHistory: ApplicationSectionHistory | null,
   ): ApplicationSectionDto {
+    this.assertSectionKey(row.key);
+
+    const valueJson = (activeHistory?.valueJson ??
+      row.valueJson) as unknown as Record<string, unknown>;
+    this.assertSectionStructure(row.key, valueJson);
+
     return {
       id: row.id,
       applicationId: row.applicationId,
       key: row.key,
-      valueJson: activeHistory?.valueJson ?? row.valueJson,
+      valueJson: valueJson as unknown as ApplicationProfileSectionValueDto,
       version: row.version,
       activeVersion: row.activeVersion,
       updatedById: row.updatedById,
@@ -248,25 +270,40 @@ export class ApplicationSectionsService {
   }
 
   private assertSectionStructure(
-    key: string,
+    key: ApplicationSectionKey,
     valueJson: Record<string, unknown>,
   ): void {
-    const validator = this.getSectionStructureValidator(key);
+    this.assertSectionKey(key);
 
-    if (!validator) {
-      return;
+    switch (key) {
+      case APPLICATION_SECTION_KEYS.PROFILE:
+        this.assertProfileSectionValue(valueJson);
+        return;
     }
-
-    validator(valueJson);
   }
 
-  private getSectionStructureValidator(
-    key: string,
-  ): ((valueJson: Record<string, unknown>) => void) | null {
-    switch (key) {
-      default:
-        // TODO: add per-section JSON schema validators once section shapes are finalized.
-        return null;
+  private assertSectionKey(key: string): asserts key is ApplicationSectionKey {
+    if (key !== APPLICATION_SECTION_KEYS.PROFILE) {
+      throw new BadRequestException(
+        `Unsupported application section key: ${key}`,
+      );
+    }
+  }
+
+  private assertProfileSectionValue(
+    valueJson: Record<string, unknown>,
+  ): asserts valueJson is ApplicationProfileSectionValue {
+    const keys = Object.keys(valueJson);
+
+    if (
+      keys.length !== 1 ||
+      !keys.includes('name') ||
+      typeof valueJson.name !== 'string' ||
+      valueJson.name.trim().length === 0
+    ) {
+      throw new BadRequestException(
+        'Profile section payload must be an object with a non-empty string "name" field.',
+      );
     }
   }
 }

@@ -30,6 +30,7 @@ export class OrgInviteResponseDto {
   @ApiPropertyOptional({
     description: 'User id who revoked invitation.',
     format: 'uuid',
+    nullable: true,
   })
   revokedById?: string | null;
 
@@ -42,9 +43,9 @@ export class OrgInviteResponseDto {
   @ApiProperty({ type: String, format: 'date-time' })
   expiresAt!: Date;
 
-  @ApiPropertyOptional({ type: String, format: 'date-time' })
+  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true })
   acceptedAt?: Date | null;
 
-  @ApiPropertyOptional({ type: String, format: 'date-time' })
+  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true })
   revokedAt?: Date | null;
 }

@@ -5,6 +5,7 @@ type Decorator = MethodDecorator & ClassDecorator & PropertyDecorator;
 
 type ApiDecoratorConfig = {
   summary: string;
+  operationId?: string;
   description?: string;
   body?:
     | Type<unknown>
@@ -43,6 +44,7 @@ export function createApiDecorator(
 ): MethodDecorator {
   return applyDecorators(
     ApiOperation({
+      operationId: config.operationId,
       summary: config.summary,
       description: config.description,
     }),

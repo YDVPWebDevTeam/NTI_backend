@@ -27,7 +27,7 @@ import { UpdateAcademicInformationDto } from './dto/update-academic-information.
 import { UpdateProfessionalSkillsDto } from './dto/update-professional-skills.dto';
 import { StudentProfileService } from './student-profile.service';
 
-@ApiTags('Student Profile')
+@ApiTags('StudentProfile')
 @Controller('student-profile')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.STUDENT)

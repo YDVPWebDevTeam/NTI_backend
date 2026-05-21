@@ -11,6 +11,7 @@ import { SystemInviteResponseDto } from '../dto/system-invite-response.dto';
 
 export const CreateSystemInviteApi = () =>
   createApiDecorator({
+    operationId: 'adminCreateSystemInvite',
     summary: 'Create system invitation',
     description:
       'Allows SUPER_ADMIN to invite ADMIN, MENTOR, and EVALUATOR; ADMIN can invite MENTOR and EVALUATOR only.',

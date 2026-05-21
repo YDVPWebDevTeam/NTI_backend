@@ -8,6 +8,7 @@ import type {
   ApplicationSectionHistory,
   Prisma,
 } from '../../generated/prisma/client';
+import { ProgramType } from '../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { PrismaDbClient } from '../infrastructure/database';
 import { ApplicationSectionsRepository } from './application-sections.repository';
@@ -16,6 +17,10 @@ import { ApplicationSectionDto } from './dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from './dto/application-section-history.dto';
 import { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
 import { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
+import {
+  isProgramAApplicationSectionKey,
+  validateProgramAApplicationSection,
+} from './program-a-application-sections.contract';
 import { ApplicationSectionsRulesService } from './rules/application-sections-rules.service';
 
 @Injectable()
@@ -82,7 +87,7 @@ export class ApplicationSectionsService {
 
       this.sectionsRules.assertApplicationIsDraft(application.status);
       this.sectionsRules.assertWriteAccess(application, user);
-      this.assertSectionStructure(key, dto.valueJson);
+      this.assertSectionStructure(application.call.type, key, dto.valueJson);
 
       const section = await this.sectionsRepository.upsertSection(
         applicationId,
@@ -248,25 +253,20 @@ export class ApplicationSectionsService {
   }
 
   private assertSectionStructure(
+    programType: ProgramType,
     key: string,
     valueJson: Record<string, unknown>,
   ): void {
-    const validator = this.getSectionStructureValidator(key);
-
-    if (!validator) {
+    if (programType !== ProgramType.PROGRAM_A) {
       return;
     }
 
-    validator(valueJson);
-  }
-
-  private getSectionStructureValidator(
-    key: string,
-  ): ((valueJson: Record<string, unknown>) => void) | null {
-    switch (key) {
-      default:
-        // TODO: add per-section JSON schema validators once section shapes are finalized.
-        return null;
+    if (!isProgramAApplicationSectionKey(key)) {
+      throw new BadRequestException(
+        `Unsupported Program A application section key: ${key}`,
+      );
     }
+
+    validateProgramAApplicationSection(key, valueJson);
   }
 }

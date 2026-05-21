@@ -2,10 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '../../../generated/prisma/client';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
-import {
-  AuditRepository,
-  type AuditEventWithActor,
-} from '../repositories/audit.repository';
+import { AuditRepository, type AuditEventWithActor } from './audit.repository';
 import {
   REPORT_EXPORT_ACTION,
   REPORT_EXPORT_ENTITY_TYPE,

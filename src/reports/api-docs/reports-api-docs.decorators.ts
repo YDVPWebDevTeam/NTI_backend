@@ -8,6 +8,7 @@ import {
   ApiParam,
   ApiProduces,
   ApiQuery,
+  ApiResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import {
@@ -321,7 +322,7 @@ export const DownloadExportJobApi = () =>
   createApiDecorator({
     summary: 'Download completed async export',
     description: [
-      'Downloads the file produced by a completed asynchronous export job.',
+      'Redirects to a short-lived presigned storage URL for the file produced by a completed asynchronous export job.',
       '',
       'Requirements:',
       '- job must belong to the authenticated admin',
@@ -330,11 +331,6 @@ export const DownloadExportJobApi = () =>
     ].join('\n'),
     extraDecorators: [
       ApiBearerAuth('access-token'),
-      ApiProduces(
-        'text/csv',
-        'application/pdf',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      ),
       ApiParam({
         name: 'id',
         type: String,
@@ -348,18 +344,18 @@ export const DownloadExportJobApi = () =>
         description:
           'Short-lived download token returned by export job status.',
       }),
-      ApiOkResponse({
+      ApiResponse({
+        status: 302,
         description:
-          'Completed async export returned as an attachment. Swagger UI will not preview the binary body.',
-        content: {
-          'text/csv': {
-            schema: { type: 'string', format: 'binary' },
-          },
-          'application/pdf': {
-            schema: { type: 'string', format: 'binary' },
-          },
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
-            schema: { type: 'string', format: 'binary' },
+          'Redirects to the presigned storage download URL in the Location header.',
+        headers: {
+          Location: {
+            description:
+              'Short-lived presigned storage URL for the export file.',
+            schema: {
+              type: 'string',
+              format: 'uri',
+            },
           },
         },
       }),
@@ -384,26 +380,33 @@ export const DownloadExportJobApi = () =>
 export const ExportAuditPdfApi = () =>
   createApiDecorator({
     summary: 'Export report export audit PDF',
-    description:
+    description: [
       'Exports a human-readable PDF containing persisted report export audit events. This endpoint is intentionally PDF-only and does not expose generic audit history APIs.',
+      '',
+      'Requirements:',
+      '- dateFrom is required',
+      '- dateTo is required',
+      '- dateTo must not be earlier than dateFrom',
+      '- requested date range must not exceed 31 days',
+    ].join('\n'),
     extraDecorators: [
       ApiBearerAuth('access-token'),
       ApiProduces('application/pdf'),
       ApiQuery({
         name: 'dateFrom',
-        required: false,
+        required: true,
         type: String,
         format: 'date-time',
         description:
-          'Optional inclusive lower bound for audit event createdAt.',
+          'Required inclusive lower bound for audit event createdAt.',
       }),
       ApiQuery({
         name: 'dateTo',
-        required: false,
+        required: true,
         type: String,
         format: 'date-time',
         description:
-          'Optional inclusive upper bound for audit event createdAt.',
+          'Required inclusive upper bound for audit event createdAt. The total requested window must not exceed 31 days.',
       }),
       ApiOkResponse({
         description:
@@ -417,7 +420,8 @@ export const ExportAuditPdfApi = () =>
     ],
     errors: [
       ApiBadRequestResponse({
-        description: 'Query parameters are invalid.',
+        description:
+          'Query parameters are invalid, missing, or exceed the maximum 31-day date range.',
       }),
       ApiUnauthorizedResponse({
         description: 'Bearer token is missing or invalid.',

@@ -1,5 +1,5 @@
 import type { PdfTemplate } from '../../infrastructure/pdf';
-import { escapeHtml } from '../report-export.utils';
+import { escapeHtml } from './report-export.utils';
 
 export type ReportPdfTemplateInput = {
   title: string;

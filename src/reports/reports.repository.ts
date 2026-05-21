@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '../../../generated/prisma/client';
+import { Prisma } from '../../generated/prisma/client';
 import {
   CallStatus,
   ProgramBProjectStatus,
-} from '../../../generated/prisma/enums';
-import { PrismaService } from '../../infrastructure/database/prisma.service';
+} from '../../generated/prisma/enums';
+import { PrismaService } from '../infrastructure/database/prisma.service';
 
 const applicationsReportSelect = {
   id: true,

@@ -9,7 +9,7 @@ import {
   type ReportExportJobResult,
 } from '../../infrastructure/queue';
 import { ReportExportQueryDto } from '../dto/report-export-query.dto';
-import { ReportsService } from '../services/reports.service';
+import { ReportsService } from '../reports.service';
 
 @Processor(QUEUE_NAMES.REPORTS)
 export class ReportExportProcessor extends WorkerHost {

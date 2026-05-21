@@ -1,11 +1,11 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { PdfService } from '../../infrastructure/pdf/pdf.service';
 import type { ReportFormat } from '../reports.constants';
-import { buildCsvBuffer, buildXlsxBuffer } from '../report-export.utils';
+import { buildCsvBuffer, buildXlsxBuffer } from './report-export.utils';
 import {
   reportPdfTemplate,
   type ReportPdfTemplateInput,
-} from '../templates/report-pdf.template';
+} from './report-pdf.template';
 
 export type ReportFilePayload = {
   buffer: Buffer;

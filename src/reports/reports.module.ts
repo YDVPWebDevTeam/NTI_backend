@@ -3,14 +3,15 @@ import { AuthModule } from '../auth/auth.module';
 import { FilesModule } from '../files/files.module';
 import { PdfModule } from '../infrastructure/pdf';
 import { QueueModule } from '../infrastructure/queue';
-import { ReportsController } from './controllers/reports.controller';
-import { AuditRepository } from './repositories/audit.repository';
-import { ReportExportJobsRepository } from './repositories/report-export-jobs.repository';
-import { ReportsRepository } from './repositories/reports.repository';
-import { AuditService } from './services/audit.service';
-import { ReportFileRendererService } from './services/report-file-renderer.service';
-import { ReportExportJobsService } from './services/report-export-jobs.service';
-import { ReportsService } from './services/reports.service';
+import { AuditRepository } from './audit/audit.repository';
+import { AuditService } from './audit/audit.service';
+import { ReportExportJobsRepository } from './report-export/report-export-jobs.repository';
+import { ReportExportJobsService } from './report-export/report-export-jobs.service';
+import { ReportExportProcessor } from './report-export/report-export.processor';
+import { ReportFileRendererService } from './report-export/report-file-renderer.service';
+import { ReportsController } from './reports.controller';
+import { ReportsRepository } from './reports.repository';
+import { ReportsService } from './reports.service';
 
 @Module({
   imports: [AuthModule, FilesModule, PdfModule, QueueModule],
@@ -23,6 +24,7 @@ import { ReportsService } from './services/reports.service';
     ReportFileRendererService,
     ReportsService,
     ReportExportJobsService,
+    ReportExportProcessor,
   ],
   exports: [ReportsService],
 })

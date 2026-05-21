@@ -69,6 +69,7 @@ describe('ReportExportJobsService', () => {
     service = new ReportExportJobsService(
       {
         fileDownloadPresignExpiresSeconds: 300,
+        jwtAccessSecret: '12345678901234567890123456789012',
       } as never,
       repository as never,
       filesService as never,
@@ -96,6 +97,61 @@ describe('ReportExportJobsService', () => {
 
     expect(updateCall?.[0]).toEqual({ id: 'job-1' });
     expect(updateCall?.[1].downloadTokenHash).toEqual(expect.any(String));
+  });
+
+  it('reuses the same download token while it is still valid', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-05-21T10:00:00.000Z'));
+
+    jobRecord.status = 'COMPLETED';
+    jobRecord.completedAt = new Date('2026-05-21T10:05:00.000Z');
+    jobRecord.uploadedFileId = 'file-1';
+
+    const firstStatus = await service.getStatus(
+      { id: 'admin-1', role: 'ADMIN' } as never,
+      'job-1',
+    );
+    const secondStatus = await service.getStatus(
+      { id: 'admin-1', role: 'ADMIN' } as never,
+      'job-1',
+    );
+
+    expect(secondStatus.downloadUrl).toBe(firstStatus.downloadUrl);
+    expect(secondStatus.downloadUrlExpiresAt).toBe(
+      firstStatus.downloadUrlExpiresAt,
+    );
+    expect(repository.update).toHaveBeenCalledTimes(1);
+
+    jest.useRealTimers();
+  });
+
+  it('rotates the download token after it expires', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-05-21T10:00:00.000Z'));
+
+    jobRecord.status = 'COMPLETED';
+    jobRecord.completedAt = new Date('2026-05-21T10:05:00.000Z');
+    jobRecord.uploadedFileId = 'file-1';
+
+    const firstStatus = await service.getStatus(
+      { id: 'admin-1', role: 'ADMIN' } as never,
+      'job-1',
+    );
+
+    jest.advanceTimersByTime(301_000);
+
+    const secondStatus = await service.getStatus(
+      { id: 'admin-1', role: 'ADMIN' } as never,
+      'job-1',
+    );
+
+    expect(secondStatus.downloadUrl).not.toBe(firstStatus.downloadUrl);
+    expect(secondStatus.downloadUrlExpiresAt).not.toBe(
+      firstStatus.downloadUrlExpiresAt,
+    );
+    expect(repository.update).toHaveBeenCalledTimes(2);
+
+    jest.useRealTimers();
   });
 
   it('stores completed exports in files storage and resolves to download url', async () => {

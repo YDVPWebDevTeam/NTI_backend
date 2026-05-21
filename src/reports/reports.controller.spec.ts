@@ -1,5 +1,5 @@
 import { ReportsController } from './reports.controller';
-import { ReportsService } from '../services/reports.service';
+import { ReportsService } from './reports.service';
 
 describe('ReportsController', () => {
   let controller: ReportsController;

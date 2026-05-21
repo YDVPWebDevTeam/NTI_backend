@@ -8,7 +8,7 @@ import { QueueModule } from './infrastructure/queue';
 import { EmailProcessor } from './infrastructure/queue/processors/email.processor';
 import { PdfProcessor } from './infrastructure/queue/processors/pdf.processor';
 import { ReportsModule } from './reports/reports.module';
-import { ReportExportProcessor } from './reports/processors/report-export.processor';
+import { ReportExportProcessor } from './reports/report-export/report-export.processor';
 
 @Module({
   imports: [

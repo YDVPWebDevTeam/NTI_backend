@@ -3,12 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { FilesService } from '../../files/files.service';
 import { ConfigService } from '../../infrastructure/config';
 import { ExportJobStatusDto } from '../dto/export-job-status.dto';
-import { ReportExportJobsRepository } from '../repositories/report-export-jobs.repository';
+import { ReportExportJobsRepository } from './report-export-jobs.repository';
 import {
   REPORT_DOWNLOAD_ROUTE_TEMPLATE,
   type ReportDataset,
@@ -123,7 +123,7 @@ export class ReportExportJobsService {
       return base;
     }
 
-    const { token, expiresAt } = await this.refreshDownloadToken(job.id);
+    const { token, expiresAt } = await this.getOrRefreshDownloadToken(job);
 
     return {
       ...base,
@@ -189,17 +189,29 @@ export class ReportExportJobsService {
     return job;
   }
 
-  private async refreshDownloadToken(id: string): Promise<{
+  private async getOrRefreshDownloadToken(job: {
+    id: string;
+    requestedByUserId: string;
+    uploadedFileId: string | null;
+    downloadTokenHash: string | null;
+    downloadTokenExpiresAt: Date | null;
+  }): Promise<{
     token: string;
     expiresAt: Date;
   }> {
-    const token = randomBytes(24).toString('hex');
+    const currentToken = this.resolveReusableDownloadToken(job);
+
+    if (currentToken) {
+      return currentToken;
+    }
+
     const expiresAt = new Date(
       Date.now() + this.configService.fileDownloadPresignExpiresSeconds * 1000,
     );
+    const token = this.buildDownloadToken(job, expiresAt);
 
     await this.reportExportJobsRepository.update(
-      { id },
+      { id: job.id },
       {
         downloadTokenHash: this.hashToken(token),
         downloadTokenExpiresAt: expiresAt,
@@ -207,6 +219,53 @@ export class ReportExportJobsService {
     );
 
     return { token, expiresAt };
+  }
+
+  private resolveReusableDownloadToken(job: {
+    id: string;
+    requestedByUserId: string;
+    uploadedFileId: string | null;
+    downloadTokenHash: string | null;
+    downloadTokenExpiresAt: Date | null;
+  }): { token: string; expiresAt: Date } | null {
+    if (
+      !job.uploadedFileId ||
+      !job.downloadTokenHash ||
+      !job.downloadTokenExpiresAt ||
+      job.downloadTokenExpiresAt.getTime() <= Date.now()
+    ) {
+      return null;
+    }
+
+    const token = this.buildDownloadToken(job, job.downloadTokenExpiresAt);
+
+    if (this.hashToken(token) !== job.downloadTokenHash) {
+      return null;
+    }
+
+    return {
+      token,
+      expiresAt: job.downloadTokenExpiresAt,
+    };
+  }
+
+  private buildDownloadToken(
+    job: {
+      id: string;
+      requestedByUserId: string;
+      uploadedFileId: string | null;
+    },
+    expiresAt: Date,
+  ): string {
+    return createHmac('sha256', this.configService.jwtAccessSecret)
+      .update(job.id)
+      .update(':')
+      .update(job.requestedByUserId)
+      .update(':')
+      .update(job.uploadedFileId ?? '')
+      .update(':')
+      .update(expiresAt.toISOString())
+      .digest('hex');
   }
 
   private hashToken(token: string): string {

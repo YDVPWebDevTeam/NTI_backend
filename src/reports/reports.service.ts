@@ -5,76 +5,66 @@ import {
   Logger,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { type Prisma } from '../../../generated/prisma/client';
+import { type Prisma } from '../../generated/prisma/client';
 import {
   ApplicationStatus,
   ProgramBTeamApplicationStatus,
   ProgramType,
-} from '../../../generated/prisma/enums';
-import { ensureAdminRole } from '../../auth/admin-role.helper';
+} from '../../generated/prisma/enums';
+import { ensureAdminRole } from '../auth/admin-role.helper';
 import {
   buildPaginationMeta,
   resolvePagination,
   resolveSortOrder,
-} from '../../common/pagination';
-import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+} from '../common/pagination';
+import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import {
   QueueService,
   REPORT_EXPORT_JOBS,
   type ReportExportQueuedQuery,
-} from '../../infrastructure/queue';
-import { ApplicationsReportResponseDto } from '../dto/applications-report-response.dto';
-import { ApplicationsReportQueryDto } from '../dto/applications-report-query.dto';
-import { AuditExportQueryDto } from '../dto/audit-export-query.dto';
-import { ExportJobStatusDto } from '../dto/export-job-status.dto';
-import { ProgramBReportQueryDto } from '../dto/program-b-report-query.dto';
-import { ProgramBReportResponseDto } from '../dto/program-b-report-response.dto';
-import { ReportExportAcceptedDto } from '../dto/report-export-accepted.dto';
-import { ReportExportQueryDto } from '../dto/report-export-query.dto';
-import { ReportsDashboardDto } from '../dto/reports-dashboard.dto';
-import { ReportsRepository } from '../repositories/reports.repository';
-import { AuditService } from './audit.service';
+} from '../infrastructure/queue';
+import { AuditService } from './audit/audit.service';
+import { ApplicationsReportResponseDto } from './dto/applications-report-response.dto';
+import { ApplicationsReportQueryDto } from './dto/applications-report-query.dto';
+import { ApplicationsReportRowDto } from './dto/applications-report-row.dto';
+import { AuditExportQueryDto } from './dto/audit-export-query.dto';
+import { ExportJobStatusDto } from './dto/export-job-status.dto';
+import { ProgramBReportQueryDto } from './dto/program-b-report-query.dto';
+import { ProgramBReportResponseDto } from './dto/program-b-report-response.dto';
+import { ProgramBReportRowDto } from './dto/program-b-report-row.dto';
+import { ReportExportAcceptedDto } from './dto/report-export-accepted.dto';
+import { ReportExportQueryDto } from './dto/report-export-query.dto';
+import { ReportsDashboardDto } from './dto/reports-dashboard.dto';
 import {
   ReportFileRendererService,
   type ReportFilePayload,
-} from './report-file-renderer.service';
-import { ReportExportJobsService } from './report-export-jobs.service';
+} from './report-export/report-file-renderer.service';
+import { ReportExportJobsService } from './report-export/report-export-jobs.service';
+import { ReportsRepository } from './reports.repository';
 import {
   REPORT_EXPORT_ACTION,
   REPORT_EXPORT_ENTITY_TYPE,
   REPORT_EXPORT_SYNC_THRESHOLD,
-} from '../reports.constants';
+} from './reports.constants';
+import type {
+  ApplicationsReportRecord,
+  ProgramBReportRecord,
+} from './reports.repository';
 
 type ExportJobDownloadPayload = {
   downloadUrl: string;
 };
 
-type ApplicationsExportRow = {
-  id: string;
-  programType: string;
-  callTitle: string;
-  teamName: string;
-  createdByEmail: string;
-  status: string;
-  submittedAt: string;
-  decidedAt: string;
-  createdAt: string;
-  updatedAt: string;
+type ReportColumnDefinition<Row> = {
+  key: keyof Row;
+  label: string;
 };
 
-type ProgramBExportRow = {
-  id: string;
-  organizationName: string;
-  backlogTitle: string;
-  teamName: string;
-  createdByEmail: string;
-  status: string;
-  submittedAt: string;
-  shortlistedAt: string;
-  acceptedAt: string;
-  rejectedAt: string;
-  withdrawnAt: string;
-  createdAt: string;
+type ReportDatasetSchema<Record, Row> = {
+  fileBaseName: string;
+  title: string;
+  columns: readonly ReportColumnDefinition<Row>[];
+  serialize: (record: Record) => Row;
 };
 
 @Injectable()
@@ -82,33 +72,73 @@ export class ReportsService {
   private readonly logger = new Logger(ReportsService.name);
   private readonly auditExportMaxWindowDays = 31;
 
-  private readonly applicationsColumns = [
-    ['id', 'ID'],
-    ['programType', 'Program Type'],
-    ['callTitle', 'Call Title'],
-    ['teamName', 'Team Name'],
-    ['createdByEmail', 'Created By Email'],
-    ['status', 'Status'],
-    ['submittedAt', 'Submitted At'],
-    ['decidedAt', 'Decided At'],
-    ['createdAt', 'Created At'],
-    ['updatedAt', 'Updated At'],
-  ] as const;
+  private readonly applicationsSchema: ReportDatasetSchema<
+    ApplicationsReportRecord,
+    ApplicationsReportRowDto
+  > = {
+    fileBaseName: 'applications-report',
+    title: 'Applications Report',
+    columns: [
+      { key: 'id', label: 'ID' },
+      { key: 'programType', label: 'Program Type' },
+      { key: 'callTitle', label: 'Call Title' },
+      { key: 'teamName', label: 'Team Name' },
+      { key: 'createdByEmail', label: 'Created By Email' },
+      { key: 'status', label: 'Status' },
+      { key: 'submittedAt', label: 'Submitted At' },
+      { key: 'decidedAt', label: 'Decided At' },
+      { key: 'createdAt', label: 'Created At' },
+      { key: 'updatedAt', label: 'Updated At' },
+    ],
+    serialize: (row) => ({
+      id: row.id,
+      programType: row.call.type,
+      callTitle: row.call.title,
+      teamName: row.team.name,
+      createdByEmail: row.createdBy.email,
+      status: row.status,
+      submittedAt: row.submittedAt,
+      decidedAt: row.decidedAt,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }),
+  };
 
-  private readonly programBColumns = [
-    ['id', 'ID'],
-    ['organizationName', 'Organization Name'],
-    ['backlogTitle', 'Backlog Title'],
-    ['teamName', 'Team Name'],
-    ['createdByEmail', 'Created By Email'],
-    ['status', 'Status'],
-    ['submittedAt', 'Submitted At'],
-    ['shortlistedAt', 'Shortlisted At'],
-    ['acceptedAt', 'Accepted At'],
-    ['rejectedAt', 'Rejected At'],
-    ['withdrawnAt', 'Withdrawn At'],
-    ['createdAt', 'Created At'],
-  ] as const;
+  private readonly programBSchema: ReportDatasetSchema<
+    ProgramBReportRecord,
+    ProgramBReportRowDto
+  > = {
+    fileBaseName: 'program-b-report',
+    title: 'Program B Report',
+    columns: [
+      { key: 'id', label: 'ID' },
+      { key: 'organizationName', label: 'Organization Name' },
+      { key: 'backlogTitle', label: 'Backlog Title' },
+      { key: 'teamName', label: 'Team Name' },
+      { key: 'createdByEmail', label: 'Created By Email' },
+      { key: 'status', label: 'Status' },
+      { key: 'submittedAt', label: 'Submitted At' },
+      { key: 'shortlistedAt', label: 'Shortlisted At' },
+      { key: 'acceptedAt', label: 'Accepted At' },
+      { key: 'rejectedAt', label: 'Rejected At' },
+      { key: 'withdrawnAt', label: 'Withdrawn At' },
+      { key: 'createdAt', label: 'Created At' },
+    ],
+    serialize: (row) => ({
+      id: row.id,
+      organizationName: row.backlogItem.organization.name,
+      backlogTitle: row.backlogItem.title ?? '',
+      teamName: row.team.name,
+      createdByEmail: row.createdBy.email,
+      status: row.status,
+      submittedAt: row.submittedAt,
+      shortlistedAt: row.shortlistedAt,
+      acceptedAt: row.acceptedAt,
+      rejectedAt: row.rejectedAt,
+      withdrawnAt: row.withdrawnAt,
+      createdAt: row.createdAt,
+    }),
+  };
 
   constructor(
     private readonly reportsRepository: ReportsRepository,
@@ -131,10 +161,11 @@ export class ReportsService {
 
     const where = this.buildApplicationsWhere(query);
     const pagination = resolvePagination(query);
-    const orderBy: Prisma.ApplicationOrderByWithRelationInput[] = [
-      { [query.sort]: resolveSortOrder(query.order) },
-      { id: 'asc' },
-    ];
+    const orderBy =
+      this.buildStableOrderBy<Prisma.ApplicationOrderByWithRelationInput>(
+        query.sort,
+        query.order,
+      );
 
     const [rows, total] = await Promise.all([
       this.reportsRepository.findApplications({
@@ -147,18 +178,7 @@ export class ReportsService {
     ]);
 
     return {
-      data: rows.map((row) => ({
-        id: row.id,
-        programType: row.call.type,
-        callTitle: row.call.title,
-        teamName: row.team.name,
-        createdByEmail: row.createdBy.email,
-        status: row.status,
-        submittedAt: row.submittedAt,
-        decidedAt: row.decidedAt,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-      })),
+      data: rows.map((row) => this.applicationsSchema.serialize(row)),
       meta: {
         ...buildPaginationMeta(total, pagination.page, pagination.limit),
         sort: query.sort,
@@ -175,10 +195,11 @@ export class ReportsService {
 
     const where = this.buildProgramBWhere(query);
     const pagination = resolvePagination(query);
-    const orderBy: Prisma.ProgramBTeamApplicationOrderByWithRelationInput[] = [
-      { [query.sort]: resolveSortOrder(query.order) },
-      { id: 'asc' },
-    ];
+    const orderBy =
+      this.buildStableOrderBy<Prisma.ProgramBTeamApplicationOrderByWithRelationInput>(
+        query.sort,
+        query.order,
+      );
 
     const [rows, total] = await Promise.all([
       this.reportsRepository.findProgramBApplications({
@@ -191,20 +212,7 @@ export class ReportsService {
     ]);
 
     return {
-      data: rows.map((row) => ({
-        id: row.id,
-        organizationName: row.backlogItem.organization.name,
-        backlogTitle: row.backlogItem.title ?? '',
-        teamName: row.team.name,
-        createdByEmail: row.createdBy.email,
-        status: row.status,
-        submittedAt: row.submittedAt,
-        shortlistedAt: row.shortlistedAt,
-        acceptedAt: row.acceptedAt,
-        rejectedAt: row.rejectedAt,
-        withdrawnAt: row.withdrawnAt,
-        createdAt: row.createdAt,
-      })),
+      data: rows.map((row) => this.programBSchema.serialize(row)),
       meta: {
         ...buildPaginationMeta(total, pagination.page, pagination.limit),
         sort: query.sort,
@@ -349,31 +357,11 @@ export class ReportsService {
   ): Promise<ReportFilePayload> {
     if (query.dataset === 'applications') {
       const rows = await this.getApplicationExportRows(query);
-      return this.reportFileRenderer.renderFile(
-        'applications-report',
-        'Applications Report',
-        this.applicationsColumns.map(([, label]) => label),
-        rows.map((row) =>
-          this.applicationsColumns.map(
-            ([key]) => row[key as keyof ApplicationsExportRow],
-          ),
-        ),
-        query.format,
-      );
+      return this.renderExportFile(this.applicationsSchema, rows, query.format);
     }
 
     const rows = await this.getProgramBExportRows(query);
-    return this.reportFileRenderer.renderFile(
-      'program-b-report',
-      'Program B Report',
-      this.programBColumns.map(([, label]) => label),
-      rows.map((row) =>
-        this.programBColumns.map(
-          ([key]) => row[key as keyof ProgramBExportRow],
-        ),
-      ),
-      query.format,
-    );
+    return this.renderExportFile(this.programBSchema, rows, query.format);
   }
 
   private async countDatasetRows(query: ReportExportQueryDto): Promise<number> {
@@ -394,39 +382,25 @@ export class ReportsService {
 
   private async getApplicationExportRows(
     query: ReportExportQueryDto,
-  ): Promise<ApplicationsExportRow[]> {
+  ): Promise<ApplicationsReportRowDto[]> {
     const sort = query.sort ?? 'createdAt';
-    const order = query.order ?? 'desc';
 
     const rows = await this.reportsRepository.findApplications({
       where: this.buildApplicationsWhere(query),
-      orderBy: [
-        {
-          [this.resolveApplicationsExportSort(sort)]: resolveSortOrder(order),
-        },
-        { id: 'asc' },
-      ],
+      orderBy:
+        this.buildStableOrderBy<Prisma.ApplicationOrderByWithRelationInput>(
+          this.resolveApplicationsExportSort(sort),
+          query.order,
+        ),
     });
 
-    return rows.map((row) => ({
-      id: row.id,
-      programType: row.call.type,
-      callTitle: row.call.title,
-      teamName: row.team.name,
-      createdByEmail: row.createdBy.email,
-      status: row.status,
-      submittedAt: this.formatDate(row.submittedAt),
-      decidedAt: this.formatDate(row.decidedAt),
-      createdAt: this.formatDate(row.createdAt),
-      updatedAt: this.formatDate(row.updatedAt),
-    }));
+    return rows.map((row) => this.applicationsSchema.serialize(row));
   }
 
   private async getProgramBExportRows(
     query: ReportExportQueryDto,
-  ): Promise<ProgramBExportRow[]> {
+  ): Promise<ProgramBReportRowDto[]> {
     const sort = query.sort ?? 'createdAt';
-    const order = query.order ?? 'desc';
 
     const rows = await this.reportsRepository.findProgramBApplications({
       where: this.buildProgramBWhere({
@@ -434,28 +408,14 @@ export class ReportsService {
         dateTo: query.dateTo,
         status: query.status,
       }),
-      orderBy: [
-        {
-          [this.resolveProgramBExportSort(sort)]: resolveSortOrder(order),
-        },
-        { id: 'asc' },
-      ],
+      orderBy:
+        this.buildStableOrderBy<Prisma.ProgramBTeamApplicationOrderByWithRelationInput>(
+          this.resolveProgramBExportSort(sort),
+          query.order,
+        ),
     });
 
-    return rows.map((row) => ({
-      id: row.id,
-      organizationName: row.backlogItem.organization.name,
-      backlogTitle: row.backlogItem.title ?? '',
-      teamName: row.team.name,
-      createdByEmail: row.createdBy.email,
-      status: row.status,
-      submittedAt: this.formatDate(row.submittedAt),
-      shortlistedAt: this.formatDate(row.shortlistedAt),
-      acceptedAt: this.formatDate(row.acceptedAt),
-      rejectedAt: this.formatDate(row.rejectedAt),
-      withdrawnAt: this.formatDate(row.withdrawnAt),
-      createdAt: this.formatDate(row.createdAt),
-    }));
+    return rows.map((row) => this.programBSchema.serialize(row));
   }
 
   private buildApplicationsWhere(
@@ -742,6 +702,49 @@ export class ReportsService {
 
   private formatDate(value: Date | null): string {
     return value ? value.toISOString() : '';
+  }
+
+  private buildStableOrderBy<OrderBy>(
+    sort: string,
+    order?: Prisma.SortOrder,
+  ): OrderBy[] {
+    return [
+      { [sort]: resolveSortOrder(order) } as OrderBy,
+      { id: 'asc' } as OrderBy,
+    ];
+  }
+
+  private renderExportFile<RecordType, Row extends object>(
+    schema: ReportDatasetSchema<RecordType, Row>,
+    rows: Row[],
+    format: ReportExportQueryDto['format'],
+  ): Promise<ReportFilePayload> {
+    return this.reportFileRenderer.renderFile(
+      schema.fileBaseName,
+      schema.title,
+      schema.columns.map(({ label }) => label),
+      rows.map((row) =>
+        schema.columns.map(({ key }) => {
+          const value = row[key] as
+            | string
+            | number
+            | boolean
+            | Date
+            | null
+            | undefined;
+          if (typeof value === 'string') {
+            return value;
+          }
+
+          if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+          }
+
+          return this.formatDate(value ?? null);
+        }),
+      ),
+      format,
+    );
   }
 
   private buildFileName(base: string, extension: string): string {

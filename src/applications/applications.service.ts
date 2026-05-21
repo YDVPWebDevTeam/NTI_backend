@@ -73,7 +73,7 @@ import {
   ProgramAMentorshipRepository,
 } from './program-a-mentorship.repository';
 import { CreateApplicationEvaluationDto } from './dto/create-application-evaluation.dto';
-import { REQUIRED_PROGRAM_A_SECTION_KEYS } from './program-a/program-a-application-sections.contract';
+import { PROGRAM_A_SECTION_KEYS } from './program-a/program-a-application-sections.contract';
 
 type RequiredDocumentSlot = {
   documentType: DocumentType;
@@ -1535,7 +1535,7 @@ export class ApplicationsService {
         .map((section) => section.key),
     );
 
-    const missingKeys = REQUIRED_PROGRAM_A_SECTION_KEYS.filter(
+    const missingKeys = PROGRAM_A_SECTION_KEYS.filter(
       (key) => !completedKeys.has(key),
     );
 

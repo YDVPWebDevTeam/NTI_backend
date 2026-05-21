@@ -19,7 +19,7 @@ import { ApplicationSectionHistoryDto } from './dto/application-section-history.
 import { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
 import { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
 import {
-  isProgramASectionKey,
+  assertProgramASectionKey,
   validateProgramASectionPayload,
 } from './program-a/program-a-application-sections.contract';
 import { ApplicationSectionsRulesService } from './rules/application-sections-rules.service';
@@ -230,11 +230,7 @@ export class ApplicationSectionsService {
   }
 
   private assertKnownProgramASectionKey(key: string): void {
-    if (!isProgramASectionKey(key)) {
-      throw new BadRequestException(
-        `Unsupported Program A section key: ${key}`,
-      );
-    }
+    assertProgramASectionKey(key);
   }
 
   private async toSectionDto(

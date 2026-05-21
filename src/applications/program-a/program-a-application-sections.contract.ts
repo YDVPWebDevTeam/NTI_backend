@@ -11,97 +11,118 @@ export const PROGRAM_A_SECTION_KEYS = [
 
 export type ProgramASectionKey = (typeof PROGRAM_A_SECTION_KEYS)[number];
 
-export const REQUIRED_PROGRAM_A_SECTION_KEYS = PROGRAM_A_SECTION_KEYS;
+type ProgramASectionPayload = Record<string, unknown>;
 
-export function isProgramASectionKey(key: string): key is ProgramASectionKey {
-  return (PROGRAM_A_SECTION_KEYS as readonly string[]).includes(key);
-}
-
-function assertObject(
+function ensureSectionPayload(
   value: unknown,
   sectionKey: string,
-): asserts value is Record<string, unknown> {
+): ProgramASectionPayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new BadRequestException(`${sectionKey} payload must be an object`);
   }
+
+  return value as ProgramASectionPayload;
 }
 
-function assertRequiredString(
-  value: Record<string, unknown>,
-  field: string,
-  sectionKey: string,
-): void {
-  if (typeof value[field] !== 'string' || value[field].trim().length === 0) {
+function ensureNonEmptyString(value: unknown, fieldPath: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new BadRequestException(`${fieldPath} must be a non-empty string`);
+  }
+
+  return value;
+}
+
+function ensureNonEmptyStringArray(
+  value: unknown,
+  fieldPath: string,
+): string[] {
+  if (!isNonEmptyStringArray(value)) {
     throw new BadRequestException(
-      `${sectionKey}.${field} must be a non-empty string`,
+      `${fieldPath} must be an array of non-empty strings`,
     );
   }
+
+  return value;
 }
 
-function assertStringArray(
-  value: Record<string, unknown>,
-  field: string,
-  sectionKey: string,
-  minItems = 1,
-): void {
-  const fieldValue = value[field];
+function isNonEmptyStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((item) => typeof item === 'string' && item.trim().length > 0)
+  );
+}
 
-  if (
-    !Array.isArray(fieldValue) ||
-    fieldValue.length < minItems ||
-    !fieldValue.every(
-      (item) => typeof item === 'string' && item.trim().length > 0,
-    )
-  ) {
-    throw new BadRequestException(
-      `${sectionKey}.${field} must be an array of non-empty strings`,
+const PROGRAM_A_SECTION_VALIDATORS = {
+  idea_overview(value) {
+    const payload = ensureSectionPayload(value, 'idea_overview');
+    ensureNonEmptyString(payload.problem, 'idea_overview.problem');
+    ensureNonEmptyString(payload.solution, 'idea_overview.solution');
+    ensureNonEmptyString(payload.targetUsers, 'idea_overview.targetUsers');
+    ensureNonEmptyString(
+      payload.valueProposition,
+      'idea_overview.valueProposition',
     );
+  },
+  category_and_stack(value) {
+    const payload = ensureSectionPayload(value, 'category_and_stack');
+    ensureNonEmptyString(payload.category, 'category_and_stack.category');
+    ensureNonEmptyStringArray(
+      payload.stackTags,
+      'category_and_stack.stackTags',
+    );
+  },
+  team_setup(value) {
+    const payload = ensureSectionPayload(value, 'team_setup');
+    ensureNonEmptyString(payload.leaderRole, 'team_setup.leaderRole');
+    ensureNonEmptyString(
+      payload.memberResponsibilities,
+      'team_setup.memberResponsibilities',
+    );
+  },
+  execution_plan(value) {
+    const payload = ensureSectionPayload(value, 'execution_plan');
+    ensureNonEmptyString(
+      payload.roadmapSummary,
+      'execution_plan.roadmapSummary',
+    );
+    ensureNonEmptyString(
+      payload.plannedMilestones,
+      'execution_plan.plannedMilestones',
+    );
+    ensureNonEmptyString(
+      payload.timelineSummary,
+      'execution_plan.timelineSummary',
+    );
+  },
+  business_case(value) {
+    const payload = ensureSectionPayload(value, 'business_case');
+    ensureNonEmptyString(payload.market, 'business_case.market');
+    ensureNonEmptyString(payload.monetization, 'business_case.monetization');
+    ensureNonEmptyString(
+      payload.expectedImpact,
+      'business_case.expectedImpact',
+    );
+  },
+  risks(value) {
+    const payload = ensureSectionPayload(value, 'risks');
+    ensureNonEmptyString(payload.topRisks, 'risks.topRisks');
+    ensureNonEmptyString(payload.mitigations, 'risks.mitigations');
+  },
+} satisfies Record<ProgramASectionKey, (value: unknown) => void>;
+
+export function assertProgramASectionKey(
+  key: string,
+): asserts key is ProgramASectionKey {
+  if (!Object.hasOwn(PROGRAM_A_SECTION_VALIDATORS, key)) {
+    throw new BadRequestException(`Unsupported Program A section key: ${key}`);
   }
 }
 
 export function validateProgramASectionPayload(
   key: string,
-  valueJson: Record<string, unknown>,
+  valueJson: unknown,
 ): void {
-  if (!isProgramASectionKey(key)) {
-    throw new BadRequestException(`Unsupported Program A section key: ${key}`);
-  }
-
-  assertObject(valueJson, key);
-
-  switch (key) {
-    case 'idea_overview':
-      assertRequiredString(valueJson, 'problem', key);
-      assertRequiredString(valueJson, 'solution', key);
-      assertRequiredString(valueJson, 'targetUsers', key);
-      assertRequiredString(valueJson, 'valueProposition', key);
-      return;
-
-    case 'category_and_stack':
-      assertRequiredString(valueJson, 'category', key);
-      assertStringArray(valueJson, 'stackTags', key);
-      return;
-
-    case 'team_setup':
-      assertRequiredString(valueJson, 'leaderRole', key);
-      assertRequiredString(valueJson, 'memberResponsibilities', key);
-      return;
-
-    case 'execution_plan':
-      assertRequiredString(valueJson, 'roadmapSummary', key);
-      assertRequiredString(valueJson, 'plannedMilestones', key);
-      assertRequiredString(valueJson, 'timelineSummary', key);
-      return;
-
-    case 'business_case':
-      assertRequiredString(valueJson, 'market', key);
-      assertRequiredString(valueJson, 'monetization', key);
-      assertRequiredString(valueJson, 'expectedImpact', key);
-      return;
-
-    case 'risks':
-      assertRequiredString(valueJson, 'topRisks', key);
-      assertRequiredString(valueJson, 'mitigations', key);
-      return;
-  }
+  assertProgramASectionKey(key);
+  PROGRAM_A_SECTION_VALIDATORS[key](valueJson);
 }

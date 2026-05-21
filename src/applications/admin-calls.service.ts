@@ -54,6 +54,8 @@ export class AdminCallsService {
       opensAt: draftState.opensAt,
       closesAt: draftState.closesAt,
       requiredDocumentTypes: draftState.requiredDocumentTypes,
+      programACategories: draftState.programACategories,
+      programAStackTags: draftState.programAStackTags,
       eligibilityRuleConfigs: draftState.eligibilityRuleConfigs,
     });
 
@@ -142,6 +144,10 @@ export class AdminCallsService {
               (document) => document.documentType,
             ),
           );
+    const nextProgramAOptions = this.resolveProgramAOptions(nextType, dto, {
+      programACategories: existingCall.programACategories,
+      programAStackTags: existingCall.programAStackTags,
+    });
 
     this.ensureValidDateWindow(nextOpensAt, nextClosesAt);
 
@@ -160,9 +166,16 @@ export class AdminCallsService {
       opensAt: nextOpensAt,
       closesAt: nextClosesAt,
       requiredDocumentTypes:
-        dto.requiredDocumentTypes !== undefined ||
-        nextType !== existingCall.type
+        dto.requiredDocumentTypes !== undefined || nextType !== existingCall.type
           ? nextRequiredDocumentTypes
+          : undefined,
+      programACategories:
+        dto.programACategories !== undefined || nextType !== existingCall.type
+          ? nextProgramAOptions.programACategories
+          : undefined,
+      programAStackTags:
+        dto.programAStackTags !== undefined || nextType !== existingCall.type
+          ? nextProgramAOptions.programAStackTags
           : undefined,
       eligibilityRuleConfigs: this.resolveEligibilityRuleConfigs(
         nextType,
@@ -262,6 +275,7 @@ export class AdminCallsService {
     );
     const opensAt = this.parseOptionalDate(dto.opensAt, null);
     const closesAt = this.parseOptionalDate(dto.closesAt, null);
+    const programAOptions = this.resolveProgramAOptions(dto.type, dto, null);
 
     this.ensureValidDateWindow(opensAt, closesAt);
 
@@ -271,11 +285,35 @@ export class AdminCallsService {
       opensAt,
       closesAt,
       requiredDocumentTypes,
+      ...programAOptions,
       eligibilityRuleConfigs: this.resolveEligibilityRuleConfigs(
         dto.type,
         dto,
         null,
       ),
+    };
+  }
+
+  private resolveProgramAOptions(
+    type: ProgramType,
+    dto: Pick<CreateAdminCallDto, 'programACategories' | 'programAStackTags'>,
+    existingOptions: Pick<
+      AdminCallRecord,
+      'programACategories' | 'programAStackTags'
+    > | null,
+  ): Pick<AdminCallRecord, 'programACategories' | 'programAStackTags'> {
+    if (type !== ProgramType.PROGRAM_A) {
+      return {
+        programACategories: [],
+        programAStackTags: [],
+      };
+    }
+
+    return {
+      programACategories:
+        dto.programACategories ?? existingOptions?.programACategories ?? [],
+      programAStackTags:
+        dto.programAStackTags ?? existingOptions?.programAStackTags ?? [],
     };
   }
 
@@ -420,6 +458,8 @@ export class AdminCallsService {
         documentType: document.documentType,
         isRequired: document.isRequired,
       })),
+      programACategories: call.programACategories,
+      programAStackTags: call.programAStackTags,
       minTeamSize:
         this.parseNumericConfig(
           eligibilityConfigs.find((config) => config.code === 'TEAM_SIZE_MIN')

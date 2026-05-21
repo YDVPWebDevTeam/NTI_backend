@@ -12,6 +12,10 @@ export type CallWithRequiredDocumentTypes = Prisma.CallGetPayload<{
   select: ReturnType<CallsRepository['requiredDocumentTypesSelect']>;
 }>;
 
+export type PublicCallRecord = Prisma.CallGetPayload<{
+  select: ReturnType<CallsRepository['publicCallSelect']>;
+}>;
+
 export type AdminCallRecord = Prisma.CallGetPayload<{
   select: ReturnType<CallsRepository['adminCallSelect']>;
 }>;
@@ -88,6 +92,8 @@ export class CallsRepository extends BaseRepository<
       opensAt: Date | null;
       closesAt: Date | null;
       requiredDocumentTypes: DocumentType[];
+      programACategories?: string[];
+      programAStackTags?: string[];
       eligibilityRuleConfigs?: Array<{
         code: string;
         threshold: string;
@@ -102,6 +108,8 @@ export class CallsRepository extends BaseRepository<
         status: CallStatus.DRAFT,
         opensAt: data.opensAt,
         closesAt: data.closesAt,
+        programACategories: data.programACategories ?? [],
+        programAStackTags: data.programAStackTags ?? [],
         requiredDocumentTypes: {
           create: data.requiredDocumentTypes.map((documentType) => ({
             documentType,
@@ -133,6 +141,8 @@ export class CallsRepository extends BaseRepository<
       opensAt?: Date | null;
       closesAt?: Date | null;
       requiredDocumentTypes?: DocumentType[];
+      programACategories?: string[];
+      programAStackTags?: string[];
       eligibilityRuleConfigs?: Array<{
         code: string;
         threshold: string;
@@ -148,6 +158,12 @@ export class CallsRepository extends BaseRepository<
         ...(data.status !== undefined ? { status: data.status } : {}),
         ...(data.opensAt !== undefined ? { opensAt: data.opensAt } : {}),
         ...(data.closesAt !== undefined ? { closesAt: data.closesAt } : {}),
+        ...(data.programACategories !== undefined
+          ? { programACategories: data.programACategories }
+          : {}),
+        ...(data.programAStackTags !== undefined
+          ? { programAStackTags: data.programAStackTags }
+          : {}),
         ...(data.requiredDocumentTypes !== undefined
           ? {
               requiredDocumentTypes: {
@@ -180,21 +196,26 @@ export class CallsRepository extends BaseRepository<
     id: string,
     at: Date,
     db?: PrismaDbClient,
-  ): Promise<Call | null> {
+  ): Promise<PublicCallRecord | null> {
     return (db ?? this.prisma.client).call.findFirst({
       where: {
         id,
         ...this.buildPublicVisibleWhere(at),
       },
+      select: this.publicCallSelect(),
     });
   }
 
-  findPublicById(id: string, db?: PrismaDbClient): Promise<Call | null> {
+  findPublicById(
+    id: string,
+    db?: PrismaDbClient,
+  ): Promise<PublicCallRecord | null> {
     return (db ?? this.prisma.client).call.findFirst({
       where: {
         id,
         status: CallStatus.OPEN,
       },
+      select: this.publicCallSelect(),
     });
   }
 
@@ -206,7 +227,7 @@ export class CallsRepository extends BaseRepository<
       orderBy?: Prisma.CallOrderByWithRelationInput[];
     },
     db?: PrismaDbClient,
-  ): Promise<Call[]> {
+  ): Promise<PublicCallRecord[]> {
     return (db ?? this.prisma.client).call.findMany({
       where: {
         status: CallStatus.OPEN,
@@ -215,6 +236,7 @@ export class CallsRepository extends BaseRepository<
       skip: args.skip,
       take: args.take,
       orderBy: args.orderBy,
+      select: this.publicCallSelect(),
     });
   }
 
@@ -239,7 +261,7 @@ export class CallsRepository extends BaseRepository<
       orderBy?: Prisma.CallOrderByWithRelationInput[];
     },
     db?: PrismaDbClient,
-  ): Promise<Call[]> {
+  ): Promise<PublicCallRecord[]> {
     return (db ?? this.prisma.client).call.findMany({
       where: {
         ...this.buildPublicVisibleWhere(args.now),
@@ -248,6 +270,7 @@ export class CallsRepository extends BaseRepository<
       skip: args.skip,
       take: args.take,
       orderBy: args.orderBy,
+      select: this.publicCallSelect(),
     });
   }
 
@@ -261,6 +284,43 @@ export class CallsRepository extends BaseRepository<
         ...(args.programType ? { type: args.programType } : {}),
       },
     });
+  }
+
+  private publicCallSelect() {
+    return {
+      id: true,
+      type: true,
+      title: true,
+      status: true,
+      opensAt: true,
+      closesAt: true,
+      createdAt: true,
+      updatedAt: true,
+      programACategories: true,
+      programAStackTags: true,
+      requiredDocumentTypes: {
+        where: {
+          isRequired: true,
+        },
+        select: {
+          id: true,
+          documentType: true,
+          isRequired: true,
+        },
+        orderBy: {
+          documentType: 'asc',
+        },
+      },
+      eligibilityRuleConfigs: {
+        where: {
+          enabled: true,
+        },
+        select: {
+          code: true,
+          threshold: true,
+        },
+      },
+    } as const;
   }
 
   private requiredDocumentTypesSelect() {
@@ -303,6 +363,8 @@ export class CallsRepository extends BaseRepository<
       closesAt: true,
       createdAt: true,
       updatedAt: true,
+      programACategories: true,
+      programAStackTags: true,
       requiredDocumentTypes: {
         where: {
           isRequired: true,

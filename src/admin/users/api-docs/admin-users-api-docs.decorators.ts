@@ -16,6 +16,7 @@ import { USER_SORT_VALUES } from '../dto/list-users-query.dto';
 
 export const GetUsersAdminApi = () =>
   createApiDecorator({
+    operationId: 'adminListUsers',
     summary: 'List users (admin)',
     description:
       'Returns a paginated, filterable, and sortable list of all user accounts for administrators.',
@@ -72,6 +73,7 @@ export const GetUsersAdminApi = () =>
 
 export const GetUserByIdAdminApi = () =>
   createApiDecorator({
+    operationId: 'adminGetUserById',
     summary: 'Get user by id',
     description:
       'Allows ADMIN and SUPER_ADMIN accounts to fetch one user account by identifier.',
@@ -99,6 +101,7 @@ export const GetUserByIdAdminApi = () =>
 
 export const UpdateUserStatusApi = () =>
   createApiDecorator({
+    operationId: 'adminUpdateUserStatus',
     summary: 'Update user status',
     description:
       'Allows ADMIN and SUPER_ADMIN accounts to suspend or reactivate a user account.',

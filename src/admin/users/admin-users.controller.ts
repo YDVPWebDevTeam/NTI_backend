@@ -25,7 +25,7 @@ import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import type { ListUsersResponseDto } from './dto/list-users-response.dto';
 
-@ApiTags('Admin')
+@ApiTags('AdminUsers')
 @Controller('admin/users')
 export class AdminUsersController {
   constructor(private readonly adminUsersService: AdminUsersService) {}

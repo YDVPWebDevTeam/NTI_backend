@@ -50,7 +50,7 @@ import {
   UpdateUniversityDto,
 } from './dto/upsert-university.dto';
 
-@ApiTags('Admin')
+@ApiTags('AdminAcademicStructure')
 @Controller('admin/academic-structure')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)

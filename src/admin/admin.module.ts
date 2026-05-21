@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { HashingModule } from '../infrastructure/hashing';
+import { OrganizationInviteRepository } from '../organization/organization-invitation.repository';
 import { OrganizationRepository } from '../organization/organization.repository';
 import { UserRepository } from '../user/user.repository';
 import { UserModule } from '../user/user.module';
@@ -32,6 +33,7 @@ import { AdminUsersService } from './users/admin-users.service';
     AdminOrganizationsService,
     AdminOrgInvitesService,
     SystemInvitationRepository,
+    OrganizationInviteRepository,
     OrganizationRepository,
     UserRepository,
     AdminAcademicStructureService,

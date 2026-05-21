@@ -25,6 +25,7 @@ import {
 
 export const GetAdminUniversitiesApi = () =>
   createApiDecorator({
+    operationId: 'adminListUniversities',
     summary: 'List universities (admin)',
     description:
       'Returns universities for administrators. Use includeInactive=true to include inactive records.',
@@ -62,6 +63,7 @@ export const GetAdminUniversitiesApi = () =>
 
 export const GetAdminFacultiesApi = () =>
   createApiDecorator({
+    operationId: 'adminListFaculties',
     summary: 'List faculties (admin)',
     description:
       'Returns faculties under a university for administrators. Use includeInactive=true to include inactive records.',
@@ -103,6 +105,7 @@ export const GetAdminFacultiesApi = () =>
 
 export const GetAdminSpecializationsApi = () =>
   createApiDecorator({
+    operationId: 'adminListSpecializations',
     summary: 'List specializations (admin)',
     description:
       'Returns specializations under a faculty for administrators. Use includeInactive=true to include inactive records.',
@@ -144,6 +147,7 @@ export const GetAdminSpecializationsApi = () =>
 
 export const CreateAdminUniversityApi = () =>
   createApiDecorator({
+    operationId: 'adminCreateUniversity',
     summary: 'Create university (admin)',
     description: 'Creates a university record.',
     body: CreateUniversityDto,
@@ -169,6 +173,7 @@ export const CreateAdminUniversityApi = () =>
 
 export const UpdateAdminUniversityApi = () =>
   createApiDecorator({
+    operationId: 'adminUpdateUniversity',
     summary: 'Update university (admin)',
     description: 'Updates selected university fields.',
     body: UpdateUniversityDto,
@@ -198,6 +203,7 @@ export const UpdateAdminUniversityApi = () =>
 
 export const CreateAdminFacultyApi = () =>
   createApiDecorator({
+    operationId: 'adminCreateFaculty',
     summary: 'Create faculty (admin)',
     description: 'Creates a faculty record under a university.',
     body: CreateFacultyDto,
@@ -224,6 +230,7 @@ export const CreateAdminFacultyApi = () =>
 
 export const UpdateAdminFacultyApi = () =>
   createApiDecorator({
+    operationId: 'adminUpdateFaculty',
     summary: 'Update faculty (admin)',
     description: 'Updates selected faculty fields.',
     body: UpdateFacultyDto,
@@ -255,6 +262,7 @@ export const UpdateAdminFacultyApi = () =>
 
 export const CreateAdminSpecializationApi = () =>
   createApiDecorator({
+    operationId: 'adminCreateSpecialization',
     summary: 'Create specialization (admin)',
     description: 'Creates a specialization record under a faculty.',
     body: CreateSpecializationDto,
@@ -281,6 +289,7 @@ export const CreateAdminSpecializationApi = () =>
 
 export const UpdateAdminSpecializationApi = () =>
   createApiDecorator({
+    operationId: 'adminUpdateSpecialization',
     summary: 'Update specialization (admin)',
     description: 'Updates selected specialization fields.',
     body: UpdateSpecializationDto,

@@ -25,6 +25,7 @@ import { AcceptInviteOrgDto } from '../dto/accept-invite-org.dto';
 
 export const RegisterApi = () =>
   createApiDecorator({
+    operationId: 'register',
     summary: 'Register a new user',
     description:
       'Creates a new account, sends an email verification link, and returns the authenticated user context. The account will be created with a pending status until the email is confirmed.',
@@ -44,6 +45,7 @@ export const RegisterApi = () =>
 
 export const RegisterCompanyOwnerApi = () =>
   createApiDecorator({
+    operationId: 'registerCompanyOwner',
     summary: 'Register a new company owner',
     description:
       'Creates a new account, sends an email verification link, and returns the authenticated user context. The account will be created with a pending status until the email is confirmed.',
@@ -63,6 +65,7 @@ export const RegisterCompanyOwnerApi = () =>
 
 export const RegisterViaInviteApi = () =>
   createApiDecorator({
+    operationId: 'registerViaInvite',
     summary: 'Register via invite',
     description:
       'Creates an active user account from a valid team invitation token, joins the invited team, marks the invitation as accepted, and issues auth cookies.',
@@ -89,6 +92,7 @@ export const RegisterViaInviteApi = () =>
 
 export const AcceptOrgInviteApi = () =>
   createApiDecorator({
+    operationId: 'acceptOrganizationInvite',
     summary: 'Accept organization invitation',
     description:
       'Creates a new company employee account from a valid organization invitation token. The user receives access and refresh tokens via HttpOnly cookies.',
@@ -111,6 +115,7 @@ export const AcceptOrgInviteApi = () =>
 
 export const LoginApi = () =>
   createApiDecorator({
+    operationId: 'login',
     summary: 'Log in',
     description:
       'Authenticates non-admin users and writes both access and refresh tokens into HttpOnly cookies. Admin accounts must use `/auth/admin/login`.',
@@ -131,6 +136,7 @@ export const LoginApi = () =>
 
 export const AdminLoginApi = () =>
   createApiDecorator({
+    operationId: 'adminLogin',
     summary: 'Log in as admin',
     description:
       'Authenticates ADMIN or SUPER_ADMIN accounts. If password rotation is required, returns `requiresPasswordChange=true` and sets short-lived HttpOnly `requiresPasswordChangeToken` cookie instead of issuing session tokens.',
@@ -151,6 +157,7 @@ export const AdminLoginApi = () =>
 
 export const ForceChangePasswordApi = () =>
   createApiDecorator({
+    operationId: 'adminForceChangePassword',
     summary: 'Force change password',
     description:
       'Validates a short-lived password-change challenge token from HttpOnly `requiresPasswordChangeToken` cookie, updates password hash, clears forced-change flag, and issues normal auth tokens.',
@@ -175,6 +182,7 @@ export const ForceChangePasswordApi = () =>
 
 export const MeApi = () =>
   createApiDecorator({
+    operationId: 'getMe',
     summary: 'Get current user',
     description:
       'Returns the current authenticated user using the `accessToken` cookie (or Bearer token for backward compatibility).',
@@ -197,6 +205,7 @@ export const MeApi = () =>
 
 export const RefreshApi = () =>
   createApiDecorator({
+    operationId: 'refreshSession',
     summary: 'Refresh access token',
     description:
       'Uses the HttpOnly `refreshToken` cookie to rotate the refresh token and issue a new `accessToken` cookie.',
@@ -216,6 +225,7 @@ export const RefreshApi = () =>
 
 export const LogoutApi = () =>
   createApiDecorator({
+    operationId: 'logout',
     summary: 'Log out',
     description:
       'Revokes the current refresh token and clears `accessToken` and `refreshToken` cookies.',
@@ -234,6 +244,7 @@ export const LogoutApi = () =>
 
 export const ConfirmEmailApi = () =>
   createApiDecorator({
+    operationId: 'confirmEmail',
     summary: 'Confirm email',
     description:
       "Confirms the user's email address using the verification token.",
@@ -252,6 +263,7 @@ export const ConfirmEmailApi = () =>
 
 export const ResendConfirmationEmailApi = () =>
   createApiDecorator({
+    operationId: 'resendConfirmationEmail',
     summary: 'Resend confirmation email',
     description:
       'Sends a new email verification token to the specified email address.',
@@ -264,6 +276,7 @@ export const ResendConfirmationEmailApi = () =>
 
 export const ForgotPasswordApi = () =>
   createApiDecorator({
+    operationId: 'forgotPassword',
     summary: 'Request password reset',
     description:
       'Accepts an email address and, if the account exists, enqueues a password reset email without revealing whether the email is registered.',
@@ -277,6 +290,7 @@ export const ForgotPasswordApi = () =>
 
 export const ResetPasswordApi = () =>
   createApiDecorator({
+    operationId: 'resetPassword',
     summary: 'Reset password',
     description:
       'Resets the account password using a valid password reset token and revokes all active refresh tokens for the user.',

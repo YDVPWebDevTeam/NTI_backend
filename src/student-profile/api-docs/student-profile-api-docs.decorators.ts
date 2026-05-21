@@ -14,7 +14,6 @@ import {
   SpecializationLookupDto,
   UniversityLookupDto,
 } from '../academic-structure/dto/academic-structure.dto';
-import { CompleteStudentProfileDto } from '../dto/complete-student-profile.dto';
 import { GetMyStudentProfileResponseDto } from '../dto/student-profile.dto';
 import { UpdateAcademicInformationDto } from '../dto/update-academic-information.dto';
 import { UpdateProfessionalSkillsDto } from '../dto/update-professional-skills.dto';
@@ -100,32 +99,6 @@ export const UpdateProfessionalSkillsApi = () =>
       ApiUnprocessableEntityResponse({
         description:
           'Academic information is incomplete or no primary skill was provided.',
-      }),
-    ],
-  });
-
-export const CompleteProfileApi = () =>
-  createApiDecorator({
-    operationId: 'completeMyStudentProfile',
-    summary: 'Mark profile as complete',
-    description:
-      'Marks profile as complete when required academic and professional sections are filled.',
-    body: CompleteStudentProfileDto,
-    successResponse: {
-      status: 200,
-      type: GetMyStudentProfileResponseDto,
-      description: 'Completed student profile snapshot.',
-    },
-    extraDecorators: [ApiBearerAuth('access-token')],
-    errors: [
-      ApiUnauthorizedResponse({
-        description: 'Bearer token is missing or invalid.',
-      }),
-      ApiForbiddenResponse({
-        description: 'Only users with STUDENT role can access this endpoint.',
-      }),
-      ApiUnprocessableEntityResponse({
-        description: 'Profile is incomplete.',
       }),
     ],
   });

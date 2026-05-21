@@ -16,6 +16,11 @@ import {
 } from 'class-validator';
 import { DocumentType, ProgramType } from '../../../generated/prisma/enums';
 
+const trimStringArray = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map((item) => (typeof item === 'string' ? item.trim() : item))
+    : value;
+
 export class CreateAdminCallDto {
   @ApiProperty({ enum: ProgramType })
   @IsEnum(ProgramType)
@@ -54,6 +59,34 @@ export class CreateAdminCallDto {
   @ArrayUnique()
   @IsEnum(DocumentType, { each: true })
   requiredDocumentTypes?: DocumentType[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['AI', 'HealthTech', 'Education'],
+    description: 'Program A category options rendered by the applicant form.',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => trimStringArray(value))
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(100, { each: true })
+  programACategories?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['React', 'NestJS', 'Flutter'],
+    description: 'Program A stack/tag options rendered by the applicant form.',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => trimStringArray(value))
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(100, { each: true })
+  programAStackTags?: string[];
 
   @ApiPropertyOptional({ example: 3 })
   @IsOptional()

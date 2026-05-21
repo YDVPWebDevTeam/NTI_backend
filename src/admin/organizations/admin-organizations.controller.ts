@@ -27,7 +27,7 @@ import { UpdateOrgStatusDto } from './dto/update-org-status.dto';
 import { ListOrganizationsQueryDto } from './dto/list-organizations-query.dto';
 import type { ListOrganizationsResponseDto } from './dto/list-organizations-response.dto';
 
-@ApiTags('Admin')
+@ApiTags('AdminOrganizations')
 @Controller('admin/organizations')
 export class AdminOrganizationsController {
   constructor(

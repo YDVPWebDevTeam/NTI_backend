@@ -17,6 +17,7 @@ import { ORG_SORT_VALUES } from '../dto/list-organizations-query.dto';
 
 export const GetAdminOrganizationsApi = () =>
   createApiDecorator({
+    operationId: 'adminListOrganizations',
     summary: 'List organizations (admin)',
     description:
       'Returns a paginated, filterable, and sortable list of all organizations for administrators.',
@@ -66,6 +67,7 @@ export const GetAdminOrganizationsApi = () =>
 
 export const GetAdminOrganizationApi = () =>
   createApiDecorator({
+    operationId: 'adminGetOrganization',
     summary: 'Get organization (admin)',
     description:
       'Returns organization profile by id for administrators, including the single company owner summary.',
@@ -90,6 +92,7 @@ export const GetAdminOrganizationApi = () =>
 
 export const UpdateOrganizationStatusApi = () =>
   createApiDecorator({
+    operationId: 'adminUpdateOrganizationStatus',
     summary: 'Process organization status',
     description:
       'Allows ADMIN and SUPER_ADMIN to approve or reject organizations that are pending review.',

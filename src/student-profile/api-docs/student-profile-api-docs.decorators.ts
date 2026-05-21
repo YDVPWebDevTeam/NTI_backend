@@ -14,13 +14,13 @@ import {
   SpecializationLookupDto,
   UniversityLookupDto,
 } from '../academic-structure/dto/academic-structure.dto';
-import { CompleteStudentProfileDto } from '../dto/complete-student-profile.dto';
 import { GetMyStudentProfileResponseDto } from '../dto/student-profile.dto';
 import { UpdateAcademicInformationDto } from '../dto/update-academic-information.dto';
 import { UpdateProfessionalSkillsDto } from '../dto/update-professional-skills.dto';
 
 export const GetMyProfileApi = () =>
   createApiDecorator({
+    operationId: 'getMyStudentProfile',
     summary: 'Get my student profile',
     description:
       'Returns profile completion status and profile data for the authenticated student.',
@@ -45,6 +45,7 @@ export const GetMyProfileApi = () =>
 
 export const UpdateAcademicInformationApi = () =>
   createApiDecorator({
+    operationId: 'updateMyStudentAcademicInformation',
     summary: 'Update academic information',
     description:
       'Creates or updates academic section of the student profile and validates selected hierarchy values.',
@@ -74,6 +75,7 @@ export const UpdateAcademicInformationApi = () =>
 
 export const UpdateProfessionalSkillsApi = () =>
   createApiDecorator({
+    operationId: 'updateMyStudentProfessionalSkills',
     summary: 'Update professional skills',
     description:
       'Replaces professional profile section, including skills and optional projects.',
@@ -101,33 +103,9 @@ export const UpdateProfessionalSkillsApi = () =>
     ],
   });
 
-export const CompleteProfileApi = () =>
-  createApiDecorator({
-    summary: 'Mark profile as complete',
-    description:
-      'Marks profile as complete when required academic and professional sections are filled.',
-    body: CompleteStudentProfileDto,
-    successResponse: {
-      status: 200,
-      type: GetMyStudentProfileResponseDto,
-      description: 'Completed student profile snapshot.',
-    },
-    extraDecorators: [ApiBearerAuth('access-token')],
-    errors: [
-      ApiUnauthorizedResponse({
-        description: 'Bearer token is missing or invalid.',
-      }),
-      ApiForbiddenResponse({
-        description: 'Only users with STUDENT role can access this endpoint.',
-      }),
-      ApiUnprocessableEntityResponse({
-        description: 'Profile is incomplete.',
-      }),
-    ],
-  });
-
 export const GetUniversitiesApi = () =>
   createApiDecorator({
+    operationId: 'listUniversities',
     summary: 'List universities',
     description:
       'Returns universities filtered by optional search and activity flag.',
@@ -164,6 +142,7 @@ export const GetUniversitiesApi = () =>
 
 export const GetFacultiesApi = () =>
   createApiDecorator({
+    operationId: 'listFacultiesByUniversity',
     summary: 'List faculties by university',
     description: 'Returns active faculties for the selected university.',
     successResponse: {
@@ -191,6 +170,7 @@ export const GetFacultiesApi = () =>
 
 export const GetSpecializationsApi = () =>
   createApiDecorator({
+    operationId: 'listSpecializationsByFaculty',
     summary: 'List specializations by faculty',
     description: 'Returns active specializations for the selected faculty.',
     successResponse: {

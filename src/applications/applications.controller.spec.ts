@@ -247,19 +247,23 @@ describe('ApplicationsController', () => {
 
   it('delegates section upsert to the sections service', async () => {
     const user = { id: 'user-1', email: 'lead@example.com' } as never;
-    const dto = { valueJson: { firstName: 'Jane' } } as never;
+    const dto = {
+      problem: 'Students struggle to find grants',
+      solution: 'A guided application flow',
+      targetUsers: 'Student teams',
+      valueProposition: 'Faster and clearer application submission',
+    } as never;
 
-    const result = await controller.upsertSection(
+    const result = await controller.upsertIdeaOverviewSection(
       'application-1',
-      'profile',
       dto,
       user,
     );
 
     expect(sectionsService.upsertSection).toHaveBeenCalledWith(
       'application-1',
-      'profile',
-      dto,
+      'idea_overview',
+      { valueJson: dto },
       user,
     );
     expect(result).toEqual({ id: 'section-1' });

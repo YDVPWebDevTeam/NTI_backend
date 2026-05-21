@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { InvitationStatus, UserRole } from 'generated/prisma/enums';
+import { InvitationStatus, UserRole } from '../../../generated/prisma/enums';
 
 export class OrganizationInviteItemDto {
   @ApiProperty({

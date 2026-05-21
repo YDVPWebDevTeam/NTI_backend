@@ -46,13 +46,18 @@ export {
   StartEvaluationApplicationApi,
   StartApplicationOnboardingApi,
   SubmitApplicationApi,
-  UpsertApplicationSectionApi,
+  UpsertIdeaOverviewSectionApi,
 } from './api-docs';
 export { ApplicationLifecycleTransitionDto } from './dto/application-lifecycle-transition.dto';
 export { ApplicationDetailDto } from './dto/application-detail.dto';
 export { ApplicationDocumentDto } from './dto/application-document.dto';
 export { ApplicationSectionDto } from './dto/application-section.dto';
 export { ApplicationSectionHistoryDto } from './dto/application-section-history.dto';
+export {
+  APPLICATION_SECTION_KEYS,
+  type ApplicationSectionKey,
+} from './dto/application-section-key.constants';
+export { ApplicationProfileSectionValueDto } from './dto/application-profile-section-value.dto';
 export { AssignMentorDto } from './dto/assign-mentor.dto';
 export { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
 export { CreateApplicationDto } from './dto/create-application.dto';
@@ -71,6 +76,7 @@ export { RequiredDocumentsResponseDto } from './dto/required-documents-response.
 export { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
 export { UpdateAdminCallDto } from './dto/update-admin-call.dto';
 export { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
+export { UpsertIdeaOverviewSectionDto } from './dto/upsert-idea-overview-section.dto';
 export { NeedsInfoRepository } from './needs-info.repository';
 export { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
 export { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';

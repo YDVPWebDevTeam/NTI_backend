@@ -17,9 +17,9 @@ import {
   GetOrganizationInvitesApi,
 } from './api-docs/admin-org-invites-api-docs.decorators';
 import { AdminOrgInvitesService } from './admin-org-invites.service';
-import { OrganizationStatusResponseDto } from './dto/organization-status-response.dto';
+import { OrganizationInviteItemDto } from '../../organization/dto/organization-invite-item.dto';
 
-@ApiTags('Admin')
+@ApiTags('AdminOrganizations')
 @Controller('admin/organizations')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
@@ -32,7 +32,7 @@ export class AdminOrgInvitesController {
   @Get('invites')
   listAll(
     @GetUserContext() actor: AuthenticatedUserContext,
-  ): Promise<OrganizationStatusResponseDto[]> {
+  ): Promise<OrganizationInviteItemDto[]> {
     return this.adminOrgInvitesService.listAll(actor);
   }
 
@@ -41,7 +41,7 @@ export class AdminOrgInvitesController {
   listByOrganization(
     @GetUserContext() actor: AuthenticatedUserContext,
     @Param('id', ParseUUIDPipe) organizationId: string,
-  ): Promise<OrganizationStatusResponseDto[]> {
+  ): Promise<OrganizationInviteItemDto[]> {
     return this.adminOrgInvitesService.listByOrganization(
       actor,
       organizationId,

@@ -91,9 +91,6 @@ export class StudentProfileDataDto {
 
   @ApiPropertyOptional()
   cvFileId?: string;
-
-  @ApiPropertyOptional()
-  profileCompletedAt?: string;
 }
 
 export class StudentSkillDto {

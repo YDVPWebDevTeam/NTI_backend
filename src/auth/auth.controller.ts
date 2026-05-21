@@ -109,7 +109,7 @@ export class AuthController {
     return this.authCookieService.toHttpAuthResponse(authResult);
   }
 
-  @ApiTags('Admin')
+  @ApiTags('AdminAuth')
   @AdminLoginApi()
   @HttpCode(HttpStatus.OK)
   @Post('admin/login')
@@ -121,7 +121,7 @@ export class AuthController {
     return this.authCookieService.applyAdminLoginResponse(reply, authResult);
   }
 
-  @ApiTags('Admin')
+  @ApiTags('AdminAuth')
   @ForceChangePasswordApi()
   @HttpCode(HttpStatus.OK)
   @Post('admin/force-change-password')

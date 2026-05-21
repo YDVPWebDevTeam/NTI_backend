@@ -339,6 +339,68 @@ describe('ApplicationSectionsService', () => {
     expect(sectionsRepository.upsertSection).not.toHaveBeenCalled();
   });
 
+  it('upsertSection rejects unsupported section keys', async () => {
+    const transactionClient = { tx: 'db-client' } as never;
+
+    applicationsRepository.transaction.mockImplementation(
+      (fn: (db: never) => Promise<unknown>) => fn(transactionClient),
+    );
+    applicationsRepository.findByIdWithRelations.mockResolvedValue(
+      mockApplication,
+    );
+    sectionsRules.assertApplicationIsDraft.mockImplementation(() => undefined);
+    sectionsRules.assertWriteAccess.mockImplementation(() => undefined);
+
+    await expect(
+      service.upsertSection(
+        'application-1',
+        'unknown' as never,
+        {
+          valueJson: { name: 'Jane' },
+        },
+        {
+          id: 'user-1',
+          email: 'lead@example.com',
+          role: UserRole.STUDENT,
+        } as never,
+      ),
+    ).rejects.toThrow('Unsupported application section key: unknown');
+
+    expect(sectionsRepository.upsertSection).not.toHaveBeenCalled();
+  });
+
+  it('upsertSection rejects invalid profile payload shape', async () => {
+    const transactionClient = { tx: 'db-client' } as never;
+
+    applicationsRepository.transaction.mockImplementation(
+      (fn: (db: never) => Promise<unknown>) => fn(transactionClient),
+    );
+    applicationsRepository.findByIdWithRelations.mockResolvedValue(
+      mockApplication,
+    );
+    sectionsRules.assertApplicationIsDraft.mockImplementation(() => undefined);
+    sectionsRules.assertWriteAccess.mockImplementation(() => undefined);
+
+    await expect(
+      service.upsertSection(
+        'application-1',
+        'profile',
+        {
+          valueJson: { firstName: 'Jane' } as never,
+        },
+        {
+          id: 'user-1',
+          email: 'lead@example.com',
+          role: UserRole.STUDENT,
+        } as never,
+      ),
+    ).rejects.toThrow(
+      'Profile section payload must be an object with a non-empty string "name" field.',
+    );
+
+    expect(sectionsRepository.upsertSection).not.toHaveBeenCalled();
+  });
+
   it('getSectionHistory requires admin', async () => {
     applicationsRepository.findByIdWithRelations.mockResolvedValue(
       mockApplication,
@@ -475,5 +537,23 @@ describe('ApplicationSectionsService', () => {
       transactionClient,
     );
     expect(result.valueJson).toEqual(ideaOverviewPayload);
+  });
+
+  it('listSections rejects persisted unsupported section keys', async () => {
+    applicationsRepository.findByIdWithRelations.mockResolvedValue(
+      mockApplication,
+    );
+    sectionsRules.assertReadAccess.mockImplementation(() => undefined);
+    sectionsRepository.findByApplicationId.mockResolvedValue([
+      { ...baseSection, key: 'legacy' },
+    ]);
+
+    await expect(
+      service.listSections('application-1', {
+        id: 'user-2',
+        email: 'member@example.com',
+        role: UserRole.STUDENT,
+      } as never),
+    ).rejects.toThrow('Unsupported application section key: legacy');
   });
 });

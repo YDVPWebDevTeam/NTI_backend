@@ -4,22 +4,28 @@ jest.mock('@prisma/client', () => ({}), { virtual: true });
 jest.mock('../../organization/organization.repository', () => ({
   OrganizationRepository: class OrganizationRepository {},
 }));
+jest.mock('../../organization/organization-invitation.repository', () => ({
+  OrganizationInviteRepository: class OrganizationInviteRepository {},
+}));
 
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import {
-  OrganizationStatus,
+  InvitationStatus,
   UserRole,
   UserStatus,
 } from '../../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import { OrganizationInviteRepository } from '../../organization/organization-invitation.repository';
 import { OrganizationRepository } from '../../organization/organization.repository';
 import { AdminOrgInvitesService } from './admin-org-invites.service';
 
 describe('AdminOrgInvitesService', () => {
   let service: AdminOrgInvitesService;
+  let organizationInviteRepository: {
+    findMany: jest.Mock;
+  };
   let organizationRepository: {
     findUnique: jest.Mock;
-    findMany: jest.Mock;
   };
 
   const actorAdmin: AuthenticatedUserContext = {
@@ -39,12 +45,16 @@ describe('AdminOrgInvitesService', () => {
   };
 
   beforeEach(() => {
-    organizationRepository = {
-      findUnique: jest.fn(),
+    organizationInviteRepository = {
       findMany: jest.fn(),
     };
 
+    organizationRepository = {
+      findUnique: jest.fn(),
+    };
+
     service = new AdminOrgInvitesService(
+      organizationInviteRepository as unknown as OrganizationInviteRepository,
       organizationRepository as unknown as OrganizationRepository,
     );
   });
@@ -55,43 +65,38 @@ describe('AdminOrgInvitesService', () => {
     );
   });
 
-  it('lists all pending organization applications ordered by createdAt desc', async () => {
-    const createdAt = new Date('2026-01-01T00:00:00.000Z');
-    const updatedAt = new Date('2026-01-01T00:00:00.000Z');
+  it('lists all organization invites ordered by createdAt desc', async () => {
+    const createdAt = new Date('2030-01-01T00:00:00.000Z');
+    const expiresAt = new Date('2030-01-08T00:00:00.000Z');
 
-    organizationRepository.findMany.mockResolvedValue([
+    organizationInviteRepository.findMany.mockResolvedValue([
       {
-        id: 'org-1',
-        name: 'Acme Labs s.r.o.',
-        ico: '12345678',
-        status: OrganizationStatus.PENDING,
-        website: null,
-        sector: null,
-        description: null,
-        logoUrl: null,
+        id: 'invite-1',
+        email: 'employee@example.com',
+        roleToAssign: UserRole.COMPANY_EMPLOYEE,
+        status: InvitationStatus.PENDING,
         createdAt,
-        updatedAt,
+        expiresAt,
+        acceptedAt: null,
+        revokedAt: null,
       },
     ]);
 
     const result = await service.listAll(actorAdmin);
 
-    expect(organizationRepository.findMany).toHaveBeenCalledWith({
-      where: { status: OrganizationStatus.PENDING },
+    expect(organizationInviteRepository.findMany).toHaveBeenCalledWith({
       orderBy: [{ createdAt: 'desc' }],
     });
     expect(result).toEqual([
       {
-        id: 'org-1',
-        name: 'Acme Labs s.r.o.',
-        ico: '12345678',
-        status: OrganizationStatus.PENDING,
-        website: null,
-        sector: null,
-        description: null,
-        logoUrl: null,
+        id: 'invite-1',
+        email: 'employee@example.com',
+        roleToAssign: UserRole.COMPANY_EMPLOYEE,
+        status: InvitationStatus.PENDING,
         createdAt,
-        updatedAt,
+        expiresAt,
+        acceptedAt: null,
+        revokedAt: null,
       },
     ]);
   });
@@ -104,46 +109,29 @@ describe('AdminOrgInvitesService', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('returns application for organization id', async () => {
-    const application = {
-      id: 'org-1',
-      name: 'Acme Labs s.r.o.',
-      ico: '12345678',
-      status: OrganizationStatus.PENDING,
-      website: null,
-      sector: null,
-      description: null,
-      logoUrl: null,
-      createdAt: new Date('2026-01-02T00:00:00.000Z'),
-      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+  it('returns invites for organization id', async () => {
+    const invite = {
+      id: 'invite-1',
+      email: 'employee@example.com',
+      roleToAssign: UserRole.COMPANY_EMPLOYEE,
+      status: InvitationStatus.PENDING,
+      createdAt: new Date('2030-01-02T00:00:00.000Z'),
+      expiresAt: new Date('2030-01-09T00:00:00.000Z'),
+      acceptedAt: null,
+      revokedAt: null,
     };
-    organizationRepository.findUnique.mockResolvedValue(application);
+    organizationRepository.findUnique.mockResolvedValue({ id: 'org-1' });
+    organizationInviteRepository.findMany.mockResolvedValue([invite]);
 
     const result = await service.listByOrganization(actorAdmin, 'org-1');
 
     expect(organizationRepository.findUnique).toHaveBeenCalledWith({
       id: 'org-1',
     });
-    expect(result).toEqual([application]);
-  });
-
-  it('returns even non-pending application for organization id', async () => {
-    const application = {
-      id: 'org-1',
-      name: 'Acme Labs s.r.o.',
-      ico: '12345678',
-      status: OrganizationStatus.ACTIVE,
-      website: null,
-      sector: null,
-      description: null,
-      logoUrl: null,
-      createdAt: new Date('2026-01-02T00:00:00.000Z'),
-      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
-    };
-    organizationRepository.findUnique.mockResolvedValue(application);
-
-    const result = await service.listByOrganization(actorAdmin, 'org-1');
-
-    expect(result).toEqual([application]);
+    expect(organizationInviteRepository.findMany).toHaveBeenCalledWith({
+      where: { organizationId: 'org-1' },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+    expect(result).toEqual([invite]);
   });
 });

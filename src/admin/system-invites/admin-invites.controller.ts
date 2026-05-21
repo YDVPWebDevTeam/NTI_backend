@@ -11,7 +11,7 @@ import { AdminInvitesService } from './admin-invites.service';
 import { CreateSystemInviteDto } from './dto/create-system-invite.dto';
 import { SystemInviteResponseDto } from './dto/system-invite-response.dto';
 
-@ApiTags('Admin')
+@ApiTags('AdminAuth')
 @Controller('admin/invites')
 export class AdminInvitesController {
   constructor(private readonly adminInvitesService: AdminInvitesService) {}

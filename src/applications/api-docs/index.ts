@@ -31,5 +31,5 @@ export {
   StartEvaluationApplicationApi,
   StartApplicationOnboardingApi,
   SubmitApplicationApi,
-  UpsertApplicationSectionApi,
+  UpsertIdeaOverviewSectionApi,
 } from './applications-api-docs.decorators';

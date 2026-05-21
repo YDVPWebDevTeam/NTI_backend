@@ -43,6 +43,12 @@ export class AdminCallDto {
   @ApiProperty({ type: [RequiredDocumentTypeDto] })
   requiredDocumentTypes!: RequiredDocumentTypeDto[];
 
+  @ApiProperty({ type: [String], example: ['AI', 'HealthTech'] })
+  programACategories!: string[];
+
+  @ApiProperty({ type: [String], example: ['React', 'NestJS'] })
+  programAStackTags!: string[];
+
   @ApiPropertyOptional({ example: 3, nullable: true })
   minTeamSize!: number | null;
 

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { isEmail } from 'class-validator';
 import type {
   EmailVerificationToken,
   Prisma,
@@ -124,7 +125,7 @@ export class EmailVerificationService {
   }
 
   private isValidEmail(value: string): boolean {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    return isEmail(value);
   }
 
   markAccepted(

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { isEmail } from 'class-validator';
 import type { EmailChangeToken, Prisma } from '../../generated/prisma/client';
 import type { PrismaDbClient } from '../infrastructure/database';
 import { ConfigService } from '../infrastructure/config';
@@ -131,7 +132,7 @@ export class EmailChangeTokenService {
   }
 
   private isValidEmail(value: string): boolean {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    return isEmail(value);
   }
 
   generateToken(): string {

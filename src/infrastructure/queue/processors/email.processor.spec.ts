@@ -15,6 +15,7 @@ describe('EmailProcessor', () => {
   let processor: EmailProcessor;
   let mailerService: {
     sendConfirmationEmail: jest.Mock;
+    sendEmailChangeConfirmationEmail: jest.Mock;
     sendTeamConfirm: jest.Mock;
     sendPasswordResetEmail: jest.Mock;
     sendSystemInvite: jest.Mock;
@@ -27,6 +28,7 @@ describe('EmailProcessor', () => {
   beforeEach(() => {
     mailerService = {
       sendConfirmationEmail: jest.fn().mockResolvedValue(undefined),
+      sendEmailChangeConfirmationEmail: jest.fn().mockResolvedValue(undefined),
       sendTeamConfirm: jest.fn().mockResolvedValue(undefined),
       sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
       sendSystemInvite: jest.fn().mockResolvedValue(undefined),
@@ -92,6 +94,34 @@ describe('EmailProcessor', () => {
       'student@example.com',
       'confirm-token',
       '/register/student',
+    );
+  });
+
+  it('routes EMAIL_CHANGE_CONFIRMATION jobs to sendEmailChangeConfirmationEmail', async () => {
+    const job: EmailProcessorJob = {
+      id: 'job-0b',
+      name: EMAIL_JOBS.EMAIL_CHANGE_CONFIRMATION,
+      data: {
+        email: 'new@example.com',
+        token: 'email-change-token',
+        newEmail: 'new@example.com',
+      },
+    } as Job<
+      {
+        email: string;
+        token: string;
+        newEmail: string;
+      },
+      void,
+      typeof EMAIL_JOBS.EMAIL_CHANGE_CONFIRMATION
+    >;
+
+    await processor.process(job);
+
+    expect(mailerService.sendEmailChangeConfirmationEmail).toHaveBeenCalledWith(
+      'new@example.com',
+      'email-change-token',
+      'new@example.com',
     );
   });
 

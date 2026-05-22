@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AdminModule } from './admin/admin.module';
@@ -22,6 +23,7 @@ import { ProgramBProjectsModule } from './programs/program-b/projects/program-b-
 import { ProgramBTeamApplicationModule } from './programs/program-b/team-application/program-b-team-application.module';
 import { StudentProfileModule } from './student-profile';
 import { ApplicationsModule } from './applications';
+import { AccountModule } from './account/account.module';
 
 const queueProcessorProviders =
   process.env.RUN_QUEUE_PROCESSORS === 'true'
@@ -57,8 +59,16 @@ const queueProcessorProviders =
     FilesModule,
     StudentProfileModule,
     ApplicationsModule,
+    AccountModule,
   ],
   controllers: [AppController],
-  providers: [AppService, ...queueProcessorProviders],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+    ...queueProcessorProviders,
+  ],
 })
 export class AppModule {}

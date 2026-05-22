@@ -77,6 +77,17 @@ export class MailerService {
     });
   }
 
+  async sendEmailChangeConfirmationEmail(
+    email: string,
+    token: string,
+    newEmail: string,
+  ): Promise<void> {
+    await this.sendTemplate(email, EMAIL_TEMPLATES.EMAIL_CHANGE_CONFIRMATION, {
+      token,
+      newEmail,
+    });
+  }
+
   async sendTeamConfirm(
     email: string,
     teamName: string,

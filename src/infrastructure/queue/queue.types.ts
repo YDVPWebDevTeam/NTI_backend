@@ -6,6 +6,7 @@ import type { ConfirmationPath } from '../../auth/confirmation-paths';
 export const EMAIL_JOBS = {
   PASSWORD_RESET: 'password-reset',
   USER_CONFIRMATION: 'user-confirmation',
+  EMAIL_CHANGE_CONFIRMATION: 'email-change-confirmation',
   SYSTEM_INVITE_SENT: 'system-invite-sent',
   ORG_PENDING_REVIEW: 'org-pending-review',
   ORG_APPROVED: 'org-approved',
@@ -27,6 +28,12 @@ export interface EmailJobData {
     email: string;
     token: string;
     confirmationPath: ConfirmationPath;
+  };
+
+  [EMAIL_JOBS.EMAIL_CHANGE_CONFIRMATION]: {
+    email: string;
+    token: string;
+    newEmail: string;
   };
 
   [EMAIL_JOBS.SYSTEM_INVITE_SENT]: {

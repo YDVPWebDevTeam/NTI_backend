@@ -218,6 +218,7 @@ model User {
 
   refreshTokens      RefreshToken[]
   passwordResetToken PasswordResetToken?
+  emailChangeToken   EmailChangeToken?
 
   role UserRole @default(STUDENT)
 
@@ -1003,6 +1004,22 @@ model PasswordResetToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+}
+
+model EmailChangeToken {
+  id        String @id @default(uuid())
+  tokenHash String @unique
+  newEmail  String
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@index([newEmail])
 }
 
 enum OrganizationStatus {

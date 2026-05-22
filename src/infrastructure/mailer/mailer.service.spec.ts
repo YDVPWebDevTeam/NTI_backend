@@ -74,4 +74,29 @@ describe('MailerService', () => {
       service.sendEmail('user@example.com', 'Subject', '<p>Hello</p>'),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
+
+  it('renders the email change confirmation template before sending', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+    });
+    global.fetch = fetchMock;
+    const renderMock = jest
+      .fn()
+      .mockReturnValue({ subject: 'Confirm email change', html: '<p>x</p>' });
+    const service = new MailerService(configService, {
+      render: renderMock,
+    } as unknown as EmailTemplateRegistryService);
+
+    await service.sendEmailChangeConfirmationEmail(
+      'new@example.com',
+      'email-change-token',
+      'new@example.com',
+    );
+
+    expect(renderMock).toHaveBeenCalledWith('email-change-confirmation', {
+      token: 'email-change-token',
+      newEmail: 'new@example.com',
+    });
+    expect(fetchMock).toHaveBeenCalled();
+  });
 });

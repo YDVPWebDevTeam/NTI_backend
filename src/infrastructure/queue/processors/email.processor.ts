@@ -36,6 +36,13 @@ export class EmailProcessor extends WorkerHost {
         data.confirmationPath,
       );
     },
+    [EMAIL_JOBS.EMAIL_CHANGE_CONFIRMATION]: async (data) => {
+      await this.mailerService.sendEmailChangeConfirmationEmail(
+        data.email,
+        data.token,
+        data.newEmail,
+      );
+    },
     [EMAIL_JOBS.TEAM_INVITATION]: this.handleTeamInviteEmail,
     [EMAIL_JOBS.SYSTEM_INVITE_SENT]: async (data) => {
       await this.mailerService.sendSystemInvite(

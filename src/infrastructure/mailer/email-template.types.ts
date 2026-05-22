@@ -4,6 +4,7 @@ import type { ConfirmationPath } from '../../auth/confirmation-paths';
 export const EMAIL_TEMPLATES = {
   PASSWORD_RESET: 'password-reset',
   USER_CONFIRMATION: 'user-confirmation',
+  EMAIL_CHANGE_CONFIRMATION: 'email-change-confirmation',
   SYSTEM_INVITE: 'system-invite',
   ORG_PENDING_REVIEW: 'org-pending-review',
   ORG_APPROVED: 'org-approved',
@@ -25,6 +26,10 @@ export interface EmailTemplateDataByName {
   [EMAIL_TEMPLATES.USER_CONFIRMATION]: {
     token: string;
     confirmationPath: ConfirmationPath;
+  };
+  [EMAIL_TEMPLATES.EMAIL_CHANGE_CONFIRMATION]: {
+    token: string;
+    newEmail: string;
   };
   [EMAIL_TEMPLATES.SYSTEM_INVITE]: {
     token: string;

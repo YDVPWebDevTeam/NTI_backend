@@ -40,6 +40,10 @@ import { ApplicationStatusEventDto } from './dto/application-status-event.dto';
 import { AssignMentorDto } from './dto/assign-mentor.dto';
 import { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import { CreateProgramAMilestoneDto } from './dto/create-program-a-milestone.dto';
+import { UpdateProgramAMilestoneDto } from './dto/update-program-a-milestone.dto';
+import { ProgramAMilestoneDto } from './dto/program-a-milestone.dto';
+import { InternalProgramAApplicationDto } from './dto/internal-program-a-application.dto';
 import {
   ApplicationDecision,
   CreateApplicationDecisionDto,
@@ -72,6 +76,10 @@ import {
   ProgramAMentorshipNoteWithAuthor,
   ProgramAMentorshipRepository,
 } from './program-a-mentorship.repository';
+import {
+  ProgramAMilestoneWithApplication,
+  ProgramAMilestonesRepository,
+} from './program-a-milestones.repository';
 import { CreateApplicationEvaluationDto } from './dto/create-application-evaluation.dto';
 import { PROGRAM_A_SECTION_KEYS } from './program-a/program-a-application-sections.contract';
 
@@ -123,9 +131,27 @@ export class ApplicationsService {
     private readonly needsInfoRepository: NeedsInfoRepository,
     private readonly eligibilitySignalsService: EligibilitySignalsService,
     private readonly programAMentorshipRepository: ProgramAMentorshipRepository,
+    private readonly programAMilestonesRepository: ProgramAMilestonesRepository,
     private readonly userRepository: UserRepository,
     private readonly queueService: QueueService,
   ) {}
+
+  async listInternalProgramAApplications(
+    user: AuthenticatedUserContext,
+  ): Promise<InternalProgramAApplicationDto[]> {
+    if (!this.isReviewerSideUser(user)) {
+      throw new ForbiddenException(
+        'Only reviewer-side users can list internal Program A applications',
+      );
+    }
+
+    const applications =
+      await this.applicationsRepository.listInternalProgramAApplications();
+
+    return applications.map((application) =>
+      this.toInternalProgramAApplicationDto(application),
+    );
+  }
 
   async createDraft(
     user: AuthenticatedUserContext,
@@ -978,6 +1004,104 @@ export class ApplicationsService {
     return notes.map((note) => this.toProgramAMentorshipNoteDto(note));
   }
 
+  async createProgramAMilestone(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+    dto: CreateProgramAMilestoneDto,
+  ): Promise<ProgramAMilestoneDto> {
+    return this.applicationsRepository.transaction(async (db) => {
+      const application = await this.loadWorkflowApplicationOrThrow(
+        applicationId,
+        db,
+      );
+
+      this.ensureProgramATrackingWorkflow(application);
+      this.ensureProgramATrackingAccess(application, user);
+      this.ensureArchivedApplicationIsReadOnlyForNonAdmin(application, user);
+
+      const milestone = await this.programAMilestonesRepository.createMilestone(
+        {
+          applicationId: application.id,
+          title: dto.title.trim(),
+          description: dto.description?.trim() || null,
+          dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+          status: dto.status,
+          progressNote: dto.progressNote?.trim() || null,
+        },
+        db,
+      );
+
+      return this.toProgramAMilestoneDto(milestone);
+    });
+  }
+
+  async listProgramAMilestones(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramAMilestoneDto[]> {
+    const application =
+      await this.loadWorkflowApplicationOrThrow(applicationId);
+
+    this.ensureProgramATrackingWorkflow(application);
+    this.ensureProgramATrackingReadAccess(application, user);
+
+    const milestones =
+      await this.programAMilestonesRepository.listByApplication(application.id);
+
+    return milestones.map((milestone) =>
+      this.toProgramAMilestoneDto(milestone),
+    );
+  }
+
+  async updateProgramAMilestone(
+    applicationId: string,
+    milestoneId: string,
+    user: AuthenticatedUserContext,
+    dto: UpdateProgramAMilestoneDto,
+  ): Promise<ProgramAMilestoneDto> {
+    return this.applicationsRepository.transaction(async (db) => {
+      const application = await this.loadWorkflowApplicationOrThrow(
+        applicationId,
+        db,
+      );
+
+      this.ensureProgramATrackingWorkflow(application);
+      this.ensureProgramATrackingAccess(application, user);
+      this.ensureArchivedApplicationIsReadOnlyForNonAdmin(application, user);
+
+      const existing =
+        await this.programAMilestonesRepository.findByIdForApplication(
+          application.id,
+          milestoneId,
+          db,
+        );
+
+      if (!existing) {
+        throw new NotFoundException('Program A milestone not found');
+      }
+
+      const milestone = await this.programAMilestonesRepository.updateMilestone(
+        existing.id,
+        {
+          ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
+          ...(dto.description !== undefined
+            ? { description: dto.description?.trim() || null }
+            : {}),
+          ...(dto.dueAt !== undefined
+            ? { dueAt: dto.dueAt ? new Date(dto.dueAt) : null }
+            : {}),
+          ...(dto.status !== undefined ? { status: dto.status } : {}),
+          ...(dto.progressNote !== undefined
+            ? { progressNote: dto.progressNote?.trim() || null }
+            : {}),
+        },
+        db,
+      );
+
+      return this.toProgramAMilestoneDto(milestone);
+    });
+  }
+
   async startOnboarding(
     applicationId: string,
     user: AuthenticatedUserContext,
@@ -1433,6 +1557,60 @@ export class ApplicationsService {
         'Program A mentorship is supported only for Program A applications',
       );
     }
+  }
+
+  private ensureProgramATrackingWorkflow(
+    application: ApplicationWorkflowView,
+  ): void {
+    this.ensureProgramAApplicationLifecycle(application);
+
+    const trackingStatuses: ApplicationStatus[] = [
+      ApplicationStatus.APPROVED,
+      ApplicationStatus.ONBOARDING,
+      ApplicationStatus.ACTIVE_PROJECT,
+      ApplicationStatus.PAUSED,
+      ApplicationStatus.COMPLETED,
+    ];
+
+    if (!trackingStatuses.includes(application.status)) {
+      throw new BadRequestException(
+        `Program A tracking is allowed only for approved/post-approval applications. Current status: ${application.status}`,
+      );
+    }
+  }
+
+  private ensureProgramATrackingReadAccess(
+    application: ApplicationWorkflowView,
+    user: AuthenticatedUserContext,
+  ): void {
+    if (this.isReviewerSideUser(user)) {
+      return;
+    }
+
+    if (user.role === UserRole.MENTOR && application.mentorUserId === user.id) {
+      return;
+    }
+
+    throw new ForbiddenException(
+      'Only reviewer-side users or the assigned mentor can view Program A tracking',
+    );
+  }
+
+  private ensureProgramATrackingAccess(
+    application: ApplicationWorkflowView,
+    user: AuthenticatedUserContext,
+  ): void {
+    if (isAdminRole(user.role)) {
+      return;
+    }
+
+    if (user.role === UserRole.MENTOR && application.mentorUserId === user.id) {
+      return;
+    }
+
+    throw new ForbiddenException(
+      'Only administrators or the assigned mentor can manage Program A tracking',
+    );
   }
 
   private ensureProgramAApplicationLifecycle(
@@ -2063,6 +2241,77 @@ export class ApplicationsService {
       content: note.content,
       createdAt: note.createdAt,
       author: this.toMentorshipNoteAuthorDto(note.author),
+    };
+  }
+
+  private toProgramAMilestoneDto(
+    milestone: ProgramAMilestoneWithApplication,
+  ): ProgramAMilestoneDto {
+    return {
+      id: milestone.id,
+      applicationId: milestone.applicationId,
+      title: milestone.title,
+      description: milestone.description,
+      dueAt: milestone.dueAt,
+      status: milestone.status,
+      progressNote: milestone.progressNote,
+      createdAt: milestone.createdAt,
+      updatedAt: milestone.updatedAt,
+    };
+  }
+
+  private toInternalProgramAApplicationDto(application: {
+    id: string;
+    status: ApplicationStatus;
+    submittedAt: Date | null;
+    decidedAt: Date | null;
+    mentorUserId: string | null;
+    mentorAssignedAt: Date | null;
+    mentorAssignedById: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    team: {
+      id: string;
+      name: string;
+      leaderId: string;
+    };
+    call: {
+      id: string;
+      title: string;
+      type: ProgramType;
+      status: CallStatus;
+      opensAt: Date | null;
+      closesAt: Date | null;
+    };
+    eligibilitySignals: Array<{
+      id: string;
+      code: string;
+      passed: boolean;
+      reason: string | null;
+    }>;
+  }): InternalProgramAApplicationDto {
+    return {
+      id: application.id,
+      status: application.status,
+      submittedAt: application.submittedAt,
+      decidedAt: application.decidedAt,
+      team: application.team,
+      call: application.call,
+      mentorAssignment: {
+        mentorUserId: application.mentorUserId,
+        mentorAssignedAt: application.mentorAssignedAt,
+        mentorAssignedById: application.mentorAssignedById,
+      },
+      eligibilitySignalSummary: {
+        total: application.eligibilitySignals.length,
+        passed: application.eligibilitySignals.filter((signal) => signal.passed)
+          .length,
+        failed: application.eligibilitySignals.filter(
+          (signal) => !signal.passed,
+        ).length,
+      },
+      createdAt: application.createdAt,
+      updatedAt: application.updatedAt,
     };
   }
 

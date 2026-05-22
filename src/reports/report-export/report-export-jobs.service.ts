@@ -6,6 +6,8 @@ import {
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { FilesService } from '../../files/files.service';
+import type { DownloadUrlDto } from '../../files/dto/download-url.dto';
+import type { UploadedFileDto } from '../../files/dto/uploaded-file.dto';
 import { ConfigService } from '../../infrastructure/config';
 import { ExportJobStatusDto } from '../dto/export-job-status.dto';
 import { ReportExportJobsRepository } from './report-export-jobs.repository';
@@ -20,6 +22,29 @@ type CompletedExportFileInput = {
   fileName: string;
   contentType: string;
 };
+
+type ReportExportJobRecord = {
+  id: string;
+  requestedByUserId: string;
+  dataset: string;
+  format: string;
+  status: string;
+  createdAt: Date;
+  completedAt: Date | null;
+  errorMessage: string | null;
+  uploadedFileId: string | null;
+  downloadTokenHash: string | null;
+  downloadTokenExpiresAt: Date | null;
+};
+
+type DownloadTokenJob = Pick<
+  ReportExportJobRecord,
+  | 'id'
+  | 'requestedByUserId'
+  | 'uploadedFileId'
+  | 'downloadTokenHash'
+  | 'downloadTokenExpiresAt'
+>;
 
 @Injectable()
 export class ReportExportJobsService {
@@ -62,9 +87,9 @@ export class ReportExportJobsService {
     id: string,
     input: CompletedExportFileInput,
   ): Promise<void> {
-    const job = await this.requireJob(id);
+    const job: ReportExportJobRecord = await this.requireJob(id);
 
-    const uploadedFile =
+    const uploadedFile: UploadedFileDto =
       await this.filesService.createServerGeneratedFileForOwner(
         job.requestedByUserId,
         {
@@ -108,7 +133,7 @@ export class ReportExportJobsService {
     actor: AuthenticatedUserContext,
     id: string,
   ): Promise<ExportJobStatusDto> {
-    const job = await this.requireOwnedJob(actor, id);
+    const job: ReportExportJobRecord = await this.requireOwnedJob(actor, id);
     const base: ExportJobStatusDto = {
       id: job.id,
       status: job.status,
@@ -138,12 +163,16 @@ export class ReportExportJobsService {
   async resolveDownload(
     actor: AuthenticatedUserContext,
     id: string,
-    token: string,
+    token: string | undefined,
   ): Promise<{ downloadUrl: string }> {
-    const job = await this.requireOwnedJob(actor, id);
+    const job: ReportExportJobRecord = await this.requireOwnedJob(actor, id);
 
     if (job.status !== 'COMPLETED' || !job.uploadedFileId) {
       throw new NotFoundException('Export file is not available');
+    }
+
+    if (!token?.trim()) {
+      throw new ForbiddenException('Download token is invalid or expired');
     }
 
     if (
@@ -155,7 +184,7 @@ export class ReportExportJobsService {
       throw new ForbiddenException('Download token is invalid or expired');
     }
 
-    const file = await this.filesService.requestDownloadUrl(
+    const file: DownloadUrlDto = await this.filesService.requestDownloadUrl(
       actor,
       job.uploadedFileId,
       'attachment',
@@ -166,36 +195,35 @@ export class ReportExportJobsService {
     };
   }
 
-  private async requireOwnedJob(actor: AuthenticatedUserContext, id: string) {
-    const job = await this.reportExportJobsRepository.findSelectedByIdForOwner(
-      id,
-      actor.id,
-    );
+  private async requireOwnedJob(
+    actor: AuthenticatedUserContext,
+    id: string,
+  ): Promise<ReportExportJobRecord> {
+    const job: unknown =
+      await this.reportExportJobsRepository.findSelectedByIdForOwner(
+        id,
+        actor.id,
+      );
 
     if (!job) {
       throw new NotFoundException('Export job not found');
     }
 
-    return job;
+    return job as ReportExportJobRecord;
   }
 
-  private async requireJob(id: string) {
-    const job = await this.reportExportJobsRepository.findSelectedById(id);
+  private async requireJob(id: string): Promise<ReportExportJobRecord> {
+    const job: unknown =
+      await this.reportExportJobsRepository.findSelectedById(id);
 
     if (!job) {
       throw new NotFoundException('Export job not found');
     }
 
-    return job;
+    return job as ReportExportJobRecord;
   }
 
-  private async getOrRefreshDownloadToken(job: {
-    id: string;
-    requestedByUserId: string;
-    uploadedFileId: string | null;
-    downloadTokenHash: string | null;
-    downloadTokenExpiresAt: Date | null;
-  }): Promise<{
+  private async getOrRefreshDownloadToken(job: DownloadTokenJob): Promise<{
     token: string;
     expiresAt: Date;
   }> {
@@ -221,13 +249,9 @@ export class ReportExportJobsService {
     return { token, expiresAt };
   }
 
-  private resolveReusableDownloadToken(job: {
-    id: string;
-    requestedByUserId: string;
-    uploadedFileId: string | null;
-    downloadTokenHash: string | null;
-    downloadTokenExpiresAt: Date | null;
-  }): { token: string; expiresAt: Date } | null {
+  private resolveReusableDownloadToken(
+    job: DownloadTokenJob,
+  ): { token: string; expiresAt: Date } | null {
     if (
       !job.uploadedFileId ||
       !job.downloadTokenHash ||
@@ -250,11 +274,10 @@ export class ReportExportJobsService {
   }
 
   private buildDownloadToken(
-    job: {
-      id: string;
-      requestedByUserId: string;
-      uploadedFileId: string | null;
-    },
+    job: Pick<
+      ReportExportJobRecord,
+      'id' | 'requestedByUserId' | 'uploadedFileId'
+    >,
     expiresAt: Date,
   ): string {
     return createHmac('sha256', this.configService.jwtAccessSecret)

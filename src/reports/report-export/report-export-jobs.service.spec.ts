@@ -220,4 +220,18 @@ describe('ReportExportJobsService', () => {
 
     jest.useRealTimers();
   });
+
+  it('rejects missing download tokens before hashing', async () => {
+    jobRecord.status = 'COMPLETED';
+    jobRecord.completedAt = new Date('2026-05-21T10:05:00.000Z');
+    jobRecord.uploadedFileId = 'file-1';
+
+    await expect(
+      service.resolveDownload(
+        { id: 'admin-1', role: 'ADMIN' } as never,
+        'job-1',
+        undefined,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
 });

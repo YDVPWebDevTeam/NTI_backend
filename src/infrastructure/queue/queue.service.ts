@@ -7,6 +7,8 @@ import type {
   EmailJobName,
   PdfJobData,
   PdfJobName,
+  ReportExportJobData,
+  ReportExportJobName,
 } from './queue.types';
 
 @Injectable()
@@ -14,6 +16,7 @@ export class QueueService {
   constructor(
     @InjectQueue(QUEUE_NAMES.EMAIL) private readonly emailQueue: Queue,
     @InjectQueue(QUEUE_NAMES.PDF) private readonly pdfQueue: Queue,
+    @InjectQueue(QUEUE_NAMES.REPORTS) private readonly reportsQueue: Queue,
   ) {}
 
   addEmail<K extends EmailJobName>(
@@ -40,5 +43,13 @@ export class QueueService {
     opts?: JobsOptions,
   ) {
     return this.pdfQueue.add(jobName, data, opts);
+  }
+
+  addReportExport<K extends ReportExportJobName>(
+    jobName: K,
+    data: ReportExportJobData[K],
+    opts?: JobsOptions,
+  ) {
+    return this.reportsQueue.add(jobName, data, opts);
   }
 }

@@ -12,6 +12,8 @@ jest.mock('../auth/guards/roles.guard', () => ({
 
 import { AdminApplicationsController } from './admin-applications.controller';
 import { ApplicationsService } from './applications.service';
+import { ROLES_KEY } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../../generated/prisma/enums';
 
 describe('AdminApplicationsController', () => {
   let controller: AdminApplicationsController;
@@ -43,6 +45,44 @@ describe('AdminApplicationsController', () => {
     controller = new AdminApplicationsController(
       applicationsService as unknown as ApplicationsService,
     );
+  });
+
+  it('restricts controller-wide roles to reviewer-side users', () => {
+    expect(Reflect.getMetadata(ROLES_KEY, AdminApplicationsController)).toEqual(
+      [UserRole.EVALUATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN],
+    );
+  });
+
+  it('allows mentors only on milestone endpoints', () => {
+    const listProgramAMilestones: object = Object.getOwnPropertyDescriptor(
+      AdminApplicationsController.prototype,
+      'listProgramAMilestones',
+    )!.value as object;
+    const createProgramAMilestone: object = Object.getOwnPropertyDescriptor(
+      AdminApplicationsController.prototype,
+      'createProgramAMilestone',
+    )!.value as object;
+    const updateProgramAMilestone: object = Object.getOwnPropertyDescriptor(
+      AdminApplicationsController.prototype,
+      'updateProgramAMilestone',
+    )!.value as object;
+
+    expect(Reflect.getMetadata(ROLES_KEY, listProgramAMilestones)).toEqual([
+      UserRole.EVALUATOR,
+      UserRole.ADMIN,
+      UserRole.SUPER_ADMIN,
+      UserRole.MENTOR,
+    ]);
+    expect(Reflect.getMetadata(ROLES_KEY, createProgramAMilestone)).toEqual([
+      UserRole.ADMIN,
+      UserRole.SUPER_ADMIN,
+      UserRole.MENTOR,
+    ]);
+    expect(Reflect.getMetadata(ROLES_KEY, updateProgramAMilestone)).toEqual([
+      UserRole.ADMIN,
+      UserRole.SUPER_ADMIN,
+      UserRole.MENTOR,
+    ]);
   });
 
   it('delegates formal verification with optional note', async () => {

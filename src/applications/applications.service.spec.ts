@@ -52,6 +52,7 @@ import {
   ApplicationStatus,
   CallStatus,
   DocumentType,
+  ProgramAMilestoneStatus,
   ProgramType,
   UploadStatus,
   UserRole,
@@ -71,6 +72,7 @@ describe('ApplicationsService', () => {
     assignMentor: jest.Mock;
     updateStatusIfCurrent: jest.Mock;
     updateDecisionIfCurrent: jest.Mock;
+    listInternalProgramAApplications: jest.Mock;
   };
   let applicationDocumentsRepository: {
     deactivateActiveBySlot: jest.Mock;
@@ -102,6 +104,12 @@ describe('ApplicationsService', () => {
   let programAMentorshipRepository: {
     createNote: jest.Mock;
     listNotes: jest.Mock;
+  };
+  let programAMilestonesRepository: {
+    createMilestone: jest.Mock;
+    listByApplication: jest.Mock;
+    findByIdForApplication: jest.Mock;
+    updateMilestone: jest.Mock;
   };
   let userRepository: {
     findUnique: jest.Mock;
@@ -280,6 +288,7 @@ describe('ApplicationsService', () => {
       assignMentor: jest.fn(),
       updateStatusIfCurrent: jest.fn(),
       updateDecisionIfCurrent: jest.fn(),
+      listInternalProgramAApplications: jest.fn(),
       transaction: jest.fn((fn: (db: never) => Promise<unknown>) =>
         fn({ tx: 'db-client' } as never),
       ),
@@ -325,6 +334,13 @@ describe('ApplicationsService', () => {
       listNotes: jest.fn(),
     };
 
+    programAMilestonesRepository = {
+      createMilestone: jest.fn(),
+      listByApplication: jest.fn(),
+      findByIdForApplication: jest.fn(),
+      updateMilestone: jest.fn(),
+    };
+
     userRepository = {
       findUnique: jest.fn(),
     };
@@ -361,6 +377,7 @@ describe('ApplicationsService', () => {
       needsInfoRepository as never,
       eligibilitySignalsService as never,
       programAMentorshipRepository as never,
+      programAMilestonesRepository as never,
       userRepository as never,
       queueService as never,
     );
@@ -632,6 +649,111 @@ describe('ApplicationsService', () => {
         role: UserRole.STUDENT,
       } as never),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  describe('internal Program A application list', () => {
+    it('lists internal Program A applications for reviewer-side user', async () => {
+      applicationsRepository.listInternalProgramAApplications.mockResolvedValue(
+        [
+          {
+            id: 'application-1',
+            status: ApplicationStatus.SUBMITTED,
+            submittedAt: new Date('2026-05-01T10:00:00.000Z'),
+            decidedAt: null,
+            mentorUserId: 'mentor-1',
+            mentorAssignedAt: new Date('2026-05-02T10:00:00.000Z'),
+            mentorAssignedById: 'admin-1',
+            createdAt: new Date('2026-04-30T10:00:00.000Z'),
+            updatedAt: new Date('2026-05-02T10:00:00.000Z'),
+            team: {
+              id: 'team-1',
+              name: 'Test Team',
+              leaderId: 'user-1',
+            },
+            call: {
+              id: 'call-1',
+              title: 'Program A Call',
+              type: ProgramType.PROGRAM_A,
+              status: CallStatus.OPEN,
+              opensAt: null,
+              closesAt: null,
+            },
+            eligibilitySignals: [
+              {
+                id: 'signal-1',
+                code: 'TEAM_SIZE_MIN',
+                passed: true,
+                reason: null,
+              },
+              {
+                id: 'signal-2',
+                code: 'ACADEMIC_EVIDENCE_REQUIRED',
+                passed: false,
+                reason: 'Missing academic evidence',
+              },
+            ],
+          },
+        ],
+      );
+
+      const result = await service.listInternalProgramAApplications({
+        id: 'evaluator-1',
+        email: 'evaluator@example.com',
+        role: UserRole.EVALUATOR,
+      } as never);
+
+      expect(
+        applicationsRepository.listInternalProgramAApplications,
+      ).toHaveBeenCalledTimes(1);
+
+      expect(result).toEqual([
+        {
+          id: 'application-1',
+          status: ApplicationStatus.SUBMITTED,
+          submittedAt: new Date('2026-05-01T10:00:00.000Z'),
+          decidedAt: null,
+          team: {
+            id: 'team-1',
+            name: 'Test Team',
+            leaderId: 'user-1',
+          },
+          call: {
+            id: 'call-1',
+            title: 'Program A Call',
+            type: ProgramType.PROGRAM_A,
+            status: CallStatus.OPEN,
+            opensAt: null,
+            closesAt: null,
+          },
+          mentorAssignment: {
+            mentorUserId: 'mentor-1',
+            mentorAssignedAt: new Date('2026-05-02T10:00:00.000Z'),
+            mentorAssignedById: 'admin-1',
+          },
+          eligibilitySignalSummary: {
+            total: 2,
+            passed: 1,
+            failed: 1,
+          },
+          createdAt: new Date('2026-04-30T10:00:00.000Z'),
+          updatedAt: new Date('2026-05-02T10:00:00.000Z'),
+        },
+      ]);
+    });
+
+    it('forbids student from listing internal Program A applications', async () => {
+      await expect(
+        service.listInternalProgramAApplications({
+          id: 'user-1',
+          email: 'lead@example.com',
+          role: UserRole.STUDENT,
+        } as never),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(
+        applicationsRepository.listInternalProgramAApplications,
+      ).not.toHaveBeenCalled();
+    });
   });
 
   it('submits a complete draft application and locks the team', async () => {
@@ -1298,6 +1420,267 @@ describe('ApplicationsService', () => {
       'application-1',
     );
     expect(result.map((note) => note.id)).toEqual(['note-1', 'note-2']);
+  });
+
+  describe('Program A milestones', () => {
+    const approvedProgramAApplication = {
+      ...workflowApplication,
+      status: ApplicationStatus.APPROVED,
+      mentorUserId: 'mentor-1',
+    };
+
+    const milestone = {
+      id: 'milestone-1',
+      applicationId: 'application-1',
+      title: 'Build MVP prototype',
+      description: 'Prepare a working MVP version for internal demo.',
+      dueAt: new Date('2026-06-30T23:59:59.000Z'),
+      status: ProgramAMilestoneStatus.PLANNED,
+      progressNote: 'Initial planning completed.',
+      createdAt: new Date('2026-06-01T10:00:00.000Z'),
+      updatedAt: new Date('2026-06-01T10:00:00.000Z'),
+    };
+
+    it('allows admin to create Program A milestone for approved application', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+        approvedProgramAApplication,
+      );
+      programAMilestonesRepository.createMilestone.mockResolvedValue(milestone);
+
+      const result = await service.createProgramAMilestone(
+        'application-1',
+        {
+          id: 'admin-1',
+          email: 'admin@example.com',
+          role: UserRole.ADMIN,
+        } as never,
+        {
+          title: 'Build MVP prototype',
+          description: 'Prepare a working MVP version for internal demo.',
+          dueAt: '2026-06-30T23:59:59.000Z',
+          status: ProgramAMilestoneStatus.PLANNED,
+          progressNote: 'Initial planning completed.',
+        },
+      );
+
+      expect(programAMilestonesRepository.createMilestone).toHaveBeenCalledWith(
+        {
+          applicationId: 'application-1',
+          title: 'Build MVP prototype',
+          description: 'Prepare a working MVP version for internal demo.',
+          dueAt: new Date('2026-06-30T23:59:59.000Z'),
+          status: ProgramAMilestoneStatus.PLANNED,
+          progressNote: 'Initial planning completed.',
+        },
+        { tx: 'db-client' },
+      );
+      expect(result.id).toBe('milestone-1');
+      expect(result.status).toBe(ProgramAMilestoneStatus.PLANNED);
+    });
+
+    it('allows assigned mentor to create Program A milestone', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+        approvedProgramAApplication,
+      );
+      programAMilestonesRepository.createMilestone.mockResolvedValue(milestone);
+
+      const result = await service.createProgramAMilestone(
+        'application-1',
+        {
+          id: 'mentor-1',
+          email: 'mentor@example.com',
+          role: UserRole.MENTOR,
+        } as never,
+        {
+          title: 'Build MVP prototype',
+        },
+      );
+
+      expect(result.id).toBe('milestone-1');
+      expect(programAMilestonesRepository.createMilestone).toHaveBeenCalled();
+    });
+
+    it('rejects whitespace-only milestone title on create', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+        approvedProgramAApplication,
+      );
+
+      await expect(
+        service.createProgramAMilestone(
+          'application-1',
+          {
+            id: 'admin-1',
+            email: 'admin@example.com',
+            role: UserRole.ADMIN,
+          } as never,
+          {
+            title: '   ',
+          },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(
+        programAMilestonesRepository.createMilestone,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('forbids student from creating Program A milestone', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+        approvedProgramAApplication,
+      );
+
+      await expect(
+        service.createProgramAMilestone(
+          'application-1',
+          {
+            id: 'user-1',
+            email: 'lead@example.com',
+            role: UserRole.STUDENT,
+          } as never,
+          {
+            title: 'Build MVP prototype',
+          },
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('rejects milestone creation before application is approved', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+        ...workflowApplication,
+        status: ApplicationStatus.EVALUATING,
+        mentorUserId: 'mentor-1',
+      });
+
+      await expect(
+        service.createProgramAMilestone(
+          'application-1',
+          {
+            id: 'admin-1',
+            email: 'admin@example.com',
+            role: UserRole.ADMIN,
+          } as never,
+          {
+            title: 'Build MVP prototype',
+          },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('lists Program A milestones for reviewer-side user', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+        approvedProgramAApplication,
+      );
+      programAMilestonesRepository.listByApplication.mockResolvedValue([
+        milestone,
+      ]);
+
+      const result = await service.listProgramAMilestones('application-1', {
+        id: 'evaluator-1',
+        email: 'evaluator@example.com',
+        role: UserRole.EVALUATOR,
+      } as never);
+
+      expect(
+        programAMilestonesRepository.listByApplication,
+      ).toHaveBeenCalledWith('application-1');
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('milestone-1');
+    });
+
+    it('updates Program A milestone', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+        approvedProgramAApplication,
+      );
+      programAMilestonesRepository.findByIdForApplication.mockResolvedValue(
+        milestone,
+      );
+      programAMilestonesRepository.updateMilestone.mockResolvedValue({
+        ...milestone,
+        status: ProgramAMilestoneStatus.IN_PROGRESS,
+        progressNote: 'Backend integration started.',
+      });
+
+      const result = await service.updateProgramAMilestone(
+        'application-1',
+        'milestone-1',
+        {
+          id: 'admin-1',
+          email: 'admin@example.com',
+          role: UserRole.ADMIN,
+        } as never,
+        {
+          status: ProgramAMilestoneStatus.IN_PROGRESS,
+          progressNote: 'Backend integration started.',
+        },
+      );
+
+      expect(
+        programAMilestonesRepository.findByIdForApplication,
+      ).toHaveBeenCalledWith('application-1', 'milestone-1', {
+        tx: 'db-client',
+      });
+      expect(programAMilestonesRepository.updateMilestone).toHaveBeenCalledWith(
+        'milestone-1',
+        {
+          status: ProgramAMilestoneStatus.IN_PROGRESS,
+          progressNote: 'Backend integration started.',
+        },
+        { tx: 'db-client' },
+      );
+      expect(result.status).toBe(ProgramAMilestoneStatus.IN_PROGRESS);
+    });
+
+    it('rejects whitespace-only milestone title on update', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+        approvedProgramAApplication,
+      );
+      programAMilestonesRepository.findByIdForApplication.mockResolvedValue(
+        milestone,
+      );
+
+      await expect(
+        service.updateProgramAMilestone(
+          'application-1',
+          'milestone-1',
+          {
+            id: 'admin-1',
+            email: 'admin@example.com',
+            role: UserRole.ADMIN,
+          } as never,
+          {
+            title: '   ',
+          },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(
+        programAMilestonesRepository.updateMilestone,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('throws not found when updating missing Program A milestone', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+        approvedProgramAApplication,
+      );
+      programAMilestonesRepository.findByIdForApplication.mockResolvedValue(
+        null,
+      );
+
+      await expect(
+        service.updateProgramAMilestone(
+          'application-1',
+          'missing-milestone',
+          {
+            id: 'admin-1',
+            email: 'admin@example.com',
+            role: UserRole.ADMIN,
+          } as never,
+          {
+            status: ProgramAMilestoneStatus.DONE,
+          },
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
   });
 
   it('starts onboarding for approved Program A application', async () => {

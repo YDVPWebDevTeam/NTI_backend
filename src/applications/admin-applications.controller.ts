@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -29,7 +31,11 @@ import {
 import { ApplicationsService } from './applications.service';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationLifecycleTransitionDto } from './dto/application-lifecycle-transition.dto';
+import { CreateProgramAMilestoneDto } from './dto/create-program-a-milestone.dto';
 import { OptionalApplicationTransitionNoteDto } from './dto/optional-application-transition-note.dto';
+import { ProgramAMilestoneDto } from './dto/program-a-milestone.dto';
+import { UpdateProgramAMilestoneDto } from './dto/update-program-a-milestone.dto';
+import { InternalProgramAApplicationDto } from './dto/internal-program-a-application.dto';
 
 @ApiTags('Admin')
 @Controller('admin/applications')
@@ -37,6 +43,52 @@ import { OptionalApplicationTransitionNoteDto } from './dto/optional-application
 @Roles(UserRole.EVALUATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
 export class AdminApplicationsController {
   constructor(private readonly applicationsService: ApplicationsService) {}
+  @Get('program-a')
+  listProgramAApplications(
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<InternalProgramAApplicationDto[]> {
+    return this.applicationsService.listInternalProgramAApplications(user);
+  }
+
+  @Roles(
+    UserRole.EVALUATOR,
+    UserRole.ADMIN,
+    UserRole.SUPER_ADMIN,
+    UserRole.MENTOR,
+  )
+  @Get(':id/program-a-milestones')
+  listProgramAMilestones(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ProgramAMilestoneDto[]> {
+    return this.applicationsService.listProgramAMilestones(id, user);
+  }
+
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MENTOR)
+  @Post(':id/program-a-milestones')
+  createProgramAMilestone(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: CreateProgramAMilestoneDto,
+  ): Promise<ProgramAMilestoneDto> {
+    return this.applicationsService.createProgramAMilestone(id, user, dto);
+  }
+
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MENTOR)
+  @Patch(':id/program-a-milestones/:milestoneId')
+  updateProgramAMilestone(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('milestoneId', ParseUUIDPipe) milestoneId: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+    @Body() dto: UpdateProgramAMilestoneDto,
+  ): Promise<ProgramAMilestoneDto> {
+    return this.applicationsService.updateProgramAMilestone(
+      id,
+      milestoneId,
+      user,
+      dto,
+    );
+  }
 
   @FormalVerifyApplicationApi()
   @HttpCode(HttpStatus.OK)

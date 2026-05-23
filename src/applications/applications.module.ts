@@ -20,6 +20,7 @@ import { UserRepository } from '../user/user.repository';
 import { ApplicationSectionsRulesService } from './rules/application-sections-rules.service';
 import { ApplicationSectionsService } from './application-sections.service';
 import { ApplicationEvaluationsRepository } from './application-evaluations.repository';
+import { ProgramAMilestonesRepository } from './program-a-milestones.repository';
 
 @Module({
   imports: [AuthModule, TeamModule, FilesModule, EligibilitySignalsModule],
@@ -36,6 +37,7 @@ import { ApplicationEvaluationsRepository } from './application-evaluations.repo
     ApplicationDocumentsRepository,
     CallsRepository,
     ProgramAMentorshipRepository,
+    ProgramAMilestonesRepository,
     UserRepository,
     ApplicationRulesService,
     ApplicationSectionsRulesService,

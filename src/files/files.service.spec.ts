@@ -308,6 +308,46 @@ describe('FilesService', () => {
     expect(response.status).toBe('UPLOADED');
   });
 
+  it('allows server generated files with mime types outside the user upload allowlist', async () => {
+    const buffer = Buffer.from('id,name\n1,Alpha');
+
+    filesRepository.create.mockResolvedValue({
+      id: 'file-1',
+    });
+    filesRepository.markUploaded.mockResolvedValue({
+      id: 'file-1',
+      ownerId: 'user-1',
+      key: 'users/user-1/report-export/2026-05-21/file.csv',
+      originalName: 'report.csv',
+      mimeType: 'text/csv',
+      size: buffer.length,
+      status: 'UPLOADED',
+      visibility: 'PRIVATE',
+      uploadedAt: new Date('2026-05-21T18:00:00.000Z'),
+    });
+
+    const response = await service.createServerGeneratedFile(authUser, {
+      filename: 'report.csv',
+      mimeType: 'text/csv',
+      buffer,
+      purpose: 'report-export',
+    });
+
+    expect(filesRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mimeType: 'text/csv',
+        size: buffer.length,
+      }),
+    );
+    expect(storageService.putObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: buffer,
+        contentType: 'text/csv',
+      }),
+    );
+    expect(response.status).toBe('UPLOADED');
+  });
+
   it('marks generated file as failed when direct storage upload fails', async () => {
     filesRepository.create.mockResolvedValue({
       id: 'file-1',

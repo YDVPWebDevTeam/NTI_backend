@@ -24,10 +24,13 @@ import { ProgramBTeamApplicationModule } from './programs/program-b/team-applica
 import { StudentProfileModule } from './student-profile';
 import { ApplicationsModule } from './applications';
 import { AccountModule } from './account/account.module';
+import { ProgramBCompanyOverviewModule } from './programs/program-b/company-overview';
+import { ReportExportProcessor } from './reports/report-export/report-export.processor';
+import { ReportsModule } from './reports/reports.module';
 
 const queueProcessorProviders =
   process.env.RUN_QUEUE_PROCESSORS === 'true'
-    ? [EmailProcessor, PdfProcessor]
+    ? [EmailProcessor, PdfProcessor, ReportExportProcessor]
     : [];
 
 @Module({
@@ -60,6 +63,8 @@ const queueProcessorProviders =
     StudentProfileModule,
     ApplicationsModule,
     AccountModule,
+    ProgramBCompanyOverviewModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [

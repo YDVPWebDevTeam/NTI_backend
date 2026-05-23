@@ -108,11 +108,17 @@ export const PDF_JOBS = {
   RENDER_TEMPLATE: 'render-template',
 } as const;
 
+export const REPORT_EXPORT_JOBS = {
+  GENERATE: 'generate',
+} as const;
+
 export const PDF_TEMPLATES = {
   REPORT: 'report',
 } as const;
 
 export type PdfJobName = (typeof PDF_JOBS)[keyof typeof PDF_JOBS];
+export type ReportExportJobName =
+  (typeof REPORT_EXPORT_JOBS)[keyof typeof REPORT_EXPORT_JOBS];
 export type PdfTemplateName =
   (typeof PDF_TEMPLATES)[keyof typeof PDF_TEMPLATES];
 
@@ -137,5 +143,29 @@ export interface PdfJobResult {
     contentType: 'application/pdf';
     bufferBase64: string;
     fileName: string;
+  };
+}
+
+export type ReportExportQueuedQuery = {
+  dataset: 'applications' | 'program-b';
+  format: 'csv' | 'xlsx' | 'pdf';
+  dateFrom?: string;
+  dateTo?: string;
+  programType?: string;
+  status?: string;
+  sort?: string;
+  order?: 'asc' | 'desc';
+};
+
+export interface ReportExportJobData {
+  [REPORT_EXPORT_JOBS.GENERATE]: {
+    exportJobId: string;
+    query: ReportExportQueuedQuery;
+  };
+}
+
+export interface ReportExportJobResult {
+  [REPORT_EXPORT_JOBS.GENERATE]: {
+    exportJobId: string;
   };
 }

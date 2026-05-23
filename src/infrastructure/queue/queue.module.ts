@@ -26,6 +26,7 @@ const DEFAULT_JOB_OPTIONS = {
     BullModule.registerQueue(
       { name: QUEUE_NAMES.EMAIL },
       { name: QUEUE_NAMES.PDF },
+      { name: QUEUE_NAMES.REPORTS },
     ),
   ],
   providers: [QueueService],

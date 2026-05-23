@@ -171,6 +171,13 @@ enum NeedsInfoItemStatus {
   RESOLVED
 }
 
+enum ProgramAMilestoneStatus {
+  PLANNED
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
 enum ProgramBProjectStatus {
   ACTIVE
   BLOCKED
@@ -254,10 +261,12 @@ model User {
   applicationDocumentsForMember    ApplicationDocument[]       @relation("ApplicationDocumentMember")
   productOwnerForBacklogItems      BacklogItem[]               @relation("BacklogItemProductOwner")
   productOwnerForProgramBProjects  ProgramBProject[]           @relation("ProgramBProjectProductOwner")
-  assignedProgramBProjectsAsMentor ProgramBProject[]           @relation("ProgramBProjectMentor")
-  programBMentorAssignmentsMade    ProgramBProject[]           @relation("ProgramBProjectMentorAssignedBy")
   programBMentoringNotesAuthored   ProgramBMentoringNote[]     @relation("ProgramBMentoringNoteAuthor")
   programBPoReviewsAuthored        ProgramBPoReview[]          @relation("ProgramBPoReviewAuthor")
+  auditEvents                      AuditEvent[]                @relation("AuditEventActor")
+  requestedReportExportJobs        ReportExportJob[]           @relation("ReportExportJobRequestedBy")
+  assignedProgramBProjectsAsMentor ProgramBProject[]           @relation("ProgramBProjectMentor")
+  programBMentorAssignmentsMade    ProgramBProject[]           @relation("ProgramBProjectMentorAssignedBy")
 
   needsInfoItemsCreated           NeedsInfoItem[]          @relation("NeedsInfoCreatedBy")
   needsInfoItemsResolved          NeedsInfoItem[]          @relation("NeedsInfoResolvedBy")
@@ -308,6 +317,7 @@ model UploadedFile {
   programBBacklogDocuments   ProgramBBacklogDocument[]
   programBProjectDocuments   ProgramBProjectDocument[]
   programBTeamApplicationCvs ProgramBTeamApplicationCv[]
+  reportExportJobs           ReportExportJob[]
 
   @@index([ownerId, status])
   @@index([status, uploadUrlExpiresAt])
@@ -392,8 +402,9 @@ model Application {
   mentorAssignedById String?
   mentorAssignedBy   User?                    @relation("ApplicationMentorAssignedBy", fields: [mentorAssignedById], references: [id], onDelete: SetNull)
 
-  mentorshipNotes  ProgramAMentorshipNote[]
-  programBProjects ProgramBProject[]
+  mentorshipNotes    ProgramAMentorshipNote[]
+  programAMilestones ProgramAMilestone[]
+  programBProjects   ProgramBProject[]
 
   status      ApplicationStatus @default(DRAFT)
   submittedAt DateTime?
@@ -467,6 +478,26 @@ model ProgramAMentorshipNote {
 
   @@index([applicationId, createdAt, id])
   @@index([authorId, createdAt])
+}
+
+model ProgramAMilestone {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  dueAt       DateTime?
+  status      ProgramAMilestoneStatus @default(PLANNED)
+
+  progressNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([applicationId, createdAt])
+  @@index([applicationId, status])
 }
 
 model EligibilitySignal {
@@ -1091,6 +1122,50 @@ model SystemInvitation {
 
   @@index([status, expiresAt, email])
   @@index([email, roleToAssign, status, expiresAt])
+}
+
+model AuditEvent {
+  id String @id @default(uuid())
+
+  actorUserId String
+  actorUser   User   @relation("AuditEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json
+
+  createdAt DateTime @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
+}
+
+model ReportExportJob {
+  id String @id
+
+  requestedByUserId String
+  requestedByUser   User   @relation("ReportExportJobRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+
+  dataset String
+  format  String
+  status  String
+
+  completedAt  DateTime?
+  errorMessage String?
+
+  uploadedFileId String?
+  uploadedFile   UploadedFile? @relation(fields: [uploadedFileId], references: [id], onDelete: SetNull)
+
+  downloadTokenHash      String?
+  downloadTokenExpiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([requestedByUserId, createdAt])
+  @@index([status, createdAt])
 }
 
 model University {

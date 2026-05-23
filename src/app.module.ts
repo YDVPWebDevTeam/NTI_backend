@@ -22,6 +22,7 @@ import { ProgramBProjectsModule } from './programs/program-b/projects/program-b-
 import { ProgramBTeamApplicationModule } from './programs/program-b/team-application/program-b-team-application.module';
 import { StudentProfileModule } from './student-profile';
 import { ApplicationsModule } from './applications';
+import { ProgramBCompanyOverviewModule } from './programs/program-b/company-overview';
 import { ReportExportProcessor } from './reports/report-export/report-export.processor';
 import { ReportsModule } from './reports/reports.module';
 
@@ -59,6 +60,7 @@ const queueProcessorProviders =
     FilesModule,
     StudentProfileModule,
     ApplicationsModule,
+    ProgramBCompanyOverviewModule,
     ReportsModule,
   ],
   controllers: [AppController],

@@ -1,10 +1,10 @@
-import type { EmailChangeToken } from '../../generated/prisma/client';
-import type { PrismaDbClient } from '../infrastructure/database';
+import type { EmailChangeToken } from '../../../generated/prisma/client';
+import type { PrismaDbClient } from '../../infrastructure/database';
 
-jest.mock('../infrastructure/config', () => ({
+jest.mock('../../infrastructure/config', () => ({
   ConfigService: class ConfigService {},
 }));
-jest.mock('../infrastructure/hashing', () => ({
+jest.mock('../../infrastructure/hashing', () => ({
   HashingService: class HashingService {},
 }));
 jest.mock('./email-change-token.repository', () => ({

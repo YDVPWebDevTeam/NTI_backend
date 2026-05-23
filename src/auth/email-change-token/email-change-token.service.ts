@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { isEmail } from 'class-validator';
-import type { EmailChangeToken, Prisma } from '../../generated/prisma/client';
-import type { PrismaDbClient } from '../infrastructure/database';
-import { ConfigService } from '../infrastructure/config';
-import { HashingService } from '../infrastructure/hashing';
-import { addHours } from '../common/time/time.utils';
+import type {
+  EmailChangeToken,
+  Prisma,
+} from '../../../generated/prisma/client';
+import type { PrismaDbClient } from '../../infrastructure/database';
+import { ConfigService } from '../../infrastructure/config';
+import { HashingService } from '../../infrastructure/hashing';
+import { addHours } from '../../common/time/time.utils';
+import { resolveDevBypassEmail } from '../token/dev-email-bypass.utils';
 import { EmailChangeTokenRepository } from './email-change-token.repository';
 
 export type EmailChangeTokenPayload = {
@@ -84,25 +87,7 @@ export class EmailChangeTokenService {
   }
 
   private resolveDevBypassEmail(token: string): string | null {
-    const bypassToken = this.configService.devEmailVerificationBypassToken;
-
-    if (
-      !this.configService.isDevelopment ||
-      !this.configService.devEmailVerificationBypassEnabled
-    ) {
-      return null;
-    }
-
-    if (bypassToken) {
-      const dynamicPrefix = `${bypassToken}:`;
-      if (token.startsWith(dynamicPrefix)) {
-        const email = token.slice(dynamicPrefix.length).trim().toLowerCase();
-        return this.isValidEmail(email) ? email : null;
-      }
-    }
-
-    const directEmailToken = token.trim().toLowerCase();
-    return this.isValidEmail(directEmailToken) ? directEmailToken : null;
+    return resolveDevBypassEmail(token, this.configService);
   }
 
   private async findLatestPendingTokenForBypassEmail(
@@ -129,10 +114,6 @@ export class EmailChangeTokenService {
         )
       )[0] ?? null
     );
-  }
-
-  private isValidEmail(value: string): boolean {
-    return isEmail(value);
   }
 
   generateToken(): string {

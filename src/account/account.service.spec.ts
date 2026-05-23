@@ -20,7 +20,7 @@ jest.mock('../infrastructure/queue', () => ({
   QueueService: class QueueService {},
 }));
 
-jest.mock('./email-change-token.service', () => ({
+jest.mock('../auth/email-change-token/email-change-token.service', () => ({
   EmailChangeTokenService: class EmailChangeTokenService {},
 }));
 
@@ -36,7 +36,7 @@ import { RefreshTokenService } from '../auth/refresh-token/refresh-token.service
 import { HashingService } from '../infrastructure/hashing';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { UserService } from '../user/user.service';
-import { EmailChangeTokenService } from './email-change-token.service';
+import { EmailChangeTokenService } from '../auth/email-change-token/email-change-token.service';
 import { ACCOUNT_MESSAGES } from './account.messages';
 
 describe('AccountService', () => {

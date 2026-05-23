@@ -5,13 +5,13 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import { EmailChangeTokenService } from '../auth/email-change-token/email-change-token.service';
 import { isPrismaUniqueConstraintError } from '../common/prisma/prisma-error.utils';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { UserService } from '../user/user.service';
 import { HashingService } from '../infrastructure/hashing';
 import { RefreshTokenService } from '../auth/refresh-token/refresh-token.service';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
-import { EmailChangeTokenService } from './email-change-token.service';
 import { ACCOUNT_MESSAGES } from './account.messages';
 
 export type AccountMessageResponse = {

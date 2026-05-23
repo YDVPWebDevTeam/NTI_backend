@@ -103,6 +103,23 @@ export class EmailTemplateRegistryService {
             subject: 'Password reset',
           }),
       },
+      [EMAIL_TEMPLATES.EMAIL_CHANGE_CONFIRMATION]: {
+        render: (data) =>
+          this.createActionEmail({
+            title: 'Confirm your new email',
+            preheader: 'Confirm the new email address for your NTI account.',
+            intro: [
+              `We received a request to change your NTI email address to ${data.newEmail}.`,
+              'If you made this request, confirm the new email address using the secure link below.',
+            ],
+            cta: {
+              label: 'Confirm new email',
+              url: `${this.configService.frontUrl}/account/change-email/confirm?token=${encodeURIComponent(data.token)}`,
+            },
+            note: 'This link is single-use. If you did not request this change, you can ignore this email.',
+            subject: 'Confirm email change',
+          }),
+      },
       [EMAIL_TEMPLATES.TEAM_INVITATION]: {
         render: (data) =>
           this.createActionEmail({

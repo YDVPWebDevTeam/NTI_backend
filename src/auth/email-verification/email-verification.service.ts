@@ -8,6 +8,7 @@ import { addHours } from '../../common/time/time.utils';
 import { EmailVerificationRepository } from './email-verification.repository';
 import { ConfigService } from '../../infrastructure/config';
 import { HashingService } from '../../infrastructure/hashing';
+import { resolveDevBypassEmail } from '../token/dev-email-bypass.utils';
 
 @Injectable()
 export class EmailVerificationService {
@@ -74,25 +75,7 @@ export class EmailVerificationService {
   }
 
   private resolveDevBypassEmail(token: string): string | null {
-    const bypassToken = this.configService.devEmailVerificationBypassToken;
-
-    if (
-      !this.configService.isDevelopment ||
-      !this.configService.devEmailVerificationBypassEnabled
-    ) {
-      return null;
-    }
-
-    if (bypassToken) {
-      const dynamicPrefix = `${bypassToken}:`;
-      if (token.startsWith(dynamicPrefix)) {
-        const email = token.slice(dynamicPrefix.length).trim().toLowerCase();
-        return this.isValidEmail(email) ? email : null;
-      }
-    }
-
-    const directEmailToken = token.trim().toLowerCase();
-    return this.isValidEmail(directEmailToken) ? directEmailToken : null;
+    return resolveDevBypassEmail(token, this.configService);
   }
 
   private async findLatestPendingTokenForBypassEmail(
@@ -121,10 +104,6 @@ export class EmailVerificationService {
         )
       )[0] ?? null
     );
-  }
-
-  private isValidEmail(value: string): boolean {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   }
 
   markAccepted(

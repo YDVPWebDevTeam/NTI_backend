@@ -12,6 +12,8 @@ import { JwtAuthStrategy } from './strategies/jwt-auth.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshJwtStrategy } from './strategies/refresh-auth.strategy';
 import { RefreshJwtGuard } from './guards/refresh-auth.guard';
+import { EmailChangeTokenRepository } from './email-change-token/email-change-token.repository';
+import { EmailChangeTokenService } from './email-change-token/email-change-token.service';
 import { EmailVerificationRepository } from './email-verification/email-verification.repository';
 import { EmailVerificationService } from './email-verification/email-verification.service';
 import { ResetTokenRepository } from './reset-token/reset-token.repository';
@@ -43,6 +45,8 @@ import { OrganizationRepository } from 'src/organization/organization.repository
     AuthCookieService,
     AuthService,
     AuthRegistrationService,
+    EmailChangeTokenRepository,
+    EmailChangeTokenService,
     EmailVerificationRepository,
     EmailVerificationService,
     ResetTokenRepository,
@@ -59,6 +63,7 @@ import { OrganizationRepository } from 'src/organization/organization.repository
   ],
   exports: [
     AuthService,
+    EmailChangeTokenService,
     EmailVerificationService,
     ResetTokenService,
     RefreshTokenService,

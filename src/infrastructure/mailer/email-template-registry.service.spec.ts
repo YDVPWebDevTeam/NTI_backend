@@ -36,6 +36,22 @@ describe('EmailTemplateRegistryService', () => {
     );
   });
 
+  it('renders email change confirmation with the new email in the content', () => {
+    const result = service.render(EMAIL_TEMPLATES.EMAIL_CHANGE_CONFIRMATION, {
+      token: 'email-change-token',
+      newEmail: 'new@example.com',
+    });
+
+    expect(result.subject).toBe('Confirm email change');
+    expect(result.html).toContain('new@example.com');
+    expect(result.html).toContain(
+      'https://app.nti.test/account/change-email/confirm?token=email-change-token',
+    );
+    expect(result.text).toContain(
+      'Confirm new email: https://app.nti.test/account/change-email/confirm?token=email-change-token',
+    );
+  });
+
   it('escapes dynamic content in organization rejection emails', () => {
     const result = service.render(EMAIL_TEMPLATES.ORG_REJECTED, {
       organizationId: 'org-1',
@@ -78,6 +94,12 @@ describe('EmailTemplateRegistryService', () => {
       service.render(EMAIL_TEMPLATES.PASSWORD_RESET, { token: 'reset-token' })
         .subject,
     ).toBe('Password reset');
+    expect(
+      service.render(EMAIL_TEMPLATES.EMAIL_CHANGE_CONFIRMATION, {
+        token: 'email-change-token',
+        newEmail: 'new@example.com',
+      }).subject,
+    ).toBe('Confirm email change');
     expect(
       service.render(EMAIL_TEMPLATES.TEAM_INVITATION, {
         teamName: 'Alpha Team',

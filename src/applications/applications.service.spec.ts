@@ -1500,6 +1500,30 @@ describe('ApplicationsService', () => {
       expect(programAMilestonesRepository.createMilestone).toHaveBeenCalled();
     });
 
+    it('rejects whitespace-only milestone title on create', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+        approvedProgramAApplication,
+      );
+
+      await expect(
+        service.createProgramAMilestone(
+          'application-1',
+          {
+            id: 'admin-1',
+            email: 'admin@example.com',
+            role: UserRole.ADMIN,
+          } as never,
+          {
+            title: '   ',
+          },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(
+        programAMilestonesRepository.createMilestone,
+      ).not.toHaveBeenCalled();
+    });
+
     it('forbids student from creating Program A milestone', async () => {
       applicationsRepository.findByIdForWorkflow.mockResolvedValue(
         approvedProgramAApplication,
@@ -1604,6 +1628,34 @@ describe('ApplicationsService', () => {
         { tx: 'db-client' },
       );
       expect(result.status).toBe(ProgramAMilestoneStatus.IN_PROGRESS);
+    });
+
+    it('rejects whitespace-only milestone title on update', async () => {
+      applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+        approvedProgramAApplication,
+      );
+      programAMilestonesRepository.findByIdForApplication.mockResolvedValue(
+        milestone,
+      );
+
+      await expect(
+        service.updateProgramAMilestone(
+          'application-1',
+          'milestone-1',
+          {
+            id: 'admin-1',
+            email: 'admin@example.com',
+            role: UserRole.ADMIN,
+          } as never,
+          {
+            title: '   ',
+          },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(
+        programAMilestonesRepository.updateMilestone,
+      ).not.toHaveBeenCalled();
     });
 
     it('throws not found when updating missing Program A milestone', async () => {

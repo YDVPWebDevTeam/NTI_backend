@@ -1019,10 +1019,15 @@ export class ApplicationsService {
       this.ensureProgramATrackingAccess(application, user);
       this.ensureArchivedApplicationIsReadOnlyForNonAdmin(application, user);
 
+      const title = dto.title.trim();
+      if (title.length === 0) {
+        throw new BadRequestException('Milestone title cannot be empty');
+      }
+
       const milestone = await this.programAMilestonesRepository.createMilestone(
         {
           applicationId: application.id,
-          title: dto.title.trim(),
+          title,
           description: dto.description?.trim() || null,
           dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
           status: dto.status,
@@ -1080,10 +1085,18 @@ export class ApplicationsService {
         throw new NotFoundException('Program A milestone not found');
       }
 
+      const trimmedTitle = dto.title?.trim();
+      if (
+        dto.title !== undefined &&
+        (!trimmedTitle || trimmedTitle.length === 0)
+      ) {
+        throw new BadRequestException('Milestone title cannot be empty');
+      }
+
       const milestone = await this.programAMilestonesRepository.updateMilestone(
         existing.id,
         {
-          ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
+          ...(dto.title !== undefined ? { title: trimmedTitle! } : {}),
           ...(dto.description !== undefined
             ? { description: dto.description?.trim() || null }
             : {}),

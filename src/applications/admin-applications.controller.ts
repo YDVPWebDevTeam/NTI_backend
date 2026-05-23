@@ -40,12 +40,7 @@ import { InternalProgramAApplicationDto } from './dto/internal-program-a-applica
 @ApiTags('Admin')
 @Controller('admin/applications')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(
-  UserRole.EVALUATOR,
-  UserRole.ADMIN,
-  UserRole.SUPER_ADMIN,
-  UserRole.MENTOR,
-)
+@Roles(UserRole.EVALUATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
 export class AdminApplicationsController {
   constructor(private readonly applicationsService: ApplicationsService) {}
   @Get('program-a')
@@ -55,6 +50,12 @@ export class AdminApplicationsController {
     return this.applicationsService.listInternalProgramAApplications(user);
   }
 
+  @Roles(
+    UserRole.EVALUATOR,
+    UserRole.ADMIN,
+    UserRole.SUPER_ADMIN,
+    UserRole.MENTOR,
+  )
   @Get(':id/program-a-milestones')
   listProgramAMilestones(
     @Param('id', ParseUUIDPipe) id: string,
@@ -63,6 +64,7 @@ export class AdminApplicationsController {
     return this.applicationsService.listProgramAMilestones(id, user);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MENTOR)
   @Post(':id/program-a-milestones')
   createProgramAMilestone(
     @Param('id', ParseUUIDPipe) id: string,
@@ -72,6 +74,7 @@ export class AdminApplicationsController {
     return this.applicationsService.createProgramAMilestone(id, user, dto);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MENTOR)
   @Patch(':id/program-a-milestones/:milestoneId')
   updateProgramAMilestone(
     @Param('id', ParseUUIDPipe) id: string,

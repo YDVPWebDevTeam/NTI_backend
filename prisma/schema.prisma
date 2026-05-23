@@ -171,6 +171,13 @@ enum NeedsInfoItemStatus {
   RESOLVED
 }
 
+enum ProgramAMilestoneStatus {
+  PLANNED
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
 enum ProgramBProjectStatus {
   ACTIVE
   BLOCKED
@@ -394,8 +401,9 @@ model Application {
   mentorAssignedById String?
   mentorAssignedBy   User?                    @relation("ApplicationMentorAssignedBy", fields: [mentorAssignedById], references: [id], onDelete: SetNull)
 
-  mentorshipNotes  ProgramAMentorshipNote[]
-  programBProjects ProgramBProject[]
+  mentorshipNotes    ProgramAMentorshipNote[]
+  programAMilestones ProgramAMilestone[]
+  programBProjects   ProgramBProject[]
 
   status      ApplicationStatus @default(DRAFT)
   submittedAt DateTime?
@@ -469,6 +477,26 @@ model ProgramAMentorshipNote {
 
   @@index([applicationId, createdAt, id])
   @@index([authorId, createdAt])
+}
+
+model ProgramAMilestone {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  dueAt       DateTime?
+  status      ProgramAMilestoneStatus @default(PLANNED)
+
+  progressNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([applicationId, createdAt])
+  @@index([applicationId, status])
 }
 
 model EligibilitySignal {

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Application, Prisma } from '../../generated/prisma/client';
-import { ApplicationStatus } from '../../generated/prisma/enums';
+import { ApplicationStatus, ProgramType } from '../../generated/prisma/enums';
 import { BaseRepository, PrismaDbClient } from '../infrastructure/database';
 import { PrismaService } from '../infrastructure/database/prisma.service';
 
@@ -60,6 +60,63 @@ export class ApplicationsRepository extends BaseRepository<
     return (db ?? this.prisma.client).application.findUnique({
       where: { id },
       select: this.applicationEligibilitySelect(),
+    });
+  }
+
+  listInternalProgramAApplications(db?: PrismaDbClient) {
+    return (db ?? this.prisma.client).application.findMany({
+      where: {
+        call: {
+          type: ProgramType.PROGRAM_A,
+        },
+        status: {
+          not: ApplicationStatus.DRAFT,
+        },
+      },
+      orderBy: [
+        {
+          submittedAt: 'desc',
+        },
+        {
+          createdAt: 'desc',
+        },
+      ],
+      select: {
+        id: true,
+        status: true,
+        submittedAt: true,
+        decidedAt: true,
+        mentorUserId: true,
+        mentorAssignedAt: true,
+        mentorAssignedById: true,
+        createdAt: true,
+        updatedAt: true,
+        team: {
+          select: {
+            id: true,
+            name: true,
+            leaderId: true,
+          },
+        },
+        call: {
+          select: {
+            id: true,
+            title: true,
+            type: true,
+            status: true,
+            opensAt: true,
+            closesAt: true,
+          },
+        },
+        eligibilitySignals: {
+          select: {
+            id: true,
+            code: true,
+            passed: true,
+            reason: true,
+          },
+        },
+      },
     });
   }
 

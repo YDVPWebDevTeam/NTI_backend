@@ -146,7 +146,7 @@ The PDF module provides template-driven PDF creation and queue-backed processing
 
 - `src/infrastructure/pdf` contains the PDF services, template registry, and worker flow
 - Puppeteer settings are controlled through `PUPPETEER_*`
-- the worker can use a separate Chromium installation in containerized environments
+- synchronous API PDF exports and the worker both require a Chromium installation in containerized environments
 
 ## Database
 
@@ -283,6 +283,7 @@ Required minimum for API:
 Notes:
 
 - API container runs Prisma migrations on startup via Dockerfile command.
+- API container must include Chromium because `GET /api/v1/reports/export?...&format=pdf` can render synchronously in the web service.
 - Keep migrations in API only; do not run them in worker.
 
 ### 3. Create a Worker Background Service

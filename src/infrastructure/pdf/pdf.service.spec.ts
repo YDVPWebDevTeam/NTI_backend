@@ -5,11 +5,16 @@ jest.mock('puppeteer-core', () => ({
   },
 }));
 
+jest.mock('node:fs', () => ({
+  existsSync: jest.fn(),
+}));
+
 jest.mock('../config', () => ({
   ConfigService: class ConfigService {},
 }));
 
 import { InternalServerErrorException } from '@nestjs/common';
+import { existsSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import { ConfigService } from '../config';
 import { PdfService } from './pdf.service';
@@ -49,6 +54,34 @@ describe('PdfService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('uses the configured executable path when launching the browser', async () => {
+    await service.generateFromHtml({ html: '<html><body>Hello</body></html>' });
+
+    expect(launchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executablePath: '/usr/bin/chromium',
+      }),
+    );
+  });
+
+  it('falls back to a detected Chromium binary when no executable path is configured', async () => {
+    const existsSyncMock = existsSync as jest.MockedFunction<typeof existsSync>;
+    existsSyncMock.mockImplementation((path) => path === '/usr/bin/chromium');
+    service = new PdfService({
+      puppeteerHeadless: true,
+      puppeteerExecutablePath: undefined,
+      puppeteerTimeoutMs: 15000,
+    } as ConfigService);
+
+    await service.generateFromHtml({ html: '<html><body>Hello</body></html>' });
+
+    expect(launchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executablePath: '/usr/bin/chromium',
+      }),
+    );
   });
 
   it('reuses the browser across render calls', async () => {

@@ -4,6 +4,7 @@ import {
   Logger,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { existsSync } from 'node:fs';
 import puppeteer, { type Browser, type LaunchOptions } from 'puppeteer-core';
 import { ConfigService } from '../config';
 import type {
@@ -11,6 +12,13 @@ import type {
   PdfGenerateFromTemplateInput,
   PdfTemplateRenderOptions,
 } from './pdf.types';
+
+const DEFAULT_CHROMIUM_PATHS = [
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/google-chrome',
+  '/usr/bin/google-chrome-stable',
+];
 
 const DEFAULT_PDF_OPTIONS: PdfTemplateRenderOptions = {
   format: 'A4',
@@ -95,9 +103,13 @@ export class PdfService implements OnModuleDestroy {
   }
 
   private getLaunchOptions(): LaunchOptions {
+    const executablePath =
+      this.configService.puppeteerExecutablePath ??
+      DEFAULT_CHROMIUM_PATHS.find((path) => existsSync(path));
+
     return {
       headless: this.configService.puppeteerHeadless,
-      executablePath: this.configService.puppeteerExecutablePath,
+      executablePath,
       timeout: this.configService.puppeteerTimeoutMs,
       args: [
         '--disable-dev-shm-usage',

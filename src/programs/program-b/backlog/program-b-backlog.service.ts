@@ -18,6 +18,7 @@ import {
   UserRole,
   UserStatus,
 } from '../../../../generated/prisma/enums';
+import { CallsRepository } from '../../../applications/calls.repository';
 import { isPrismaUniqueConstraintError } from '../../../common/prisma/prisma-error.utils';
 import type { AuthenticatedUserContext } from '../../../common/types/auth-user-context.type';
 import {
@@ -65,6 +66,7 @@ export class ProgramBBacklogService {
     private readonly projectsRepository: ProgramBProjectsRepository,
     private readonly filesService: FilesService,
     private readonly storageService: R2StorageService,
+    private readonly callsRepository: CallsRepository,
   ) {}
 
   async create(
@@ -208,6 +210,15 @@ export class ProgramBBacklogService {
     this.ensureActiveStudent(user);
 
     const pagination = resolvePagination(query);
+    const hasActiveCall = await this.callsRepository.hasActiveProgramBCall(
+      new Date(),
+    );
+    if (!hasActiveCall) {
+      return {
+        data: [],
+        meta: buildPaginationMeta(0, pagination.page, pagination.limit),
+      };
+    }
     const normalizedQuery = query.q?.trim();
     const where: Prisma.BacklogItemWhereInput = {
       status: BacklogItemStatus.PUBLISHED,
@@ -256,9 +267,17 @@ export class ProgramBBacklogService {
     user: AuthenticatedUserContext,
   ): Promise<ProgramBBacklogItemDto> {
     this.ensureActiveStudent(user);
-    const item = await this.backlogRepository.findDetailUnique({ id });
 
-    if (!item || item.status !== BacklogItemStatus.PUBLISHED) {
+    const [item, hasActiveCall] = await Promise.all([
+      this.backlogRepository.findDetailUnique({ id }),
+      this.callsRepository.hasActiveProgramBCall(new Date()),
+    ]);
+
+    if (
+      !item ||
+      item.status !== BacklogItemStatus.PUBLISHED ||
+      !hasActiveCall
+    ) {
       throw new NotFoundException('Backlog item not found');
     }
 

@@ -42,6 +42,16 @@ export const callsSeed: SeedTask = {
       );
 
       if (existingCall.rowCount && existingCall.rowCount > 0) {
+        await context.client.query(
+          `UPDATE "Call" SET title = $1, status = $2, "opensAt" = $3, "closesAt" = $4, "updatedAt" = NOW() WHERE id = $5`,
+          [
+            call.title,
+            call.status,
+            call.opensAt,
+            call.closesAt,
+            existingCall.rows[0].id,
+          ],
+        );
         continue;
       }
 

@@ -29,7 +29,8 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "prisma:reset": "prisma migrate reset",
-    "prisma:seed": "prisma db seed"
+    "prisma:seed": "prisma db seed",
+    "seed:dev": "node --experimental-strip-types --experimental-specifier-resolution=node prisma/seed/dev.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.926.0",

@@ -461,6 +461,17 @@ export class CallsRepository extends BaseRepository<
     } as const;
   }
 
+  hasActiveProgramBCall(now: Date, db?: PrismaDbClient): Promise<boolean> {
+    return (db ?? this.prisma.client).call
+      .count({
+        where: {
+          type: ProgramType.PROGRAM_B,
+          ...this.buildPublicVisibleWhere(now),
+        },
+      })
+      .then((count) => count > 0);
+  }
+
   private buildPublicVisibleWhere(at: Date): Prisma.CallWhereInput {
     return {
       status: CallStatus.OPEN,

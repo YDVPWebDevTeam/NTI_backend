@@ -160,6 +160,17 @@ export class UserRepository extends BaseRepository<
     });
   }
 
+  findActiveMentors(db?: PrismaDbClient): Promise<OrganizationMemberRecord[]> {
+    return this.getDelegate(db).findMany({
+      where: {
+        role: UserRole.MENTOR,
+        status: UserStatus.ACTIVE,
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      select: organizationMemberSelect,
+    });
+  }
+
   updateUserRole(
     userId: string,
     role: UserRole,

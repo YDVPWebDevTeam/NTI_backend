@@ -19,6 +19,7 @@ import { RolesGuard } from '../../../auth/guards/roles.guard';
 import type { AuthenticatedUserContext } from '../../../common/types/auth-user-context.type';
 import { CompleteProgramBDocumentUploadDto } from '../backlog/dto/complete-program-b-document-upload.dto';
 import { ProgramBDocumentDownloadDto } from '../backlog/dto/program-b-backlog-document.dto';
+import { ProgramBAssignableMentorDto } from './dto/program-b-assignable-mentor.dto';
 import { AssignProgramBMentorDto } from './dto/assign-program-b-mentor.dto';
 import { CreateProgramBFinalAcceptanceDto } from './dto/create-program-b-final-acceptance.dto';
 import { CreateProgramBMentoringNoteDto } from './dto/create-program-b-mentoring-note.dto';
@@ -57,6 +58,13 @@ export class ProgramBProjectsController {
   )
   listMy(@GetUserContext() user: AuthenticatedUserContext) {
     return this.projectsService.listMy(user);
+  }
+
+  @ApiOkResponse({ type: [ProgramBAssignableMentorDto] })
+  @Get('assignable-mentors')
+  @Roles(UserRole.EVALUATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  listAssignableMentors(@GetUserContext() user: AuthenticatedUserContext) {
+    return this.projectsService.listAssignableMentors(user);
   }
 
   @ApiOkResponse({ type: ProgramBProjectDetailDto })

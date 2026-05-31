@@ -304,6 +304,7 @@ describe('ProgramBBacklogService', () => {
       projectsRepository as never,
       filesService as never,
       storageService as never,
+      { hasActiveProgramBCall: jest.fn().mockResolvedValue(true) } as never,
     );
   });
 
@@ -490,6 +491,52 @@ describe('ProgramBBacklogService', () => {
     await expect(
       service.create({ productOwnerUserId: 'other-org-user' }, owner as never),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('returns an empty page for listPublished when no active call exists', async () => {
+    const callsRepository = {
+      hasActiveProgramBCall: jest.fn().mockResolvedValue(false),
+    };
+    const localService = new ProgramBBacklogService(
+      backlogRepository as never,
+      organizationRepository as never,
+      userRepository as never,
+      teamApplicationRepository as never,
+      projectsRepository as never,
+      filesService as never,
+      storageService as never,
+      callsRepository as never,
+    );
+
+    const result = await localService.listPublished(
+      { page: 1, limit: 20, sort: 'updatedAt', order: 'desc' },
+      student as never,
+    );
+
+    expect(result.data).toEqual([]);
+    expect(result.meta.total).toBe(0);
+    expect(backlogRepository.findMany).not.toHaveBeenCalled();
+  });
+
+  it('throws NotFoundException for findPublishedById when no active call exists', async () => {
+    const callsRepository = {
+      hasActiveProgramBCall: jest.fn().mockResolvedValue(false),
+    };
+    const localService = new ProgramBBacklogService(
+      backlogRepository as never,
+      organizationRepository as never,
+      userRepository as never,
+      teamApplicationRepository as never,
+      projectsRepository as never,
+      filesService as never,
+      storageService as never,
+      callsRepository as never,
+    );
+    backlogRepository.findDetailUnique.mockResolvedValue(publishedItem);
+
+    await expect(
+      localService.findPublishedById('item-1', student as never),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('lists organization backlog items with deterministic sorting', async () => {

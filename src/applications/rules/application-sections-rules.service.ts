@@ -4,8 +4,10 @@ import {
   Injectable,
 } from '@nestjs/common';
 import type { ApplicationWithRelations } from '../applications.repository';
-import { ApplicationStatus, UserRole } from '../../../generated/prisma/enums';
+import { ApplicationStatus } from '../../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
+import { isAdminRole, isTeamMember } from '../../common/auth/role-groups';
+import { APPLICATIONS_MESSAGES } from '../applications.messages';
 
 @Injectable()
 export class ApplicationSectionsRulesService {
@@ -21,17 +23,13 @@ export class ApplicationSectionsRulesService {
     application: ApplicationWithRelations,
     user: AuthenticatedUserContext,
   ): void {
-    if (user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN) {
+    if (isAdminRole(user.role)) {
       return;
     }
 
-    const isTeamMember =
-      application.team.leaderId === user.id ||
-      application.team.members?.some((member) => member.userId === user.id);
-
-    if (!isTeamMember) {
+    if (!isTeamMember(application.team, user.id)) {
       throw new ForbiddenException(
-        'You do not have permission to view this application',
+        APPLICATIONS_MESSAGES.NO_PERMISSION_VIEW_APPLICATION,
       );
     }
   }
@@ -42,14 +40,14 @@ export class ApplicationSectionsRulesService {
   ): void {
     if (application.team.leaderId !== user.id) {
       throw new ForbiddenException(
-        'Only team lead can update application sections',
+        APPLICATIONS_MESSAGES.ONLY_TEAM_LEAD_CAN_UPDATE_SECTIONS,
       );
     }
   }
 
   assertAdminAccess(user: AuthenticatedUserContext): void {
-    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Admin access required');
+    if (!isAdminRole(user.role)) {
+      throw new ForbiddenException(APPLICATIONS_MESSAGES.ADMIN_ACCESS_REQUIRED);
     }
   }
 }

@@ -128,7 +128,7 @@ describe('EmailChangeTokenService', () => {
 
     expect(result).toEqual(validTokenRecord);
     expect(repository.findMany).toHaveBeenCalledTimes(1);
-    expect(repository.findMany.mock.calls[0][0]).toMatchObject({
+    expect(repository.findMany.mock.calls[0]![0]).toMatchObject({
       where: {
         usedAt: null,
         newEmail: 'new.user@example.com',
@@ -153,7 +153,7 @@ describe('EmailChangeTokenService', () => {
 
     expect(result).toEqual(validTokenRecord);
     expect(repository.findMany).toHaveBeenCalledTimes(1);
-    expect(repository.findMany.mock.calls[0][0]).toMatchObject({
+    expect(repository.findMany.mock.calls[0]![0]).toMatchObject({
       where: {
         usedAt: null,
         newEmail: 'new.user@example.com',

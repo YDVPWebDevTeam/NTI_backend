@@ -31,7 +31,7 @@ describe('UpdateOrgStatusDto', () => {
     const errors = await validate(dto);
 
     expect(errors).not.toHaveLength(0);
-    expect(errors[0].property).toBe('rejectionReason');
+    expect(errors[0]!.property).toBe('rejectionReason');
   });
 
   it('rejects unsupported status values', async () => {
@@ -41,6 +41,6 @@ describe('UpdateOrgStatusDto', () => {
     const errors = await validate(dto);
 
     expect(errors).not.toHaveLength(0);
-    expect(errors[0].property).toBe('status');
+    expect(errors[0]!.property).toBe('status');
   });
 });

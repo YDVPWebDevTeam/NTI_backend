@@ -27,6 +27,22 @@ jest.mock(
     FileVisibility: {
       PRIVATE: 'PRIVATE',
     },
+    OrganizationDocumentVisibility: {
+      INTERNAL: 'INTERNAL',
+      SHARED: 'SHARED',
+    },
+    InvitationStatus: {
+      PENDING: 'PENDING',
+      ACCEPTED: 'ACCEPTED',
+      EXPIRED: 'EXPIRED',
+      REVOKED: 'REVOKED',
+    },
+    OrganizationStatus: {
+      PENDING: 'PENDING',
+      ACTIVE: 'ACTIVE',
+      REJECTED: 'REJECTED',
+      SUSPENDED: 'SUSPENDED',
+    },
     ProgramBMilestoneStatus: {
       PLANNED: 'PLANNED',
       IN_PROGRESS: 'IN_PROGRESS',

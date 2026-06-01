@@ -7,6 +7,8 @@ import { OrganizationDocumentsRepository } from './documents/organization-docume
 import { OrganizationDocumentsService } from './documents/organization-documents.service';
 import { OrganizationController } from './organization.controller';
 import { OrganizationService } from './organization.service';
+import { OrganizationAccessService } from './organization-access.service';
+import { OrganizationInviteService } from './organization-invite.service';
 import { OrganizationRepository } from './organization.repository';
 import { UserRepository } from 'src/user/user.repository';
 import { OrganizationInviteRepository } from './organization-invitation.repository';
@@ -16,6 +18,8 @@ import { OrganizationInviteRepository } from './organization-invitation.reposito
   controllers: [OrganizationController, OrganizationDocumentsController],
   providers: [
     OrganizationService,
+    OrganizationAccessService,
+    OrganizationInviteService,
     OrganizationDocumentsService,
     OrganizationRepository,
     OrganizationDocumentsRepository,
@@ -23,5 +27,6 @@ import { OrganizationInviteRepository } from './organization-invitation.reposito
     UserRepository,
     InvitationTokenService,
   ],
+  exports: [OrganizationInviteService],
 })
 export class OrganizationModule {}

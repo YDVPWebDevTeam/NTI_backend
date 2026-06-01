@@ -10,6 +10,12 @@ import {
 } from '../../infrastructure/queue';
 import { ReportExportQueryDto } from '../dto/report-export-query.dto';
 import { ReportsService } from '../reports.service';
+import {
+  logJobCompleted,
+  logJobFailed,
+} from '../../infrastructure/queue/processors/queue-processor.helpers';
+
+const REPORT_EXPORT_JOB_LABEL = 'report export';
 
 @Processor(QUEUE_NAMES.REPORTS)
 export class ReportExportProcessor extends WorkerHost {
@@ -46,7 +52,7 @@ export class ReportExportProcessor extends WorkerHost {
 
   @OnWorkerEvent('completed')
   onCompleted(job: Job<ReportExportJobData[ReportExportJobName]>): void {
-    this.logger.log(`Completed report export job "${job.name}" (${job.id})`);
+    logJobCompleted(this.logger, REPORT_EXPORT_JOB_LABEL, job);
   }
 
   @OnWorkerEvent('failed')
@@ -54,12 +60,6 @@ export class ReportExportProcessor extends WorkerHost {
     job: Job<ReportExportJobData[ReportExportJobName]> | undefined,
     error: Error,
   ): void {
-    const jobName = job?.name ?? 'unknown';
-    const jobId = job?.id ?? 'unknown';
-
-    this.logger.error(
-      `Failed report export job "${jobName}" (${jobId}): ${error.message}`,
-      error.stack,
-    );
+    logJobFailed(this.logger, REPORT_EXPORT_JOB_LABEL, job, error);
   }
 }

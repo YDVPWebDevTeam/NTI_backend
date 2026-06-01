@@ -15,9 +15,12 @@ jest.mock('../../common/invitations/invitation-token.service', () => ({
   InvitationTokenService: class InvitationTokenService {},
 }));
 
-jest.mock('../../applications/eligibility-signals.service', () => ({
-  EligibilitySignalsService: class EligibilitySignalsService {},
-}));
+jest.mock(
+  '../../applications/eligibility-signals/eligibility-signals.service',
+  () => ({
+    EligibilitySignalsService: class EligibilitySignalsService {},
+  }),
+);
 
 jest.mock('../../infrastructure/queue', () => ({
   EMAIL_JOBS: {
@@ -26,7 +29,7 @@ jest.mock('../../infrastructure/queue', () => ({
   QueueService: class QueueService {},
 }));
 
-import { EligibilitySignalsService } from '../../applications/eligibility-signals.service';
+import { EligibilitySignalsService } from '../../applications/eligibility-signals/eligibility-signals.service';
 import { InvitationTokenService } from '../../common/invitations/invitation-token.service';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import type { PrismaDbClient } from '../../infrastructure/database';

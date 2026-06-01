@@ -8,11 +8,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import {
-  Organization,
-  OrganizationDocument,
-  Prisma,
-} from 'generated/prisma/client';
+import { Organization, OrganizationDocument } from 'generated/prisma/client';
 import {
   OrganizationDocumentVisibility,
   OrganizationStatus,
@@ -23,6 +19,7 @@ import {
 import { isAdminRole } from '../../auth/admin-role.helper';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { isUniqueConstraintOnFields } from '../../common/prisma/prisma-error.utils';
+import { SERIALIZABLE_TX_OPTIONS } from '../../common/prisma/transaction.constants';
 import { ConfigService } from '../../infrastructure/config';
 import type { PrismaDbClient } from '../../infrastructure/database';
 import { R2StorageService } from '../../infrastructure/storage';
@@ -33,6 +30,7 @@ import { OrganizationDocumentDownloadDto } from './dto/organization-document-dow
 import { OrganizationDocumentDto } from './dto/organization-document.dto';
 import { OrganizationDocumentUploadDto } from './dto/organization-document-upload.dto';
 import { OrganizationDocumentsRepository } from './organization-documents.repository';
+import { ORGANIZATION_DOCUMENTS_MESSAGES } from './organization-documents.messages';
 
 const VERSION_RETRY_LIMIT = 2;
 const MIME_EXTENSION_MAP: Record<string, string> = {
@@ -43,9 +41,7 @@ const MIME_EXTENSION_MAP: Record<string, string> = {
 
 @Injectable()
 export class OrganizationDocumentsService {
-  private readonly transactionOptions = {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-  } as const;
+  private readonly transactionOptions = SERIALIZABLE_TX_OPTIONS;
 
   constructor(
     private readonly documentsRepository: OrganizationDocumentsRepository,
@@ -121,7 +117,9 @@ export class OrganizationDocumentsService {
     }
 
     if (!document) {
-      throw new ConflictException('Failed to allocate document version');
+      throw new ConflictException(
+        ORGANIZATION_DOCUMENTS_MESSAGES.FAILED_TO_ALLOCATE_DOCUMENT_VERSION,
+      );
     }
 
     const uploadUrl = await this.storageService.createPresignedUploadUrl({
@@ -157,11 +155,15 @@ export class OrganizationDocumentsService {
     }
 
     if (document.status === UploadStatus.FAILED) {
-      throw new ConflictException('Upload has already failed');
+      throw new ConflictException(
+        ORGANIZATION_DOCUMENTS_MESSAGES.UPLOAD_ALREADY_FAILED,
+      );
     }
 
     if (document.uploadUrlExpiresAt.getTime() < Date.now()) {
-      throw new ConflictException('Upload URL has expired');
+      throw new ConflictException(
+        ORGANIZATION_DOCUMENTS_MESSAGES.UPLOAD_URL_EXPIRED,
+      );
     }
 
     if (this.configService.organizationDocumentVerifyObjectOnComplete) {
@@ -174,7 +176,7 @@ export class OrganizationDocumentsService {
         objectInfo.ContentType !== document.mimeType
       ) {
         throw new BadRequestException(
-          'Uploaded object type does not match request',
+          ORGANIZATION_DOCUMENTS_MESSAGES.UPLOADED_OBJECT_TYPE_MISMATCH,
         );
       }
 
@@ -183,7 +185,7 @@ export class OrganizationDocumentsService {
         objectInfo.ContentLength !== document.sizeBytes
       ) {
         throw new BadRequestException(
-          'Uploaded object size does not match request',
+          ORGANIZATION_DOCUMENTS_MESSAGES.UPLOADED_OBJECT_SIZE_MISMATCH,
         );
       }
     }
@@ -229,7 +231,9 @@ export class OrganizationDocumentsService {
     );
 
     if (document.status !== UploadStatus.UPLOADED) {
-      throw new ConflictException('Document is not available for reading yet');
+      throw new ConflictException(
+        ORGANIZATION_DOCUMENTS_MESSAGES.DOCUMENT_NOT_AVAILABLE,
+      );
     }
 
     const downloadUrl = await this.storageService.createPresignedDownloadUrl({
@@ -254,7 +258,9 @@ export class OrganizationDocumentsService {
     });
 
     if (!organization) {
-      throw new NotFoundException('Organization not found');
+      throw new NotFoundException(
+        ORGANIZATION_DOCUMENTS_MESSAGES.ORGANIZATION_NOT_FOUND,
+      );
     }
 
     if (isAdminRole(user.role)) {
@@ -273,7 +279,7 @@ export class OrganizationDocumentsService {
 
     if (organization.status !== OrganizationStatus.ACTIVE) {
       throw new ForbiddenException(
-        'Only active organization members may manage organization documents',
+        ORGANIZATION_DOCUMENTS_MESSAGES.ONLY_ACTIVE_MEMBERS_CAN_MANAGE,
       );
     }
 
@@ -292,7 +298,9 @@ export class OrganizationDocumentsService {
     );
 
     if (!document) {
-      throw new NotFoundException('Organization document not found');
+      throw new NotFoundException(
+        ORGANIZATION_DOCUMENTS_MESSAGES.ORGANIZATION_DOCUMENT_NOT_FOUND,
+      );
     }
 
     return document;
@@ -300,14 +308,18 @@ export class OrganizationDocumentsService {
 
   private validateUploadPolicy(dto: CreateOrganizationDocumentUploadDto): void {
     if (dto.sizeBytes > this.configService.organizationDocumentMaxSizeBytes) {
-      throw new PayloadTooLargeException('File is too large');
+      throw new PayloadTooLargeException(
+        ORGANIZATION_DOCUMENTS_MESSAGES.FILE_TOO_LARGE,
+      );
     }
 
     const allowedMimeTypes =
       this.configService.organizationDocumentAllowedMimeTypes;
 
     if (!allowedMimeTypes.includes(dto.mimeType)) {
-      throw new BadRequestException('File type is not allowed');
+      throw new BadRequestException(
+        ORGANIZATION_DOCUMENTS_MESSAGES.FILE_TYPE_NOT_ALLOWED,
+      );
     }
   }
 

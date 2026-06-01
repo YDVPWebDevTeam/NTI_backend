@@ -9,12 +9,20 @@ import { Prisma } from 'generated/prisma/client';
 import {
   BacklogItemStatus,
   FileVisibility,
+  ProgramBDocumentVisibility,
   ProgramBMilestoneStatus,
+  ProgramBProjectDocumentCategory,
   ProgramBProjectStatus,
   UploadStatus,
   UserRole,
   UserStatus,
 } from 'generated/prisma/enums';
+import {
+  isReviewerRole,
+  isSameOrgCompanyMember,
+} from '../../../common/auth/role-groups';
+import { SERIALIZABLE_TX_OPTIONS } from '../../../common/prisma/transaction.constants';
+import { toProgramBDocumentDto } from '../common/program-b-document.mapper';
 import { isPrismaUniqueConstraintError } from '../../../common/prisma/prisma-error.utils';
 import type { AuthenticatedUserContext } from '../../../common/types/auth-user-context.type';
 import type { PrismaDbClient } from '../../../infrastructure/database';
@@ -49,12 +57,11 @@ import {
   ProgramBProjectExecutionView,
   ProgramBProjectsRepository,
 } from './program-b-projects.repository';
+import { PROGRAM_B_PROJECTS_MESSAGES } from './program-b-projects.messages';
 
 @Injectable()
 export class ProgramBProjectsService {
-  private readonly projectWriteTransactionOptions = {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-  } as const;
+  private readonly projectWriteTransactionOptions = SERIALIZABLE_TX_OPTIONS;
 
   constructor(
     private readonly projectsRepository: ProgramBProjectsRepository,
@@ -126,7 +133,9 @@ export class ProgramBProjectsService {
     const updateData = this.buildMilestoneUpdateData(dto);
 
     if (Object.keys(updateData).length === 0) {
-      throw new BadRequestException('Request body is empty');
+      throw new BadRequestException(
+        PROGRAM_B_PROJECTS_MESSAGES.REQUEST_BODY_EMPTY,
+      );
     }
 
     return this.projectsRepository.transaction(async (db) => {
@@ -144,7 +153,9 @@ export class ProgramBProjectsService {
       );
 
       if (result.count === 0) {
-        throw new NotFoundException('Milestone not found');
+        throw new NotFoundException(
+          PROGRAM_B_PROJECTS_MESSAGES.MILESTONE_NOT_FOUND,
+        );
       }
 
       const milestone = await this.projectsRepository.findMilestoneForProject(
@@ -154,7 +165,9 @@ export class ProgramBProjectsService {
       );
 
       if (!milestone) {
-        throw new NotFoundException('Milestone not found');
+        throw new NotFoundException(
+          PROGRAM_B_PROJECTS_MESSAGES.MILESTONE_NOT_FOUND,
+        );
       }
 
       return milestone;
@@ -326,7 +339,9 @@ export class ProgramBProjectsService {
     );
 
     if (document.uploadedFile.status !== UploadStatus.UPLOADED) {
-      throw new ConflictException('Document is not available for reading yet');
+      throw new ConflictException(
+        PROGRAM_B_PROJECTS_MESSAGES.DOCUMENT_NOT_AVAILABLE_FOR_READING,
+      );
     }
 
     const downloadUrl = await this.storageService.createPresignedDownloadUrl({
@@ -357,14 +372,18 @@ export class ProgramBProjectsService {
       );
 
       if (!mentor) {
-        throw new NotFoundException('Mentor user not found');
+        throw new NotFoundException(
+          PROGRAM_B_PROJECTS_MESSAGES.MENTOR_USER_NOT_FOUND,
+        );
       }
 
       if (
         mentor.role !== UserRole.MENTOR ||
         mentor.status !== UserStatus.ACTIVE
       ) {
-        throw new BadRequestException('Target user must be an active mentor');
+        throw new BadRequestException(
+          PROGRAM_B_PROJECTS_MESSAGES.TARGET_USER_MUST_BE_ACTIVE_MENTOR,
+        );
       }
 
       await this.projectsRepository.updateProject(
@@ -385,7 +404,9 @@ export class ProgramBProjectsService {
       );
 
       if (!updatedProject) {
-        throw new NotFoundException('Program B project not found');
+        throw new NotFoundException(
+          PROGRAM_B_PROJECTS_MESSAGES.PROJECT_NOT_FOUND,
+        );
       }
 
       return this.toProjectDetailDto(updatedProject);
@@ -429,7 +450,9 @@ export class ProgramBProjectsService {
         await this.projectsRepository.findProjectForExecution(projectId, db);
 
       if (!refreshedProject) {
-        throw new NotFoundException('Program B project not found');
+        throw new NotFoundException(
+          PROGRAM_B_PROJECTS_MESSAGES.PROJECT_NOT_FOUND,
+        );
       }
 
       if (
@@ -449,7 +472,9 @@ export class ProgramBProjectsService {
       );
 
       if (!detail) {
-        throw new NotFoundException('Program B project not found');
+        throw new NotFoundException(
+          PROGRAM_B_PROJECTS_MESSAGES.PROJECT_NOT_FOUND,
+        );
       }
 
       return this.toProjectDetailDto(detail);
@@ -472,7 +497,9 @@ export class ProgramBProjectsService {
     );
 
     if (!project) {
-      throw new NotFoundException('Program B project not found');
+      throw new NotFoundException(
+        PROGRAM_B_PROJECTS_MESSAGES.PROJECT_NOT_FOUND,
+      );
     }
 
     return project;
@@ -488,7 +515,9 @@ export class ProgramBProjectsService {
     );
 
     if (!project) {
-      throw new NotFoundException('Program B project not found');
+      throw new NotFoundException(
+        PROGRAM_B_PROJECTS_MESSAGES.PROJECT_NOT_FOUND,
+      );
     }
 
     return project;
@@ -502,19 +531,11 @@ export class ProgramBProjectsService {
       throw new ForbiddenException();
     }
 
-    if (
-      user.role === UserRole.ADMIN ||
-      user.role === UserRole.SUPER_ADMIN ||
-      user.role === UserRole.EVALUATOR
-    ) {
+    if (isReviewerRole(user.role)) {
       return;
     }
 
-    if (
-      (user.role === UserRole.COMPANY_OWNER ||
-        user.role === UserRole.COMPANY_EMPLOYEE) &&
-      user.organizationId === project.backlogItem.organizationId
-    ) {
+    if (isSameOrgCompanyMember(user, project.backlogItem.organizationId)) {
       return;
     }
 
@@ -534,7 +555,9 @@ export class ProgramBProjectsService {
 
   private ensureProjectWritable(project: ProgramBProjectExecutionView): void {
     if (project.status === ProgramBProjectStatus.CLOSED) {
-      throw new ConflictException('Closed Program B projects are read-only');
+      throw new ConflictException(
+        PROGRAM_B_PROJECTS_MESSAGES.CLOSED_PROJECTS_ARE_READ_ONLY,
+      );
     }
   }
 
@@ -543,18 +566,12 @@ export class ProgramBProjectsService {
     user: AuthenticatedUserContext,
     db?: PrismaDbClient,
   ): Promise<void> {
-    const allowedRoles: UserRole[] = [
-      UserRole.COMPANY_OWNER,
-      UserRole.COMPANY_EMPLOYEE,
-    ];
-
     if (
       user.status !== UserStatus.ACTIVE ||
-      !allowedRoles.includes(user.role) ||
-      user.organizationId !== project.backlogItem.organizationId
+      !isSameOrgCompanyMember(user, project.backlogItem.organizationId)
     ) {
       throw new ForbiddenException(
-        'Only company-side project members may manage milestones',
+        PROGRAM_B_PROJECTS_MESSAGES.ONLY_COMPANY_MEMBERS_MAY_MANAGE_MILESTONES,
       );
     }
 
@@ -567,7 +584,7 @@ export class ProgramBProjectsService {
 
     if (!organizationMember) {
       throw new ForbiddenException(
-        'Only company-side project members may manage milestones',
+        PROGRAM_B_PROJECTS_MESSAGES.ONLY_COMPANY_MEMBERS_MAY_MANAGE_MILESTONES,
       );
     }
   }
@@ -578,17 +595,11 @@ export class ProgramBProjectsService {
   ): void {
     if (user.status !== UserStatus.ACTIVE) {
       throw new ForbiddenException(
-        'Only NTI-side reviewers and mentors may create mentoring notes',
+        PROGRAM_B_PROJECTS_MESSAGES.ONLY_REVIEWERS_AND_MENTORS_MAY_CREATE_NOTES,
       );
     }
 
-    const globalReviewerRoles: UserRole[] = [
-      UserRole.EVALUATOR,
-      UserRole.ADMIN,
-      UserRole.SUPER_ADMIN,
-    ];
-
-    if (globalReviewerRoles.includes(user.role)) {
+    if (isReviewerRole(user.role)) {
       return;
     }
 
@@ -597,7 +608,7 @@ export class ProgramBProjectsService {
     }
 
     throw new ForbiddenException(
-      'Only NTI-side reviewers and assigned mentors may create mentoring notes',
+      PROGRAM_B_PROJECTS_MESSAGES.ONLY_REVIEWERS_AND_ASSIGNED_MENTORS_MAY_CREATE_NOTES,
     );
   }
 
@@ -610,7 +621,7 @@ export class ProgramBProjectsService {
       project.productOwnerUserId !== user.id
     ) {
       throw new ForbiddenException(
-        'Only the active assigned product owner may create PO reviews',
+        PROGRAM_B_PROJECTS_MESSAGES.ONLY_ACTIVE_PO_MAY_CREATE_PO_REVIEWS,
       );
     }
   }
@@ -623,11 +634,7 @@ export class ProgramBProjectsService {
       throw new ForbiddenException();
     }
 
-    if (
-      (user.role === UserRole.COMPANY_OWNER ||
-        user.role === UserRole.COMPANY_EMPLOYEE) &&
-      user.organizationId === project.backlogItem.organizationId
-    ) {
+    if (isSameOrgCompanyMember(user, project.backlogItem.organizationId)) {
       return;
     }
 
@@ -642,14 +649,9 @@ export class ProgramBProjectsService {
   }
 
   private ensureMentorAssignmentAuthor(user: AuthenticatedUserContext): void {
-    if (
-      user.status !== UserStatus.ACTIVE ||
-      !(
-        [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.EVALUATOR] as UserRole[]
-      ).includes(user.role)
-    ) {
+    if (user.status !== UserStatus.ACTIVE || !isReviewerRole(user.role)) {
       throw new ForbiddenException(
-        'Only NTI-side reviewers may assign a mentor',
+        PROGRAM_B_PROJECTS_MESSAGES.ONLY_REVIEWERS_MAY_ASSIGN_MENTOR,
       );
     }
   }
@@ -661,7 +663,7 @@ export class ProgramBProjectsService {
   ): Promise<void> {
     if (user.status !== UserStatus.ACTIVE) {
       throw new ForbiddenException(
-        'Only the product owner or same-organization company owner may record company acceptance',
+        PROGRAM_B_PROJECTS_MESSAGES.ONLY_PO_OR_COMPANY_OWNER_MAY_RECORD_ACCEPTANCE,
       );
     }
 
@@ -677,7 +679,7 @@ export class ProgramBProjectsService {
 
     if (!isCompanyOwnerFromSameOrganization) {
       throw new ForbiddenException(
-        'Only the product owner or same-organization company owner may record company acceptance',
+        PROGRAM_B_PROJECTS_MESSAGES.ONLY_PO_OR_COMPANY_OWNER_MAY_RECORD_ACCEPTANCE,
       );
     }
 
@@ -690,20 +692,15 @@ export class ProgramBProjectsService {
 
     if (!organizationMember) {
       throw new ForbiddenException(
-        'Only the product owner or same-organization company owner may record company acceptance',
+        PROGRAM_B_PROJECTS_MESSAGES.ONLY_PO_OR_COMPANY_OWNER_MAY_RECORD_ACCEPTANCE,
       );
     }
   }
 
   private ensureNtiAcceptanceAuthor(user: AuthenticatedUserContext): void {
-    if (
-      user.status !== UserStatus.ACTIVE ||
-      (user.role !== UserRole.ADMIN &&
-        user.role !== UserRole.SUPER_ADMIN &&
-        user.role !== UserRole.EVALUATOR)
-    ) {
+    if (user.status !== UserStatus.ACTIVE || !isReviewerRole(user.role)) {
       throw new ForbiddenException(
-        'Only NTI-side reviewers may record NTI acceptance',
+        PROGRAM_B_PROJECTS_MESSAGES.ONLY_REVIEWERS_MAY_RECORD_NTI_ACCEPTANCE,
       );
     }
   }
@@ -823,7 +820,7 @@ export class ProgramBProjectsService {
     }
 
     throw new ConflictException(
-      'Could not assign a unique document version for this category',
+      PROGRAM_B_PROJECTS_MESSAGES.DOCUMENT_VERSION_CONFLICT,
     );
   }
 
@@ -859,7 +856,9 @@ export class ProgramBProjectsService {
       await this.projectsRepository.findProjectDocumentById(documentId);
 
     if (!document || document.projectId !== projectId) {
-      throw new NotFoundException('Program B project document not found');
+      throw new NotFoundException(
+        PROGRAM_B_PROJECTS_MESSAGES.PROJECT_DOCUMENT_NOT_FOUND,
+      );
     }
 
     return document;
@@ -867,8 +866,8 @@ export class ProgramBProjectsService {
 
   private toProjectDocumentDto(document: {
     id: string;
-    category: unknown;
-    visibility: unknown;
+    category: ProgramBProjectDocumentCategory;
+    visibility: ProgramBDocumentVisibility;
     version: number;
     createdAt: Date;
     uploadedFile: {
@@ -880,19 +879,7 @@ export class ProgramBProjectsService {
       uploadedAt: Date | null;
     };
   }): ProgramBProjectDocumentDto {
-    return {
-      id: document.id,
-      fileId: document.uploadedFile.id,
-      category: document.category as never,
-      visibility: document.visibility as never,
-      name: document.uploadedFile.originalName,
-      mimeType: document.uploadedFile.mimeType,
-      size: document.uploadedFile.size,
-      status: document.uploadedFile.status as never,
-      version: document.version,
-      uploadedAt: document.uploadedFile.uploadedAt ?? undefined,
-      createdAt: document.createdAt,
-    };
+    return toProgramBDocumentDto(document);
   }
 
   private toMilestoneDto(milestone: {
@@ -1013,7 +1000,7 @@ export class ProgramBProjectsService {
         this.toPoReviewDto(review),
       ),
       documents: (project.documents ?? []).map((document) =>
-        this.toProjectDocumentDto(document as never),
+        this.toProjectDocumentDto(document),
       ),
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,

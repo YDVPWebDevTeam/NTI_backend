@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -22,6 +23,7 @@ import {
   UpdateUniversityDto,
 } from './dto/upsert-university.dto';
 import { AdminAcademicStructureRepository } from './admin-academic-structure.repository';
+import { ADMIN_ACADEMIC_STRUCTURE_MESSAGES } from './admin-academic-structure.messages';
 
 @Injectable()
 export class AdminAcademicStructureService {
@@ -33,7 +35,7 @@ export class AdminAcademicStructureService {
   ): Promise<AdminUniversityDto[]> {
     ensureAdminRole(
       actor.role,
-      'Only administrators can access academic structure',
+      ADMIN_ACADEMIC_STRUCTURE_MESSAGES.ADMIN_ONLY_ACCESS,
     );
 
     const rows = await this.repository.findUniversities({
@@ -51,7 +53,7 @@ export class AdminAcademicStructureService {
   ): Promise<AdminFacultyDto[]> {
     ensureAdminRole(
       actor.role,
-      'Only administrators can access academic structure',
+      ADMIN_ACADEMIC_STRUCTURE_MESSAGES.ADMIN_ONLY_ACCESS,
     );
 
     await this.assertUniversityExists(universityId);
@@ -71,7 +73,7 @@ export class AdminAcademicStructureService {
   ): Promise<AdminSpecializationDto[]> {
     ensureAdminRole(
       actor.role,
-      'Only administrators can access academic structure',
+      ADMIN_ACADEMIC_STRUCTURE_MESSAGES.ADMIN_ONLY_ACCESS,
     );
 
     await this.assertFacultyExists(facultyId);
@@ -90,7 +92,7 @@ export class AdminAcademicStructureService {
   ): Promise<AdminUniversityDto> {
     ensureAdminRole(
       actor.role,
-      'Only administrators can manage academic structure',
+      ADMIN_ACADEMIC_STRUCTURE_MESSAGES.ADMIN_ONLY_MANAGE,
     );
 
     try {
@@ -107,7 +109,7 @@ export class AdminAcademicStructureService {
     } catch (error) {
       this.handlePrismaWriteError(
         error,
-        'University with same unique fields already exists',
+        ADMIN_ACADEMIC_STRUCTURE_MESSAGES.UNIVERSITY_UNIQUE_FIELDS_CONFLICT,
       );
     }
   }
@@ -119,7 +121,7 @@ export class AdminAcademicStructureService {
   ): Promise<AdminUniversityDto> {
     ensureAdminRole(
       actor.role,
-      'Only administrators can manage academic structure',
+      ADMIN_ACADEMIC_STRUCTURE_MESSAGES.ADMIN_ONLY_MANAGE,
     );
     await this.assertUniversityExists(universityId);
 
@@ -137,7 +139,7 @@ export class AdminAcademicStructureService {
     } catch (error) {
       this.handlePrismaWriteError(
         error,
-        'University with same unique fields already exists',
+        ADMIN_ACADEMIC_STRUCTURE_MESSAGES.UNIVERSITY_UNIQUE_FIELDS_CONFLICT,
       );
     }
   }
@@ -148,7 +150,7 @@ export class AdminAcademicStructureService {
   ): Promise<AdminFacultyDto> {
     ensureAdminRole(
       actor.role,
-      'Only administrators can manage academic structure',
+      ADMIN_ACADEMIC_STRUCTURE_MESSAGES.ADMIN_ONLY_MANAGE,
     );
     await this.assertUniversityExists(dto.universityId);
 
@@ -164,7 +166,7 @@ export class AdminAcademicStructureService {
     } catch (error) {
       this.handlePrismaWriteError(
         error,
-        'Faculty with this name already exists in selected university',
+        ADMIN_ACADEMIC_STRUCTURE_MESSAGES.FACULTY_NAME_CONFLICT,
       );
     }
   }
@@ -176,7 +178,7 @@ export class AdminAcademicStructureService {
   ): Promise<AdminFacultyDto> {
     ensureAdminRole(
       actor.role,
-      'Only administrators can manage academic structure',
+      ADMIN_ACADEMIC_STRUCTURE_MESSAGES.ADMIN_ONLY_MANAGE,
     );
     await this.assertFacultyExists(facultyId);
 
@@ -196,7 +198,7 @@ export class AdminAcademicStructureService {
     } catch (error) {
       this.handlePrismaWriteError(
         error,
-        'Faculty with this name already exists in selected university',
+        ADMIN_ACADEMIC_STRUCTURE_MESSAGES.FACULTY_NAME_CONFLICT,
       );
     }
   }
@@ -207,7 +209,7 @@ export class AdminAcademicStructureService {
   ): Promise<AdminSpecializationDto> {
     ensureAdminRole(
       actor.role,
-      'Only administrators can manage academic structure',
+      ADMIN_ACADEMIC_STRUCTURE_MESSAGES.ADMIN_ONLY_MANAGE,
     );
     await this.assertFacultyExists(dto.facultyId);
 
@@ -224,7 +226,7 @@ export class AdminAcademicStructureService {
     } catch (error) {
       this.handlePrismaWriteError(
         error,
-        'Specialization with this name already exists in selected faculty',
+        ADMIN_ACADEMIC_STRUCTURE_MESSAGES.SPECIALIZATION_NAME_CONFLICT,
       );
     }
   }
@@ -236,7 +238,7 @@ export class AdminAcademicStructureService {
   ): Promise<AdminSpecializationDto> {
     ensureAdminRole(
       actor.role,
-      'Only administrators can manage academic structure',
+      ADMIN_ACADEMIC_STRUCTURE_MESSAGES.ADMIN_ONLY_MANAGE,
     );
     await this.assertSpecializationExists(specializationId);
 
@@ -256,12 +258,14 @@ export class AdminAcademicStructureService {
       return this.toSpecializationDto(row);
     } catch (error) {
       if (this.isPrismaNotFoundError(error)) {
-        throw new NotFoundException('Specialization not found');
+        throw new NotFoundException(
+          ADMIN_ACADEMIC_STRUCTURE_MESSAGES.SPECIALIZATION_NOT_FOUND,
+        );
       }
 
       this.handlePrismaWriteError(
         error,
-        'Specialization with this name already exists in selected faculty',
+        ADMIN_ACADEMIC_STRUCTURE_MESSAGES.SPECIALIZATION_NAME_CONFLICT,
       );
     }
   }
@@ -272,7 +276,7 @@ export class AdminAcademicStructureService {
   ): Promise<void> {
     ensureAdminRole(
       actor.role,
-      'Only administrators can manage academic structure',
+      ADMIN_ACADEMIC_STRUCTURE_MESSAGES.ADMIN_ONLY_MANAGE,
     );
 
     try {
@@ -288,7 +292,7 @@ export class AdminAcademicStructureService {
   ): Promise<void> {
     ensureAdminRole(
       actor.role,
-      'Only administrators can manage academic structure',
+      ADMIN_ACADEMIC_STRUCTURE_MESSAGES.ADMIN_ONLY_MANAGE,
     );
 
     try {
@@ -304,7 +308,7 @@ export class AdminAcademicStructureService {
   ): Promise<void> {
     ensureAdminRole(
       actor.role,
-      'Only administrators can manage academic structure',
+      ADMIN_ACADEMIC_STRUCTURE_MESSAGES.ADMIN_ONLY_MANAGE,
     );
 
     try {
@@ -318,7 +322,9 @@ export class AdminAcademicStructureService {
     const university = await this.repository.findUniversityById(universityId);
 
     if (!university) {
-      throw new NotFoundException('University not found');
+      throw new NotFoundException(
+        ADMIN_ACADEMIC_STRUCTURE_MESSAGES.UNIVERSITY_NOT_FOUND,
+      );
     }
   }
 
@@ -326,7 +332,9 @@ export class AdminAcademicStructureService {
     const faculty = await this.repository.findFacultyById(facultyId);
 
     if (!faculty) {
-      throw new NotFoundException('Faculty not found');
+      throw new NotFoundException(
+        ADMIN_ACADEMIC_STRUCTURE_MESSAGES.FACULTY_NOT_FOUND,
+      );
     }
   }
 
@@ -337,7 +345,9 @@ export class AdminAcademicStructureService {
       await this.repository.findSpecializationById(specializationId);
 
     if (!specialization) {
-      throw new NotFoundException('Specialization not found');
+      throw new NotFoundException(
+        ADMIN_ACADEMIC_STRUCTURE_MESSAGES.SPECIALIZATION_NOT_FOUND,
+      );
     }
   }
 
@@ -400,14 +410,16 @@ export class AdminAcademicStructureService {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
     ) {
-      throw new BadRequestException(message);
+      throw new ConflictException(message);
     }
 
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2003'
     ) {
-      throw new BadRequestException('Referenced relation does not exist');
+      throw new BadRequestException(
+        ADMIN_ACADEMIC_STRUCTURE_MESSAGES.REFERENCED_RELATION_DOES_NOT_EXIST,
+      );
     }
 
     throw error;

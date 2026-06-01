@@ -2,7 +2,7 @@ jest.mock('./applications.service', () => ({
   ApplicationsService: class ApplicationsService {},
 }));
 
-jest.mock('./application-sections.service', () => ({
+jest.mock('./sections/application-sections.service', () => ({
   ApplicationSectionsService: class ApplicationSectionsService {},
 }));
 
@@ -12,19 +12,25 @@ jest.mock('../auth/guards/jwt-auth.guard', () => ({
 
 import { ApplicationsController } from './applications.controller';
 import { ApplicationsService } from './applications.service';
-import { ApplicationSectionsService } from './application-sections.service';
+import { ApplicationSectionsService } from './sections/application-sections.service';
+import { CallsService } from './calls/calls.service';
+import { ProgramAMentorshipService } from '../programs/program-a/program-a-mentorship.service';
 
 describe('ApplicationsController', () => {
   let controller: ApplicationsController;
   let applicationsService: {
     createDraft: jest.Mock;
     findById: jest.Mock;
-    listPublicCalls: jest.Mock;
-    listActivePublicCalls: jest.Mock;
-    findPublicCallById: jest.Mock;
     attachDocument: jest.Mock;
     getDocumentCompleteness: jest.Mock;
     submit: jest.Mock;
+  };
+  let callsService: {
+    listPublicCalls: jest.Mock;
+    listActivePublicCalls: jest.Mock;
+    findPublicCallById: jest.Mock;
+  };
+  let mentorshipService: {
     assignMentor: jest.Mock;
     createMentorshipNote: jest.Mock;
     listMentorshipNotes: jest.Mock;
@@ -40,17 +46,23 @@ describe('ApplicationsController', () => {
     applicationsService = {
       createDraft: jest.fn().mockResolvedValue({ id: 'application-1' }),
       findById: jest.fn().mockResolvedValue({ id: 'application-1' }),
-      listPublicCalls: jest.fn().mockResolvedValue({ data: [], meta: {} }),
-      listActivePublicCalls: jest
-        .fn()
-        .mockResolvedValue({ data: [], meta: {} }),
-      findPublicCallById: jest.fn().mockResolvedValue({ id: 'call-1' }),
       attachDocument: jest.fn().mockResolvedValue({ id: 'document-1' }),
       getDocumentCompleteness: jest.fn().mockResolvedValue({
         applicationId: 'application-1',
         isComplete: true,
       }),
       submit: jest.fn().mockResolvedValue({ id: 'application-1' }),
+    };
+
+    callsService = {
+      listPublicCalls: jest.fn().mockResolvedValue({ data: [], meta: {} }),
+      listActivePublicCalls: jest
+        .fn()
+        .mockResolvedValue({ data: [], meta: {} }),
+      findPublicCallById: jest.fn().mockResolvedValue({ id: 'call-1' }),
+    };
+
+    mentorshipService = {
       assignMentor: jest.fn().mockResolvedValue({
         applicationId: 'application-1',
         mentorUserId: 'mentor-1',
@@ -69,6 +81,8 @@ describe('ApplicationsController', () => {
     controller = new ApplicationsController(
       applicationsService as unknown as ApplicationsService,
       sectionsService as unknown as ApplicationSectionsService,
+      mentorshipService as unknown as ProgramAMentorshipService,
+      callsService as unknown as CallsService,
     );
   });
 
@@ -95,7 +109,7 @@ describe('ApplicationsController', () => {
 
     await controller.listPublicCalls(query);
 
-    expect(applicationsService.listPublicCalls).toHaveBeenCalledWith(query);
+    expect(callsService.listPublicCalls).toHaveBeenCalledWith(query);
   });
 
   it('delegates active public call listing to the applications service', async () => {
@@ -109,15 +123,13 @@ describe('ApplicationsController', () => {
 
     await controller.listActivePublicCalls(query);
 
-    expect(applicationsService.listActivePublicCalls).toHaveBeenCalledWith(
-      query,
-    );
+    expect(callsService.listActivePublicCalls).toHaveBeenCalledWith(query);
   });
 
   it('delegates public call lookup by id to the applications service', async () => {
     await controller.findPublicCallById('f6c90688-c973-40ca-8f3b-c55667cc6f77');
 
-    expect(applicationsService.findPublicCallById).toHaveBeenCalledWith(
+    expect(callsService.findPublicCallById).toHaveBeenCalledWith(
       'f6c90688-c973-40ca-8f3b-c55667cc6f77',
     );
   });
@@ -192,7 +204,7 @@ describe('ApplicationsController', () => {
       dto,
     );
 
-    expect(applicationsService.assignMentor).toHaveBeenCalledWith(
+    expect(mentorshipService.assignMentor).toHaveBeenCalledWith(
       'f6c90688-c973-40ca-8f3b-c55667cc6f77',
       user,
       dto,
@@ -213,7 +225,7 @@ describe('ApplicationsController', () => {
       dto,
     );
 
-    expect(applicationsService.createMentorshipNote).toHaveBeenCalledWith(
+    expect(mentorshipService.createMentorshipNote).toHaveBeenCalledWith(
       'application-1',
       user,
       dto,
@@ -226,7 +238,7 @@ describe('ApplicationsController', () => {
 
     const result = await controller.listMentorshipNotes('application-1', user);
 
-    expect(applicationsService.listMentorshipNotes).toHaveBeenCalledWith(
+    expect(mentorshipService.listMentorshipNotes).toHaveBeenCalledWith(
       'application-1',
       user,
     );

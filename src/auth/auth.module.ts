@@ -21,14 +21,14 @@ import { ResetTokenService } from './reset-token/reset-token.service';
 import { InvitesModule } from '../invites/invites.module';
 import { RolesGuard } from './guards/roles.guard';
 import { AuthRegistrationService } from './auth-registration.service';
-import { OrganizationInviteRepository } from 'src/organization/organization-invitation.repository';
-import { OrganizationRepository } from 'src/organization/organization.repository';
+import { OrganizationModule } from '../organization/organization.module';
 
 @Module({
   imports: [
     UserModule,
     HashingModule,
     InvitesModule,
+    OrganizationModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -58,8 +58,6 @@ import { OrganizationRepository } from 'src/organization/organization.repository
     RolesGuard,
     JwtAuthStrategy,
     RefreshJwtStrategy,
-    OrganizationInviteRepository,
-    OrganizationRepository,
   ],
   exports: [
     AuthService,

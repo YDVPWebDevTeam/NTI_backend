@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CallsRepository } from '../../../applications/calls.repository';
+import { CallsRepository } from '../../../applications/calls/calls.repository';
 import { ProgramBTeamApplicationService } from './program-b-team-application.service';
 import { ProgramBTeamApplicationController } from './program-b-team-application.controller';
 import { ProgramBTeamApplicationWithdrawalController } from './program-b-team-application-withdrawal.controller';

@@ -450,7 +450,10 @@ export class ProgramBCompanyOverviewService {
       return left.createdAt.getTime() - right.createdAt.getTime();
     });
 
-    const milestone = pendingMilestones[0];
+    const [milestone] = pendingMilestones;
+    if (!milestone) {
+      return null;
+    }
 
     return {
       id: milestone.id,

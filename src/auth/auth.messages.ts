@@ -1,0 +1,22 @@
+export const AUTH_MESSAGES = {
+  REGISTERED_USER_NOT_LOADED: 'Registered user could not be loaded',
+  INVITATION_NOT_FOUND: 'Invitation was not found',
+  ORGANIZATION_NOT_FOUND: 'Organization was not found',
+  ORGANIZATION_NOT_ACCEPTING_INVITES:
+    'Organization is not accepting invitations',
+  USER_ALREADY_REGISTERED: 'User is already registered',
+  REFRESH_TOKEN_CONTEXT_REQUIRED: 'Refresh token context is required',
+  USER_NOT_FOUND: 'User not found',
+  PASSWORD_CHANGE_REQUIRED: 'Password change is required',
+  ACCOUNT_SUSPENDED: 'User account is suspended',
+  EMAIL_CONFIRMATION_REQUIRED: 'Email confirmation is required',
+  INVALID_RESET_TOKEN: 'Invalid or expired password reset token',
+  INVALID_PASSWORD_CHANGE_TOKEN: 'Invalid or expired password change token',
+  INVITATION_CANCELED: 'Invitation has been canceled',
+  INVITATION_EXPIRED: 'Invitation has expired',
+  INVITATION_ALREADY_ACCEPTED: 'Invitation has already been accepted',
+  INVITATION_NOT_ACTIVE: 'Invitation is not active',
+  INVALID_EMAIL_OR_PASSWORD: 'Invalid email or password',
+  FORGOT_PASSWORD_EMAIL_SENT: 'If the email exists, a reset link was sent.',
+  RESET_PASSWORD_SUCCESS: 'Password reset successfully.',
+} as const;

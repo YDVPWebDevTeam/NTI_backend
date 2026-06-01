@@ -8,5 +8,5 @@ export class ResendEmailDto {
     example: 'user@example.com',
   })
   @EmailValidation()
-  email: string;
+  email!: string;
 }

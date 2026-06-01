@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { EligibilitySignalsModule } from '../applications/eligibility-signals.module';
+import { EligibilitySignalsModule } from '../applications/eligibility-signals/eligibility-signals.module';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { TeamLeadGuard } from '../auth/guards/team-lead.guard';
 import { InvitationTokenService } from '../common/invitations/invitation-token.service';

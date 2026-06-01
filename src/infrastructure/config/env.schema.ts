@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const envSchema = z.object({
+const baseEnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3001),
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
@@ -142,7 +142,7 @@ export const envSchema = z.object({
     .default(30),
 });
 
-export const envSchemaWithR2Checks = envSchema.superRefine((env, ctx) => {
+export const envSchema = baseEnvSchema.superRefine((env, ctx) => {
   const coreKeys: Array<keyof typeof env> = [
     'R2_ENDPOINT',
     'R2_BUCKET_NAME',
@@ -164,4 +164,4 @@ export const envSchemaWithR2Checks = envSchema.superRefine((env, ctx) => {
   }
 });
 
-export type Env = z.infer<typeof envSchemaWithR2Checks>;
+export type Env = z.infer<typeof envSchema>;

@@ -4,7 +4,7 @@ import { FilesModule } from '../../../files';
 import { StorageModule } from '../../../infrastructure/storage';
 import { OrganizationRepository } from '../../../organization/organization.repository';
 import { UserRepository } from '../../../user/user.repository';
-import { CallsRepository } from '../../../applications/calls.repository';
+import { CallsRepository } from '../../../applications/calls/calls.repository';
 import { ProgramBProjectsRepository } from '../projects/program-b-projects.repository';
 import { ProgramBTeamApplicationRepository } from '../team-application/program-b-team-application.repository';
 import { ProgramBBacklogController } from './program-b-backlog.controller';

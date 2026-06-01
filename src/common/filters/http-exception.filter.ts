@@ -46,8 +46,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
     } else {
       message = 'Internal server error';
       error = 'InternalServerError';
+    }
+
+    // Log every server-side failure (unhandled errors and deliberately thrown
+    // 5xx HttpExceptions alike) so they are never silently swallowed.
+    if (statusCode >= 500) {
       this.logger.error(
-        exception instanceof Error ? exception.message : String(exception),
+        `${statusCode} on ${request.method} ${request.url}: ${
+          exception instanceof Error ? exception.message : String(exception)
+        }`,
         exception instanceof Error ? exception.stack : undefined,
       );
     }

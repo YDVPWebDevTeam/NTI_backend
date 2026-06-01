@@ -272,7 +272,7 @@ export class ProgramBBacklogController {
       user,
     );
 
-    return toProgramBTeamApplicationResponseDto(application as never);
+    return toProgramBTeamApplicationResponseDto(application);
   }
 
   @Post(':id/candidates/:applicationId/accept')
@@ -293,7 +293,7 @@ export class ProgramBBacklogController {
       user,
     );
 
-    return toProgramBTeamApplicationResponseDto(application as never);
+    return toProgramBTeamApplicationResponseDto(application);
   }
 
   @Post(':id/candidates/:applicationId/reject')
@@ -314,7 +314,7 @@ export class ProgramBBacklogController {
       user,
     );
 
-    return toProgramBTeamApplicationResponseDto(application as never);
+    return toProgramBTeamApplicationResponseDto(application);
   }
 
   @Post(':id/candidates/:applicationId/create-project')

@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '../config';
 import { UserRole } from '../../../generated/prisma/enums';
 import type { ConfirmationPath } from '../../auth/confirmation-paths';
@@ -12,6 +16,7 @@ import {
 @Injectable()
 export class MailerService {
   private readonly brevoSendEmailUrl = 'https://api.brevo.com/v3/smtp/email';
+  private readonly logger = new Logger(MailerService.name);
 
   constructor(
     private readonly configService: ConfigService,
@@ -46,12 +51,12 @@ export class MailerService {
         throw new Error(`Brevo API error ${response.status}: ${body}`);
       }
     } catch (error: unknown) {
-      console.error('Email sending error', {
-        provider: 'brevo',
-        to,
-        subject,
-        error,
-      });
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(
+        `Failed to send email to "${to}" (subject: "${subject}") via brevo: ${message}`,
+        stack,
+      );
 
       throw new InternalServerErrorException('Failed to send email');
     }

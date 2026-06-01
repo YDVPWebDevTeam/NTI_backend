@@ -24,6 +24,7 @@ import {
 } from './dto/update-org-status.dto';
 import type { ListOrganizationsQueryDto } from './dto/list-organizations-query.dto';
 import type { ListOrganizationsResponseDto } from './dto/list-organizations-response.dto';
+import { ADMIN_ORGANIZATIONS_MESSAGES } from './admin-organizations.messages';
 
 @Injectable()
 export class AdminOrganizationsService {
@@ -94,14 +95,18 @@ export class AdminOrganizationsService {
     });
 
     if (!organization) {
-      throw new NotFoundException('Organization not found');
+      throw new NotFoundException(
+        ADMIN_ORGANIZATIONS_MESSAGES.ORGANIZATION_NOT_FOUND,
+      );
     }
 
     const owner =
       await this.userRepository.findOrganizationOwner(organizationId);
 
     if (!owner) {
-      throw new NotFoundException('Organization owner not found');
+      throw new NotFoundException(
+        ADMIN_ORGANIZATIONS_MESSAGES.ORGANIZATION_OWNER_NOT_FOUND,
+      );
     }
 
     return {
@@ -141,10 +146,14 @@ export class AdminOrganizationsService {
       );
 
       if (!existingOrganization) {
-        throw new NotFoundException('Organization not found');
+        throw new NotFoundException(
+          ADMIN_ORGANIZATIONS_MESSAGES.ORGANIZATION_NOT_FOUND,
+        );
       }
 
-      throw new BadRequestException('Organization has already been processed');
+      throw new BadRequestException(
+        ADMIN_ORGANIZATIONS_MESSAGES.ORGANIZATION_ALREADY_PROCESSED,
+      );
     }
 
     const updatedOrganization = await this.organizationRepository.findUnique({
@@ -152,7 +161,9 @@ export class AdminOrganizationsService {
     });
 
     if (!updatedOrganization) {
-      throw new NotFoundException('Organization not found');
+      throw new NotFoundException(
+        ADMIN_ORGANIZATIONS_MESSAGES.ORGANIZATION_NOT_FOUND,
+      );
     }
 
     const owner =

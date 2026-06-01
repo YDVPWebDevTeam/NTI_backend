@@ -23,6 +23,7 @@ jest.mock('@prisma/client', () => ({}), { virtual: true });
 
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -121,14 +122,14 @@ describe('AdminAcademicStructureService', () => {
     });
   });
 
-  it('maps P2002 write errors to BadRequestException', async () => {
+  it('maps P2002 write errors to ConflictException', async () => {
     repository.createUniversity.mockRejectedValueOnce(
       prismaKnownError('P2002'),
     );
 
     await expect(
       service.createUniversity(adminActor, { name: 'U', isActive: true }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('maps P2003 write errors to BadRequestException', async () => {

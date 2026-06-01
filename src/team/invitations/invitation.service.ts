@@ -12,7 +12,7 @@ import type {
 } from '../../../generated/prisma/client';
 import { Prisma } from '../../../generated/prisma/client';
 import { InvitationStatus } from '../../../generated/prisma/enums';
-import { EligibilitySignalsService } from '../../applications/eligibility-signals.service';
+import { EligibilitySignalsService } from '../../applications/eligibility-signals/eligibility-signals.service';
 import {
   buildOrderBy,
   buildPaginationMeta,
@@ -20,10 +20,12 @@ import {
 } from '../../common/pagination';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { InvitationTokenService } from '../../common/invitations/invitation-token.service';
+import { resolveDisplayInvitationStatus } from '../../common/invitations/invitation-state.utils';
 import { isUniqueConstraintOnFields } from '../../common/prisma/prisma-error.utils';
 import { normalizeInviteEmail } from '../../common/validation/invite-email.validation';
 import type { PrismaDbClient } from '../../infrastructure/database';
 import { EMAIL_JOBS, QueueService } from '../../infrastructure/queue';
+import { TEAM_MESSAGES } from '../team.messages';
 import { TeamRepository } from '../team.repository';
 import { GetTeamInvitesQueryDto } from './dto/get-team-invites-query.dto';
 import { GetTeamInvitesResponseDto } from './dto/get-team-invites-response.dto';
@@ -34,8 +36,6 @@ import {
 } from './invitation.repository';
 
 const INVITATION_TOKEN_MAX_RETRIES = 5;
-const RESEND_INVALID_STATE_MESSAGE =
-  'Only pending and non-expired invites can be resent';
 
 @Injectable()
 export class InvitationService {
@@ -115,7 +115,7 @@ export class InvitationService {
       }
     }
 
-    throw new Error('Failed to create invitations');
+    throw new ConflictException(TEAM_MESSAGES.FAILED_TO_CREATE_INVITATIONS);
   }
 
   async revoke(
@@ -129,7 +129,7 @@ export class InvitationService {
     );
 
     if (!invitation || invitation.teamId !== teamId) {
-      throw new NotFoundException('Invitation not found');
+      throw new NotFoundException(TEAM_MESSAGES.INVITATION_NOT_FOUND);
     }
 
     const now = new Date();
@@ -140,7 +140,7 @@ export class InvitationService {
     );
 
     if (result.count === 0) {
-      throw new ConflictException('Invitation is not active');
+      throw new ConflictException(TEAM_MESSAGES.INVITATION_IS_NOT_ACTIVE);
     }
 
     const revokedInvitation = await this.invitationRepository.findById(
@@ -149,7 +149,7 @@ export class InvitationService {
     );
 
     if (!revokedInvitation) {
-      throw new NotFoundException('Invitation not found');
+      throw new NotFoundException(TEAM_MESSAGES.INVITATION_NOT_FOUND);
     }
 
     return revokedInvitation;
@@ -197,11 +197,11 @@ export class InvitationService {
     );
 
     if (!invitation) {
-      throw new NotFoundException('Invitation not found');
+      throw new NotFoundException(TEAM_MESSAGES.INVITATION_NOT_FOUND);
     }
 
     if (team.lockedAt) {
-      throw new ConflictException('Team is locked');
+      throw new ConflictException(TEAM_MESSAGES.TEAM_IS_LOCKED);
     }
 
     const now = new Date();
@@ -210,7 +210,9 @@ export class InvitationService {
       invitation.revokedAt !== null ||
       invitation.expiresAt <= now
     ) {
-      throw new BadRequestException(RESEND_INVALID_STATE_MESSAGE);
+      throw new BadRequestException(
+        TEAM_MESSAGES.ONLY_PENDING_NON_EXPIRED_CAN_BE_RESENT,
+      );
     }
 
     const previousToken = invitation.token;
@@ -282,7 +284,7 @@ export class InvitationService {
       }
     }
 
-    throw new Error('Failed to resend invitation');
+    throw new ConflictException(TEAM_MESSAGES.FAILED_TO_RESEND_INVITATION);
   }
 
   async accept(
@@ -295,27 +297,25 @@ export class InvitationService {
       const normalizedUserEmail = normalizeInviteEmail(user.email);
 
       if (!invitation) {
-        throw new NotFoundException('Invitation not found');
+        throw new NotFoundException(TEAM_MESSAGES.INVITATION_NOT_FOUND);
       }
 
       if (invitation.status === InvitationStatus.ACCEPTED) {
-        throw new ConflictException('Invitation already accepted');
+        throw new ConflictException(TEAM_MESSAGES.INVITATION_ALREADY_ACCEPTED);
       }
 
       if (invitation.email !== normalizedUserEmail) {
-        throw new ForbiddenException(
-          'Invitation token does not belong to the authenticated user',
-        );
+        throw new ForbiddenException(TEAM_MESSAGES.INVITATION_TOKEN_MISMATCH);
       }
 
       const team = await this.teamRepository.findById(invitation.teamId, tx);
 
       if (!team) {
-        throw new NotFoundException('Team not found');
+        throw new NotFoundException(TEAM_MESSAGES.TEAM_NOT_FOUND);
       }
 
       if (team.lockedAt) {
-        throw new ConflictException('Team is locked');
+        throw new ConflictException(TEAM_MESSAGES.TEAM_IS_LOCKED);
       }
 
       const now = new Date();
@@ -324,7 +324,9 @@ export class InvitationService {
         invitation.revokedAt !== null ||
         invitation.expiresAt <= now
       ) {
-        throw new ConflictException('Invitation expired or revoked');
+        throw new ConflictException(
+          TEAM_MESSAGES.INVITATION_EXPIRED_OR_REVOKED,
+        );
       }
 
       const existingMember = await this.teamRepository.findMember(
@@ -334,7 +336,7 @@ export class InvitationService {
       );
 
       if (existingMember) {
-        throw new ConflictException('User is already a team member');
+        throw new ConflictException(TEAM_MESSAGES.USER_ALREADY_TEAM_MEMBER);
       }
 
       const accepted = await this.invitationRepository.markAcceptedIfPending(
@@ -351,14 +353,18 @@ export class InvitationService {
         );
 
         if (!latestInvitation) {
-          throw new NotFoundException('Invitation not found');
+          throw new NotFoundException(TEAM_MESSAGES.INVITATION_NOT_FOUND);
         }
 
         if (latestInvitation.status === InvitationStatus.ACCEPTED) {
-          throw new ConflictException('Invitation already accepted');
+          throw new ConflictException(
+            TEAM_MESSAGES.INVITATION_ALREADY_ACCEPTED,
+          );
         }
 
-        throw new ConflictException('Invitation expired or revoked');
+        throw new ConflictException(
+          TEAM_MESSAGES.INVITATION_EXPIRED_OR_REVOKED,
+        );
       }
 
       let membership: TeamMember;
@@ -371,7 +377,7 @@ export class InvitationService {
         );
       } catch (error: unknown) {
         if (isUniqueConstraintOnFields(error, ['userId', 'teamId'])) {
-          throw new ConflictException('User is already a team member');
+          throw new ConflictException(TEAM_MESSAGES.USER_ALREADY_TEAM_MEMBER);
         }
 
         throw error;
@@ -402,7 +408,7 @@ export class InvitationService {
     );
 
     if (!invitation) {
-      throw new NotFoundException('Invitation not found');
+      throw new NotFoundException(TEAM_MESSAGES.INVITATION_NOT_FOUND);
     }
 
     if (
@@ -411,7 +417,7 @@ export class InvitationService {
       invitation.expiresAt <= new Date()
     ) {
       throw new BadRequestException(
-        'Invitation is expired, revoked, or already accepted',
+        TEAM_MESSAGES.INVITATION_IS_EXPIRED_OR_ACCEPTED,
       );
     }
 
@@ -527,7 +533,8 @@ export class InvitationService {
       and.push(this.buildStatusWhere(query.status, now));
     }
 
-    return and.length === 1 ? and[0] : { AND: and };
+    const [first] = and;
+    return and.length === 1 && first ? first : { AND: and };
   }
 
   private buildStatusWhere(
@@ -573,28 +580,10 @@ export class InvitationService {
     return {
       id: invitation.id,
       email: invitation.email,
-      status: this.resolveInvitationStatus(invitation, now),
+      status: resolveDisplayInvitationStatus(invitation, now),
       createdAt: invitation.createdAt,
       expiresAt: invitation.expiresAt,
       revokedAt: invitation.revokedAt,
     };
-  }
-
-  private resolveInvitationStatus(
-    invitation: Invitation,
-    now: Date,
-  ): InvitationStatus {
-    if (invitation.revokedAt !== null) {
-      return InvitationStatus.REVOKED;
-    }
-
-    if (
-      invitation.status === InvitationStatus.PENDING &&
-      invitation.expiresAt <= now
-    ) {
-      return InvitationStatus.EXPIRED;
-    }
-
-    return invitation.status;
   }
 }

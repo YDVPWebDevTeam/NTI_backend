@@ -9,6 +9,7 @@ import { EmailChangeTokenService } from '../auth/email-change-token/email-change
 import { isPrismaUniqueConstraintError } from '../common/prisma/prisma-error.utils';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { UserService } from '../user/user.service';
+import { USER_MESSAGES } from '../user/user.messages';
 import { HashingService } from '../infrastructure/hashing';
 import { RefreshTokenService } from '../auth/refresh-token/refresh-token.service';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
@@ -103,7 +104,7 @@ export class AccountService {
 
     const existingUser = await this.userService.findByEmail(newEmail);
     if (existingUser && existingUser.id !== user.id) {
-      throw new ConflictException('User with this email already exists');
+      throw new ConflictException(USER_MESSAGES.EMAIL_ALREADY_EXISTS);
     }
 
     const { token } = await this.emailChangeTokenService.createForUser(
@@ -156,7 +157,7 @@ export class AccountService {
           );
         } catch (error) {
           if (isPrismaUniqueConstraintError(error)) {
-            throw new ConflictException('User with this email already exists');
+            throw new ConflictException(USER_MESSAGES.EMAIL_ALREADY_EXISTS);
           }
 
           throw error;

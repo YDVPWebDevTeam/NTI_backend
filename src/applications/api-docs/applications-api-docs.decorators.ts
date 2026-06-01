@@ -33,7 +33,7 @@ import { NeedsInfoItemDto } from '../dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from '../dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from '../dto/needs-info-thread.dto';
 import { OptionalApplicationTransitionNoteDto } from '../dto/optional-application-transition-note.dto';
-import { ProgramAMentorshipNoteDto } from '../dto/program-a-mentorship-note.dto';
+import { ProgramAMentorshipNoteDto } from '../../programs/program-a/dto/program-a-mentorship-note.dto';
 import { PublicCallDto } from '../dto/public-call.dto';
 import { PUBLIC_CALL_SORT_VALUES } from '../dto/public-calls-query.dto';
 import { PublicCallsResponseDto } from '../dto/public-calls-response.dto';

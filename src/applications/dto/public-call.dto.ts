@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CallStatus, ProgramType } from '../../../generated/prisma/enums';
 import { RequiredDocumentTypeDto } from './required-document-type.dto';
-import { ProgramACallOptionDto } from './program-a-call-option.dto';
+import { ProgramACallOptionDto } from '../../programs/program-a/dto/program-a-call-option.dto';
 
 export class PublicCallDto {
   @ApiProperty({

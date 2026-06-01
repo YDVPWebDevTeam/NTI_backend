@@ -2,11 +2,11 @@ jest.mock('./applications.repository', () => ({
   ApplicationsRepository: class ApplicationsRepository {},
 }));
 
-jest.mock('./application-documents.repository', () => ({
+jest.mock('./documents/application-documents.repository', () => ({
   ApplicationDocumentsRepository: class ApplicationDocumentsRepository {},
 }));
 
-jest.mock('./application-evaluations.repository', () => ({
+jest.mock('./evaluations/application-evaluations.repository', () => ({
   ApplicationEvaluationsRepository: class ApplicationEvaluationsRepository {},
 }));
 
@@ -14,7 +14,7 @@ jest.mock('./rules/application-rules.service', () => ({
   ApplicationRulesService: class ApplicationRulesService {},
 }));
 
-jest.mock('./calls.repository', () => ({
+jest.mock('./calls/calls.repository', () => ({
   CallsRepository: class CallsRepository {},
 }));
 
@@ -26,7 +26,7 @@ jest.mock('../files/files.repository', () => ({
   FilesRepository: class FilesRepository {},
 }));
 
-jest.mock('./eligibility-signals.service', () => ({
+jest.mock('./eligibility-signals/eligibility-signals.service', () => ({
   EligibilitySignalsService: class EligibilitySignalsService {},
 }));
 
@@ -52,16 +52,24 @@ import {
   ApplicationStatus,
   CallStatus,
   DocumentType,
+  NeedsInfoItemStatus,
   ProgramAMilestoneStatus,
   ProgramType,
   UploadStatus,
   UserRole,
 } from '../../generated/prisma/enums';
 import { ApplicationsService } from './applications.service';
+import { ApplicationAccessService } from './application-access.service';
+import { ProgramAMentorshipService } from '../programs/program-a/program-a-mentorship.service';
+import { ProgramAMilestonesService } from '../programs/program-a/program-a-milestones.service';
+import { CallsService } from './calls/calls.service';
 import { ApplicationDecision } from './dto/create-application-decision.dto';
 
 describe('ApplicationsService', () => {
   let service: ApplicationsService;
+  let callsService: CallsService;
+  let mentorshipService: ProgramAMentorshipService;
+  let milestonesService: ProgramAMilestonesService;
   let applicationsRepository: {
     findActiveByTeamAndCall: jest.Mock;
     createDraft: jest.Mock;
@@ -366,20 +374,33 @@ describe('ApplicationsService', () => {
       addEmail: jest.fn().mockResolvedValue(undefined),
     };
 
+    const applicationAccess = new ApplicationAccessService(
+      applicationRulesService as never,
+    );
     service = new ApplicationsService(
       applicationsRepository as never,
       applicationEvaluationsRepository as never,
       applicationDocumentsRepository as never,
       applicationRulesService as never,
-      callsRepository as never,
       teamRepository as never,
       filesRepository as never,
       needsInfoRepository as never,
       eligibilitySignalsService as never,
+      queueService as never,
+      applicationAccess,
+    );
+    callsService = new CallsService(callsRepository as never);
+    mentorshipService = new ProgramAMentorshipService(
+      applicationsRepository as never,
       programAMentorshipRepository as never,
-      programAMilestonesRepository as never,
       userRepository as never,
       queueService as never,
+      applicationAccess,
+    );
+    milestonesService = new ProgramAMilestonesService(
+      applicationsRepository as never,
+      programAMilestonesRepository as never,
+      applicationAccess,
     );
   });
 
@@ -403,7 +424,7 @@ describe('ApplicationsService', () => {
       mockCall,
     );
 
-    const result = await service.getRequiredDocumentsForCall('call-1');
+    const result = await callsService.getRequiredDocumentsForCall('call-1');
 
     expect(result.requiredDocuments).toHaveLength(3);
     expect(result.programType).toBe(ProgramType.PROGRAM_A);
@@ -413,7 +434,7 @@ describe('ApplicationsService', () => {
     callsRepository.findByIdWithRequiredDocumentTypes.mockResolvedValue(null);
 
     await expect(
-      service.getRequiredDocumentsForCall('missing-call'),
+      callsService.getRequiredDocumentsForCall('missing-call'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -893,7 +914,7 @@ describe('ApplicationsService', () => {
     ]);
     callsRepository.countPublic.mockResolvedValue(1);
 
-    const result = await service.listPublicCalls({
+    const result = await callsService.listPublicCalls({
       page: 1,
       limit: 10,
       type: ProgramType.PROGRAM_A,
@@ -919,7 +940,7 @@ describe('ApplicationsService', () => {
     callsRepository.findPublicVisibleMany.mockResolvedValue([]);
     callsRepository.countPublicVisible.mockResolvedValue(0);
 
-    await service.listActivePublicCalls({
+    await callsService.listActivePublicCalls({
       page: 1,
       limit: 20,
       sort: 'closesAt',
@@ -962,7 +983,7 @@ describe('ApplicationsService', () => {
       programACategories: [],
       programAStackTags: [],
     });
-    const result = await service.findPublicCallById('call-1');
+    const result = await callsService.findPublicCallById('call-1');
 
     expect(callsRepository.findPublicById).toHaveBeenCalledWith('call-1');
     expect(result.type).toBe(ProgramType.PROGRAM_B);
@@ -1013,7 +1034,7 @@ describe('ApplicationsService', () => {
       ],
     });
 
-    const result = await service.findPublicCallById('call-1');
+    const result = await callsService.findPublicCallById('call-1');
 
     expect(result.requiredDocumentTypes).toEqual([
       {
@@ -1042,9 +1063,9 @@ describe('ApplicationsService', () => {
   it('throws not found when public call cannot be exposed', async () => {
     callsRepository.findPublicById.mockResolvedValue(null);
 
-    await expect(service.findPublicCallById('call-404')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      callsService.findPublicCallById('call-404'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('allows admin to assign mentor on approved Program A application', async () => {
@@ -1064,7 +1085,7 @@ describe('ApplicationsService', () => {
       mentorAssignedById: 'admin-1',
     });
 
-    const result = await service.assignMentor(
+    const result = await mentorshipService.assignMentor(
       'application-1',
       {
         id: 'admin-1',
@@ -1107,7 +1128,7 @@ describe('ApplicationsService', () => {
     });
 
     await expect(
-      service.assignMentor(
+      mentorshipService.assignMentor(
         'application-1',
         {
           id: 'admin-1',
@@ -1126,7 +1147,7 @@ describe('ApplicationsService', () => {
     });
 
     await expect(
-      service.assignMentor(
+      mentorshipService.assignMentor(
         'application-1',
         {
           id: 'admin-1',
@@ -1146,7 +1167,7 @@ describe('ApplicationsService', () => {
     userRepository.findUnique.mockResolvedValue(null);
 
     await expect(
-      service.assignMentor(
+      mentorshipService.assignMentor(
         'application-1',
         {
           id: 'admin-1',
@@ -1169,7 +1190,7 @@ describe('ApplicationsService', () => {
     });
 
     await expect(
-      service.assignMentor(
+      mentorshipService.assignMentor(
         'application-1',
         {
           id: 'admin-1',
@@ -1201,7 +1222,7 @@ describe('ApplicationsService', () => {
       mentorAssignedById: 'admin-1',
     });
 
-    const result = await service.assignMentor(
+    const result = await mentorshipService.assignMentor(
       'application-1',
       {
         id: 'admin-1',
@@ -1235,7 +1256,7 @@ describe('ApplicationsService', () => {
       },
     });
 
-    const result = await service.createMentorshipNote(
+    const result = await mentorshipService.createMentorshipNote(
       'application-1',
       {
         id: 'mentor-1',
@@ -1281,7 +1302,7 @@ describe('ApplicationsService', () => {
       },
     });
 
-    const result = await service.createMentorshipNote(
+    const result = await mentorshipService.createMentorshipNote(
       'application-1',
       {
         id: 'admin-1',
@@ -1303,7 +1324,7 @@ describe('ApplicationsService', () => {
     });
 
     await expect(
-      service.createMentorshipNote(
+      mentorshipService.createMentorshipNote(
         'application-1',
         {
           id: 'mentor-2',
@@ -1323,7 +1344,7 @@ describe('ApplicationsService', () => {
     });
 
     await expect(
-      service.createMentorshipNote(
+      mentorshipService.createMentorshipNote(
         'application-1',
         {
           id: 'user-2',
@@ -1343,7 +1364,7 @@ describe('ApplicationsService', () => {
     });
 
     await expect(
-      service.createMentorshipNote(
+      mentorshipService.createMentorshipNote(
         'application-1',
         {
           id: 'mentor-1',
@@ -1363,7 +1384,7 @@ describe('ApplicationsService', () => {
     });
 
     await expect(
-      service.createMentorshipNote(
+      mentorshipService.createMentorshipNote(
         'application-1',
         {
           id: 'admin-1',
@@ -1410,11 +1431,14 @@ describe('ApplicationsService', () => {
       },
     ]);
 
-    const result = await service.listMentorshipNotes('application-1', {
-      id: 'mentor-1',
-      email: 'mentor@example.com',
-      role: UserRole.MENTOR,
-    } as never);
+    const result = await mentorshipService.listMentorshipNotes(
+      'application-1',
+      {
+        id: 'mentor-1',
+        email: 'mentor@example.com',
+        role: UserRole.MENTOR,
+      } as never,
+    );
 
     expect(programAMentorshipRepository.listNotes).toHaveBeenCalledWith(
       'application-1',
@@ -1447,7 +1471,7 @@ describe('ApplicationsService', () => {
       );
       programAMilestonesRepository.createMilestone.mockResolvedValue(milestone);
 
-      const result = await service.createProgramAMilestone(
+      const result = await milestonesService.createProgramAMilestone(
         'application-1',
         {
           id: 'admin-1',
@@ -1484,7 +1508,7 @@ describe('ApplicationsService', () => {
       );
       programAMilestonesRepository.createMilestone.mockResolvedValue(milestone);
 
-      const result = await service.createProgramAMilestone(
+      const result = await milestonesService.createProgramAMilestone(
         'application-1',
         {
           id: 'mentor-1',
@@ -1506,7 +1530,7 @@ describe('ApplicationsService', () => {
       );
 
       await expect(
-        service.createProgramAMilestone(
+        milestonesService.createProgramAMilestone(
           'application-1',
           {
             id: 'admin-1',
@@ -1530,7 +1554,7 @@ describe('ApplicationsService', () => {
       );
 
       await expect(
-        service.createProgramAMilestone(
+        milestonesService.createProgramAMilestone(
           'application-1',
           {
             id: 'user-1',
@@ -1552,7 +1576,7 @@ describe('ApplicationsService', () => {
       });
 
       await expect(
-        service.createProgramAMilestone(
+        milestonesService.createProgramAMilestone(
           'application-1',
           {
             id: 'admin-1',
@@ -1574,17 +1598,20 @@ describe('ApplicationsService', () => {
         milestone,
       ]);
 
-      const result = await service.listProgramAMilestones('application-1', {
-        id: 'evaluator-1',
-        email: 'evaluator@example.com',
-        role: UserRole.EVALUATOR,
-      } as never);
+      const result = await milestonesService.listProgramAMilestones(
+        'application-1',
+        {
+          id: 'evaluator-1',
+          email: 'evaluator@example.com',
+          role: UserRole.EVALUATOR,
+        } as never,
+      );
 
       expect(
         programAMilestonesRepository.listByApplication,
       ).toHaveBeenCalledWith('application-1');
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('milestone-1');
+      expect(result[0]!.id).toBe('milestone-1');
     });
 
     it('updates Program A milestone', async () => {
@@ -1600,7 +1627,7 @@ describe('ApplicationsService', () => {
         progressNote: 'Backend integration started.',
       });
 
-      const result = await service.updateProgramAMilestone(
+      const result = await milestonesService.updateProgramAMilestone(
         'application-1',
         'milestone-1',
         {
@@ -1639,7 +1666,7 @@ describe('ApplicationsService', () => {
       );
 
       await expect(
-        service.updateProgramAMilestone(
+        milestonesService.updateProgramAMilestone(
           'application-1',
           'milestone-1',
           {
@@ -1667,7 +1694,7 @@ describe('ApplicationsService', () => {
       );
 
       await expect(
-        service.updateProgramAMilestone(
+        milestonesService.updateProgramAMilestone(
           'application-1',
           'missing-milestone',
           {
@@ -2459,6 +2486,271 @@ describe('ApplicationsService', () => {
       expect(result.decidedAt).toEqual(decidedAt);
       expect(result.decisionById).toBe('evaluator-1');
       expect(result.decisionRationale).toBe('Insufficient team capability');
+    });
+  });
+
+  describe('needs-info workflow', () => {
+    const reviewer = {
+      id: 'evaluator-1',
+      email: 'eval@example.com',
+      role: UserRole.EVALUATOR,
+      status: 'ACTIVE',
+      organizationId: null,
+    } as never;
+
+    const teamLead = {
+      id: 'user-1',
+      email: 'lead@example.com',
+      role: UserRole.STUDENT,
+      status: 'ACTIVE',
+      organizationId: null,
+    } as never;
+
+    const submittedApplication = {
+      ...workflowApplication,
+      status: ApplicationStatus.SUBMITTED,
+    };
+
+    const needsInfoApplication = {
+      ...workflowApplication,
+      status: ApplicationStatus.NEEDS_INFO,
+    };
+
+    const storedItem = {
+      id: 'needs-info-1',
+      applicationId: 'application-1',
+      message: 'Please clarify your budget',
+      dueAt: null,
+      status: NeedsInfoItemStatus.OPEN,
+      createdById: 'evaluator-1',
+      resolvedAt: null,
+      resolvedById: null,
+      createdAt: new Date('2026-05-01T10:00:00.000Z'),
+    };
+
+    describe('createNeedsInfoItem', () => {
+      it('rejects non-reviewer users', async () => {
+        await expect(
+          service.createNeedsInfoItem('application-1', teamLead, {
+            message: 'clarify',
+          }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+      });
+
+      it('rejects when the application status does not allow needs-info', async () => {
+        applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+          needsInfoApplication,
+        );
+
+        await expect(
+          service.createNeedsInfoItem('application-1', reviewer, {
+            message: 'clarify',
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+
+      it('creates the item, transitions to NEEDS_INFO and notifies the team', async () => {
+        applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+          submittedApplication,
+        );
+        needsInfoRepository.createItem.mockResolvedValue(storedItem);
+        applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+          count: 1,
+        });
+
+        const result = await service.createNeedsInfoItem(
+          'application-1',
+          reviewer,
+          { message: 'Please clarify your budget' },
+        );
+
+        expect(
+          applicationsRepository.updateStatusIfCurrent,
+        ).toHaveBeenCalledWith(
+          'application-1',
+          ApplicationStatus.SUBMITTED,
+          ApplicationStatus.NEEDS_INFO,
+          { tx: 'db-client' },
+        );
+        expect(needsInfoRepository.createStatusEvent).toHaveBeenCalledTimes(1);
+        expect(queueService.addEmail).toHaveBeenCalledWith(
+          'application-needs-info-requested',
+          expect.objectContaining({ applicationId: 'application-1' }),
+        );
+        expect(result.id).toBe('needs-info-1');
+      });
+
+      it('throws on concurrent status change', async () => {
+        applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+          submittedApplication,
+        );
+        needsInfoRepository.createItem.mockResolvedValue(storedItem);
+        applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+          count: 0,
+        });
+
+        await expect(
+          service.createNeedsInfoItem('application-1', reviewer, {
+            message: 'clarify',
+          }),
+        ).rejects.toBeInstanceOf(ConflictException);
+      });
+    });
+
+    describe('replyToNeedsInfoItem', () => {
+      it('rejects users who are not the team lead', async () => {
+        applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+          needsInfoApplication,
+        );
+
+        await expect(
+          service.replyToNeedsInfoItem(
+            'application-1',
+            'needs-info-1',
+            reviewer,
+            { message: 'here you go' },
+          ),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+      });
+
+      it('rejects replies when not in NEEDS_INFO status', async () => {
+        applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+          submittedApplication,
+        );
+
+        await expect(
+          service.replyToNeedsInfoItem(
+            'application-1',
+            'needs-info-1',
+            teamLead,
+            { message: 'here you go' },
+          ),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+
+      it('rejects replies to an already resolved item', async () => {
+        applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+          needsInfoApplication,
+        );
+        needsInfoRepository.findItemForApplication.mockResolvedValue({
+          ...storedItem,
+          status: NeedsInfoItemStatus.RESOLVED,
+        });
+
+        await expect(
+          service.replyToNeedsInfoItem(
+            'application-1',
+            'needs-info-1',
+            teamLead,
+            { message: 'here you go' },
+          ),
+        ).rejects.toBeInstanceOf(ConflictException);
+      });
+
+      it('creates a reply and marks an open item as answered', async () => {
+        applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+          needsInfoApplication,
+        );
+        needsInfoRepository.findItemForApplication.mockResolvedValue(
+          storedItem,
+        );
+        needsInfoRepository.createReply.mockResolvedValue({
+          id: 'reply-1',
+          needsInfoItemId: 'needs-info-1',
+          message: 'here you go',
+          createdById: 'user-1',
+          createdAt: new Date('2026-05-02T10:00:00.000Z'),
+        });
+
+        const result = await service.replyToNeedsInfoItem(
+          'application-1',
+          'needs-info-1',
+          teamLead,
+          { message: 'here you go' },
+        );
+
+        expect(needsInfoRepository.markItemAnswered).toHaveBeenCalledWith(
+          'needs-info-1',
+          { tx: 'db-client' },
+        );
+        expect(result.id).toBe('reply-1');
+      });
+    });
+
+    describe('resubmit', () => {
+      it('rejects resubmission when not in NEEDS_INFO status', async () => {
+        applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+          submittedApplication,
+        );
+
+        await expect(
+          service.resubmit('application-1', teamLead, {}),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+
+      it('rejects resubmission while items are still open', async () => {
+        applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+          needsInfoApplication,
+        );
+        needsInfoRepository.findUnresolvedItems.mockResolvedValue([
+          { ...storedItem, status: NeedsInfoItemStatus.OPEN },
+        ]);
+
+        await expect(
+          service.resubmit('application-1', teamLead, {}),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+
+      it('resolves answered items and transitions back to EVALUATING', async () => {
+        applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+          needsInfoApplication,
+        );
+        needsInfoRepository.findUnresolvedItems.mockResolvedValue([
+          { ...storedItem, status: NeedsInfoItemStatus.ANSWERED },
+        ]);
+        applicationsRepository.updateStatusIfCurrent.mockResolvedValue({
+          count: 1,
+        });
+        applicationsRepository.findByIdWithRelations.mockResolvedValue(
+          detailApplication,
+        );
+
+        const result = await service.resubmit('application-1', teamLead, {});
+
+        expect(needsInfoRepository.resolveAnsweredItems).toHaveBeenCalledTimes(
+          1,
+        );
+        expect(
+          applicationsRepository.updateStatusIfCurrent,
+        ).toHaveBeenCalledWith(
+          'application-1',
+          ApplicationStatus.NEEDS_INFO,
+          ApplicationStatus.EVALUATING,
+          { tx: 'db-client' },
+        );
+        expect(result.id).toBe('application-1');
+      });
+    });
+
+    describe('getNeedsInfoThread', () => {
+      it('returns the mapped thread for an authorized reviewer', async () => {
+        applicationsRepository.findByIdForWorkflow.mockResolvedValue(
+          needsInfoApplication,
+        );
+        needsInfoRepository.getThread.mockResolvedValue([
+          { ...storedItem, replies: [] },
+        ]);
+        needsInfoRepository.getStatusEvents.mockResolvedValue([]);
+
+        const result = await service.getNeedsInfoThread(
+          'application-1',
+          reviewer,
+        );
+
+        expect(result.application.id).toBe('application-1');
+        expect(result.items).toHaveLength(1);
+        expect(result.items[0]!.id).toBe('needs-info-1');
+      });
     });
   });
 });

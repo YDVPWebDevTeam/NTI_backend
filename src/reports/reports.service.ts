@@ -50,6 +50,7 @@ import type {
   ApplicationsReportRecord,
   ProgramBReportRecord,
 } from './reports.repository';
+import { REPORTS_MESSAGES } from './reports.messages';
 
 type ExportJobDownloadPayload = {
   downloadUrl: string;
@@ -462,7 +463,7 @@ export class ReportsService {
   ): { gte?: Date; lte?: Date } {
     if (!dateFrom || !dateTo) {
       throw new BadRequestException(
-        'dateFrom and dateTo are required for audit export',
+        REPORTS_MESSAGES.DATE_FROM_DATE_TO_REQUIRED_FOR_AUDIT,
       );
     }
 
@@ -470,7 +471,7 @@ export class ReportsService {
 
     if (!range?.gte || !range.lte) {
       throw new BadRequestException(
-        'dateFrom and dateTo are required for audit export',
+        REPORTS_MESSAGES.DATE_FROM_DATE_TO_REQUIRED_FOR_AUDIT,
       );
     }
 
@@ -498,15 +499,15 @@ export class ReportsService {
     const to = dateTo ? new Date(dateTo) : undefined;
 
     if (from && Number.isNaN(from.getTime())) {
-      throw new BadRequestException('dateFrom must be a valid ISO datetime');
+      throw new BadRequestException(REPORTS_MESSAGES.DATE_FROM_INVALID);
     }
 
     if (to && Number.isNaN(to.getTime())) {
-      throw new BadRequestException('dateTo must be a valid ISO datetime');
+      throw new BadRequestException(REPORTS_MESSAGES.DATE_TO_INVALID);
     }
 
     if (from && to && from > to) {
-      throw new BadRequestException('dateFrom must be before dateTo');
+      throw new BadRequestException(REPORTS_MESSAGES.DATE_FROM_BEFORE_DATE_TO);
     }
 
     return {
@@ -556,7 +557,7 @@ export class ReportsService {
       query.programType !== ProgramType.PROGRAM_B
     ) {
       throw new BadRequestException(
-        'programType=PROGRAM_A is not supported for program-b exports',
+        REPORTS_MESSAGES.PROGRAM_A_NOT_SUPPORTED_FOR_PROGRAM_B_EXPORTS,
       );
     }
   }
@@ -584,7 +585,9 @@ export class ReportsService {
         `Failed to enqueue export job "${exportJobId}": ${message}`,
       );
       await this.exportJobsService.markFailed(exportJobId, message);
-      throw new InternalServerErrorException('Failed to schedule export job');
+      throw new InternalServerErrorException(
+        REPORTS_MESSAGES.FAILED_TO_SCHEDULE_EXPORT_JOB,
+      );
     }
   }
 
@@ -608,7 +611,7 @@ export class ReportsService {
       !Object.values(ApplicationStatus).includes(status as ApplicationStatus)
     ) {
       throw new BadRequestException(
-        'status must be a valid ApplicationStatus for applications exports',
+        REPORTS_MESSAGES.STATUS_MUST_BE_VALID_FOR_APPLICATIONS,
       );
     }
 
@@ -622,7 +625,7 @@ export class ReportsService {
       )
     ) {
       throw new BadRequestException(
-        'status must be a valid ProgramBTeamApplicationStatus for program-b exports',
+        REPORTS_MESSAGES.STATUS_MUST_BE_VALID_FOR_PROGRAM_B,
       );
     }
 
@@ -641,7 +644,7 @@ export class ReportsService {
 
     if (!allowed.includes(sort as (typeof allowed)[number])) {
       throw new BadRequestException(
-        'sort must be one of createdAt, submittedAt, decidedAt, status for applications exports',
+        REPORTS_MESSAGES.SORT_MUST_BE_VALID_FOR_APPLICATIONS,
       );
     }
 
@@ -655,7 +658,7 @@ export class ReportsService {
 
     if (!allowed.includes(sort as (typeof allowed)[number])) {
       throw new BadRequestException(
-        'sort must be one of createdAt, submittedAt, status for program-b exports',
+        REPORTS_MESSAGES.SORT_MUST_BE_VALID_FOR_PROGRAM_B,
       );
     }
 

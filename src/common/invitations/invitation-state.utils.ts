@@ -29,3 +29,44 @@ export function assertPendingAndUnexpired(
     throw new BadRequestException(message);
   }
 }
+
+type DisplayInvitationState = {
+  status: InvitationStatus;
+  acceptedAt?: Date | null;
+  revokedAt: Date | null;
+  expiresAt: Date;
+};
+
+/**
+ * Derives the effective, user-facing invitation status, reconciling the stored
+ * status with the timestamp columns (a row may still be PENDING while already
+ * revoked/accepted/expired by time). `acceptedAt` is optional because some
+ * invitation models (e.g. team invitations) do not track it.
+ */
+export function resolveDisplayInvitationStatus(
+  invitation: DisplayInvitationState,
+  now: Date,
+): InvitationStatus {
+  if (
+    invitation.status === InvitationStatus.REVOKED ||
+    invitation.revokedAt !== null
+  ) {
+    return InvitationStatus.REVOKED;
+  }
+
+  if (
+    invitation.status === InvitationStatus.ACCEPTED ||
+    invitation.acceptedAt != null
+  ) {
+    return InvitationStatus.ACCEPTED;
+  }
+
+  if (
+    invitation.status === InvitationStatus.EXPIRED ||
+    invitation.expiresAt <= now
+  ) {
+    return InvitationStatus.EXPIRED;
+  }
+
+  return InvitationStatus.PENDING;
+}

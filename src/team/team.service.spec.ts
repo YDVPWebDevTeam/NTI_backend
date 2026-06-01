@@ -26,9 +26,12 @@ jest.mock('../infrastructure/queue', () => ({
   QueueService: class QueueService {},
 }));
 
-jest.mock('../applications/eligibility-signals.service', () => ({
-  EligibilitySignalsService: class EligibilitySignalsService {},
-}));
+jest.mock(
+  '../applications/eligibility-signals/eligibility-signals.service',
+  () => ({
+    EligibilitySignalsService: class EligibilitySignalsService {},
+  }),
+);
 
 import {
   ConflictException,
@@ -36,7 +39,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
-import { EligibilitySignalsService } from '../applications/eligibility-signals.service';
+import { EligibilitySignalsService } from '../applications/eligibility-signals/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import type { PrismaDbClient } from '../infrastructure/database';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';

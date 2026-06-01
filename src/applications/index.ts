@@ -1,18 +1,18 @@
 export { ApplicationsModule } from './applications.module';
-export { AdminCallsController } from './admin-calls.controller';
-export { AdminCallsService } from './admin-calls.service';
+export { AdminCallsController } from './calls/admin-calls.controller';
+export { AdminCallsService } from './calls/admin-calls.service';
 export { ApplicationsService } from './applications.service';
-export { ApplicationSectionsService } from './application-sections.service';
+export { ApplicationSectionsService } from './sections/application-sections.service';
 export { ApplicationsRepository } from './applications.repository';
-export { ApplicationDocumentsRepository } from './application-documents.repository';
-export { ApplicationEvaluationsRepository } from './application-evaluations.repository';
-export { ApplicationSectionsRepository } from './application-sections.repository';
-export { ProgramAMentorshipRepository } from './program-a-mentorship.repository';
-export { AdminApplicationsController } from './admin-applications.controller';
+export { ApplicationDocumentsRepository } from './documents/application-documents.repository';
+export { ApplicationEvaluationsRepository } from './evaluations/application-evaluations.repository';
+export { ApplicationSectionsRepository } from './sections/application-sections.repository';
+export { ProgramAMentorshipRepository } from '../programs/program-a/program-a-mentorship.repository';
+export { AdminApplicationsController } from './admin/admin-applications.controller';
 export { ApplicationsController } from './applications.controller';
-export { CallsDocumentsController } from './calls-documents.controller';
+export { CallsDocumentsController } from './calls/calls-documents.controller';
 export { ApplicationRulesService } from './rules/application-rules.service';
-export { CallsRepository } from './calls.repository';
+export { CallsRepository } from './calls/calls.repository';
 export {
   ApproveApplicationApi,
   FormalVerifyApplicationApi,
@@ -77,7 +77,7 @@ export { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto
 export { UpdateAdminCallDto } from './dto/update-admin-call.dto';
 export { UpsertApplicationSectionDto } from './dto/upsert-application-section.dto';
 export { UpsertIdeaOverviewSectionDto } from './dto/upsert-idea-overview-section.dto';
-export { NeedsInfoRepository } from './needs-info.repository';
+export { NeedsInfoRepository } from './needs-info/needs-info.repository';
 export { CreateNeedsInfoItemDto } from './dto/create-needs-info-item.dto';
 export { CreateNeedsInfoReplyDto } from './dto/create-needs-info-reply.dto';
 export { ResubmitApplicationDto } from './dto/resubmit-application.dto';
@@ -88,7 +88,7 @@ export { NeedsInfoItemDto } from './dto/needs-info-item.dto';
 export { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
 export { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';
 export { OptionalApplicationTransitionNoteDto } from './dto/optional-application-transition-note.dto';
-export { ProgramAMentorshipNoteDto } from './dto/program-a-mentorship-note.dto';
+export { ProgramAMentorshipNoteDto } from '../programs/program-a/dto/program-a-mentorship-note.dto';
 export { ApplicationEvaluationDto } from './dto/application-evaluation.dto';
 export { CreateApplicationDecisionDto } from './dto/create-application-decision.dto';
 export { CreateApplicationEvaluationDto } from './dto/create-application-evaluation.dto';

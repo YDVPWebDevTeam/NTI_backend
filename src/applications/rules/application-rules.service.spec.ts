@@ -1,4 +1,4 @@
-jest.mock('../calls.repository', () => ({
+jest.mock('../calls/calls.repository', () => ({
   CallsRepository: class CallsRepository {},
 }));
 

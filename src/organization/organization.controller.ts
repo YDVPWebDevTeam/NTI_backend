@@ -18,6 +18,7 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import type { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
 import { OrganizationService } from './organization.service';
+import { OrganizationInviteService } from './organization-invite.service';
 import {
   AcceptOrganizationInviteApi,
   CreateOrganizationApi,
@@ -51,7 +52,10 @@ import { OrganizationInviteValidationResponseDto } from './dto/organization-invi
 @ApiTags('Organizations')
 @Controller('/organizations')
 export class OrganizationController {
-  constructor(private readonly service: OrganizationService) {}
+  constructor(
+    private readonly service: OrganizationService,
+    private readonly inviteService: OrganizationInviteService,
+  ) {}
 
   @Get('me')
   @GetMyOrganizationApi()
@@ -90,7 +94,7 @@ export class OrganizationController {
   async validateInvite(
     @Body() dto: ValidateOrganizationInviteDto,
   ): Promise<OrganizationInviteValidationResponseDto> {
-    return this.service.validateInviteToken(dto.token);
+    return this.inviteService.validateInviteToken(dto.token);
   }
 
   @Post('invites/accept')
@@ -100,7 +104,7 @@ export class OrganizationController {
     @Body() dto: ValidateOrganizationInviteDto,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<OrganizationMemberResponseDto> {
-    return this.service.acceptInvite(dto.token, user);
+    return this.inviteService.acceptInvite(dto.token, user);
   }
 
   @Post(':id/invites')
@@ -112,7 +116,7 @@ export class OrganizationController {
     @Body() dto: CreateOrganizationInviteDto,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<OrganizationInviteResponseDto> {
-    return this.service.createInvite(id, dto, user);
+    return this.inviteService.createInvite(id, dto, user);
   }
 
   @Get(':id/invites')
@@ -124,7 +128,7 @@ export class OrganizationController {
     @Query() query: GetOrganizationInvitesQueryDto,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<GetOrganizationInvitesResponseDto> {
-    return this.service.listInvites(id, query, user);
+    return this.inviteService.listInvites(id, query, user);
   }
 
   @Delete(':id/invites/:inviteId')
@@ -136,7 +140,7 @@ export class OrganizationController {
     @Param('inviteId', ParseUUIDPipe) inviteId: string,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<RevokeOrganizationInviteResponseDto> {
-    return this.service.revokeInvite(id, inviteId, user);
+    return this.inviteService.revokeInvite(id, inviteId, user);
   }
 
   @Post(':id/invites/:inviteId/resend')
@@ -148,7 +152,7 @@ export class OrganizationController {
     @Param('inviteId', ParseUUIDPipe) inviteId: string,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ResendOrganizationInviteResponseDto> {
-    return this.service.resendInvite(id, inviteId, user);
+    return this.inviteService.resendInvite(id, inviteId, user);
   }
 
   @Get(':id/members')

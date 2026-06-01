@@ -6,13 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Invitation, Team } from '../../generated/prisma/client';
-import { Prisma } from '../../generated/prisma/client';
-import { EligibilitySignalsService } from '../applications/eligibility-signals.service';
+import { EligibilitySignalsService } from '../applications/eligibility-signals/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
-import type {
-  PrismaDbClient,
-  PrismaTransactionOptions,
-} from '../infrastructure/database';
+import { SERIALIZABLE_TX_OPTIONS } from '../common/prisma/transaction.constants';
+import type { PrismaDbClient } from '../infrastructure/database';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { CreateTeamWithInvitesDto } from './dto/create-team-with-invites.dto';
 import { LeaveTeamResponseDto } from './dto/leave-team-response.dto';
@@ -22,6 +19,7 @@ import { TeamSummaryResponseDto } from './dto/team-summary-response.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { CreatedInvitationDto } from './invitations/dto/created-invitation.dto';
 import { InvitationService } from './invitations/invitation.service';
+import { TEAM_MESSAGES } from './team.messages';
 import {
   TeamPublicView,
   TeamRepository,
@@ -32,10 +30,8 @@ type TeamInvitationEmailPayload = Pick<Invitation, 'id' | 'email' | 'token'>;
 
 @Injectable()
 export class TeamService {
-  private readonly membershipLifecycleTransactionOptions: PrismaTransactionOptions =
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    };
+  private readonly membershipLifecycleTransactionOptions =
+    SERIALIZABLE_TX_OPTIONS;
 
   constructor(
     private readonly teamRepository: TeamRepository,
@@ -68,7 +64,9 @@ export class TeamService {
         );
 
         if (!loadedTeam) {
-          throw new InternalServerErrorException('Failed to load created team');
+          throw new InternalServerErrorException(
+            TEAM_MESSAGES.FAILED_TO_LOAD_CREATED_TEAM,
+          );
         }
 
         const createdInvitations = await this.invitationService.createInvites(
@@ -106,9 +104,9 @@ export class TeamService {
           db,
         );
 
-        if (existingTeams.length === 1) {
-          const [existingTeam] = existingTeams;
+        const [existingTeam] = existingTeams;
 
+        if (existingTeams.length === 1 && existingTeam) {
           if (this.shouldRenamePersonalTeam(existingTeam, user.id, teamName)) {
             return this.teamRepository.update(
               { id: existingTeam.id },
@@ -121,9 +119,7 @@ export class TeamService {
         }
 
         if (existingTeams.length > 1) {
-          throw new ConflictException(
-            'Multiple active teams found for current user',
-          );
+          throw new ConflictException(TEAM_MESSAGES.MULTIPLE_ACTIVE_TEAMS);
         }
 
         const createdTeam = await this.teamRepository.create(
@@ -142,7 +138,9 @@ export class TeamService {
         );
 
         if (!loadedTeam) {
-          throw new InternalServerErrorException('Failed to load created team');
+          throw new InternalServerErrorException(
+            TEAM_MESSAGES.FAILED_TO_LOAD_CREATED_TEAM,
+          );
         }
 
         return loadedTeam;
@@ -168,13 +166,13 @@ export class TeamService {
     const team = await this.teamRepository.findUnique({ id: teamId });
 
     if (!team) {
-      throw new NotFoundException('Team not found');
+      throw new NotFoundException(TEAM_MESSAGES.TEAM_NOT_FOUND);
     }
     if (team.leaderId !== userId) {
-      throw new ForbiddenException('Only team leader can act on this team');
+      throw new ForbiddenException(TEAM_MESSAGES.ONLY_TEAM_LEADER_CAN_ACT);
     }
     if (team.archivedAt) {
-      throw new ConflictException('Archived team cannot be used');
+      throw new ConflictException(TEAM_MESSAGES.ARCHIVED_TEAM_CANNOT_BE_USED);
     }
 
     return team;
@@ -184,7 +182,7 @@ export class TeamService {
     const team = await this.teamRepository.findPublicById(id);
 
     if (!team) {
-      throw new NotFoundException('Team not found');
+      throw new NotFoundException(TEAM_MESSAGES.TEAM_NOT_FOUND);
     }
 
     return team;
@@ -196,16 +194,19 @@ export class TeamService {
     const teams = await this.teamRepository.findActiveByUserId(user.id);
 
     if (teams.length === 0) {
-      throw new NotFoundException('Current team not found');
+      throw new NotFoundException(TEAM_MESSAGES.CURRENT_TEAM_NOT_FOUND);
     }
 
     if (teams.length > 1) {
-      throw new ConflictException(
-        'Multiple active teams found for current user',
-      );
+      throw new ConflictException(TEAM_MESSAGES.MULTIPLE_ACTIVE_TEAMS);
     }
 
-    return this.toTeamDetail(teams[0]);
+    const [team] = teams;
+    if (!team) {
+      throw new NotFoundException(TEAM_MESSAGES.CURRENT_TEAM_NOT_FOUND);
+    }
+
+    return this.toTeamDetail(team);
   }
 
   async update(
@@ -240,7 +241,7 @@ export class TeamService {
     },
   ): Promise<{ createdCount: number; invitations: CreatedInvitationDto[] }> {
     if (team.lockedAt) {
-      throw new ConflictException('Team is locked');
+      throw new ConflictException(TEAM_MESSAGES.TEAM_IS_LOCKED);
     }
 
     const invitations = await this.invitationService.createInvites(
@@ -299,7 +300,7 @@ export class TeamService {
         invitations.map(({ id }) => id),
       );
       throw new InternalServerErrorException(
-        'Failed to enqueue invitation emails',
+        TEAM_MESSAGES.FAILED_TO_ENQUEUE_INVITATION_EMAILS,
       );
     }
   }
@@ -316,7 +317,7 @@ export class TeamService {
       this.ensureTeamIsUnlocked(team);
 
       if (memberId === team.leaderId) {
-        throw new ConflictException('Cannot remove current team leader');
+        throw new ConflictException(TEAM_MESSAGES.CANNOT_REMOVE_CURRENT_LEADER);
       }
 
       const membership = await this.teamRepository.findMember(
@@ -326,7 +327,7 @@ export class TeamService {
       );
 
       if (!membership) {
-        throw new NotFoundException('Team member not found');
+        throw new NotFoundException(TEAM_MESSAGES.TEAM_MEMBER_NOT_FOUND);
       }
 
       const deletedMembership = await this.teamRepository.deleteMembership(
@@ -336,7 +337,7 @@ export class TeamService {
       );
 
       if (deletedMembership.count === 0) {
-        throw new NotFoundException('Team member not found');
+        throw new NotFoundException(TEAM_MESSAGES.TEAM_MEMBER_NOT_FOUND);
       }
 
       await this.eligibilitySignalsService.recomputeForTeamApplications(
@@ -368,12 +369,12 @@ export class TeamService {
       );
 
       if (!membership) {
-        throw new NotFoundException('Team member not found');
+        throw new NotFoundException(TEAM_MESSAGES.TEAM_MEMBER_NOT_FOUND);
       }
 
       if (actorId === team.leaderId) {
         throw new ConflictException(
-          'Current team leader must transfer leadership before leaving team',
+          TEAM_MESSAGES.LEADER_MUST_TRANSFER_BEFORE_LEAVING,
         );
       }
 
@@ -384,7 +385,7 @@ export class TeamService {
       );
 
       if (deletedMembership.count === 0) {
-        throw new NotFoundException('Team member not found');
+        throw new NotFoundException(TEAM_MESSAGES.TEAM_MEMBER_NOT_FOUND);
       }
 
       await this.eligibilitySignalsService.recomputeForTeamApplications(
@@ -419,7 +420,7 @@ export class TeamService {
         );
 
         if (!newLeaderMembership) {
-          throw new NotFoundException('Team member not found');
+          throw new NotFoundException(TEAM_MESSAGES.TEAM_MEMBER_NOT_FOUND);
         }
 
         const updated = await this.teamRepository.updateLeader(
@@ -448,7 +449,7 @@ export class TeamService {
     const team = await this.teamRepository.findById(id);
 
     if (!team) {
-      throw new NotFoundException('Team not found');
+      throw new NotFoundException(TEAM_MESSAGES.TEAM_NOT_FOUND);
     }
 
     return team;
@@ -503,7 +504,7 @@ export class TeamService {
     const team = await this.teamRepository.findUnique({ id: teamId }, db);
 
     if (!team) {
-      throw new NotFoundException('Team not found');
+      throw new NotFoundException(TEAM_MESSAGES.TEAM_NOT_FOUND);
     }
 
     return team;
@@ -530,7 +531,7 @@ export class TeamService {
 
   private ensureTeamIsUnlocked(team: Team): void {
     if (team.lockedAt) {
-      throw new ConflictException('Team is locked');
+      throw new ConflictException(TEAM_MESSAGES.TEAM_IS_LOCKED);
     }
   }
 

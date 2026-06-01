@@ -21,6 +21,7 @@ import { RequestUploadDto } from './dto/request-upload.dto';
 import type { UploadedFileDto } from './dto/uploaded-file.dto';
 import type { UploadInstructionsDto } from './dto/upload-instructions.dto';
 import { FilesRepository } from './files.repository';
+import { FILES_MESSAGES } from './files.messages';
 
 const MIME_EXTENSION_MAP: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -97,7 +98,7 @@ export class FilesService {
     );
 
     if (!file) {
-      throw new NotFoundException('Upload record was not found');
+      throw new NotFoundException(FILES_MESSAGES.UPLOAD_RECORD_NOT_FOUND);
     }
 
     if (file.status === UploadStatus.UPLOADED) {
@@ -105,11 +106,11 @@ export class FilesService {
     }
 
     if (file.status === UploadStatus.FAILED) {
-      throw new ConflictException('Upload has already failed');
+      throw new ConflictException(FILES_MESSAGES.UPLOAD_ALREADY_FAILED);
     }
 
     if (file.uploadUrlExpiresAt.getTime() < Date.now()) {
-      throw new ConflictException('Upload URL has expired');
+      throw new ConflictException(FILES_MESSAGES.UPLOAD_URL_EXPIRED);
     }
 
     if (this.configService.fileUploadVerifyObjectOnComplete) {
@@ -117,13 +118,13 @@ export class FilesService {
 
       if (objectInfo.ContentType && objectInfo.ContentType !== file.mimeType) {
         throw new BadRequestException(
-          'Uploaded object type does not match request',
+          FILES_MESSAGES.UPLOADED_OBJECT_TYPE_MISMATCH,
         );
       }
 
       if (objectInfo.ContentLength && objectInfo.ContentLength !== file.size) {
         throw new BadRequestException(
-          'Uploaded object size does not match request',
+          FILES_MESSAGES.UPLOADED_OBJECT_SIZE_MISMATCH,
         );
       }
     }
@@ -150,13 +151,13 @@ export class FilesService {
     );
 
     if (!file) {
-      throw new NotFoundException('File was not found');
+      throw new NotFoundException(FILES_MESSAGES.FILE_NOT_FOUND);
     }
 
     const visibility = this.normalizeVisibility(file.visibility);
 
     if (file.status !== UploadStatus.UPLOADED) {
-      throw new ConflictException('File is not available for reading yet');
+      throw new ConflictException(FILES_MESSAGES.FILE_NOT_AVAILABLE);
     }
 
     if (visibility === FileVisibility.PUBLIC) {
@@ -263,7 +264,7 @@ export class FilesService {
         });
 
       throw new InternalServerErrorException(
-        'Failed to upload generated file to storage',
+        FILES_MESSAGES.FAILED_TO_UPLOAD_GENERATED_FILE,
       );
     }
 
@@ -279,7 +280,7 @@ export class FilesService {
       );
 
       throw new InternalServerErrorException(
-        'Failed to finalize generated file upload',
+        FILES_MESSAGES.FAILED_TO_FINALIZE_GENERATED_FILE,
       );
     }
   }
@@ -303,13 +304,13 @@ export class FilesService {
 
   private validateUploadPolicy(dto: RequestUploadDto): void {
     if (dto.size > this.configService.fileUploadMaxSizeBytes) {
-      throw new PayloadTooLargeException('File is too large');
+      throw new PayloadTooLargeException(FILES_MESSAGES.FILE_TOO_LARGE);
     }
 
     const allowedMimeTypes = this.configService.fileUploadAllowedMimeTypes;
 
     if (!allowedMimeTypes.includes(dto.mimeType)) {
-      throw new BadRequestException('File type is not allowed');
+      throw new BadRequestException(FILES_MESSAGES.FILE_TYPE_NOT_ALLOWED);
     }
 
     if (
@@ -317,14 +318,14 @@ export class FilesService {
       !this.configService.r2PublicBaseUrl
     ) {
       throw new BadRequestException(
-        'Public file uploads require R2_PUBLIC_BASE_URL to be configured',
+        FILES_MESSAGES.PUBLIC_UPLOAD_REQUIRES_BASE_URL,
       );
     }
   }
 
   private validateServerGeneratedUploadPolicy(dto: RequestUploadDto): void {
     if (dto.size > this.configService.fileUploadMaxSizeBytes) {
-      throw new PayloadTooLargeException('File is too large');
+      throw new PayloadTooLargeException(FILES_MESSAGES.FILE_TOO_LARGE);
     }
 
     if (
@@ -332,7 +333,7 @@ export class FilesService {
       !this.configService.r2PublicBaseUrl
     ) {
       throw new BadRequestException(
-        'Public file uploads require R2_PUBLIC_BASE_URL to be configured',
+        FILES_MESSAGES.PUBLIC_UPLOAD_REQUIRES_BASE_URL,
       );
     }
   }

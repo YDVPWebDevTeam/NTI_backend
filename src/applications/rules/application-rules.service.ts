@@ -9,7 +9,8 @@ import type { Call } from '../../../generated/prisma/client';
 import { CallStatus } from '../../../generated/prisma/enums';
 import type { PrismaDbClient } from '../../infrastructure/database';
 import { TeamRepository } from '../../team/team.repository';
-import { CallsRepository } from '../calls.repository';
+import { CallsRepository } from '../calls/calls.repository';
+import { APPLICATIONS_MESSAGES } from '../applications.messages';
 
 @Injectable()
 export class ApplicationRulesService {
@@ -31,7 +32,7 @@ export class ApplicationRulesService {
     // 1. Verify call exists and is open with valid date window
     const call = await this.callsRepository.findById(callId, db);
     if (!call) {
-      throw new NotFoundException('Call not found');
+      throw new NotFoundException(APPLICATIONS_MESSAGES.CALL_NOT_FOUND);
     }
 
     this.ensureCallOpenForApplications(call);
@@ -40,19 +41,19 @@ export class ApplicationRulesService {
     const team = await this.teamRepository.findPublicById(teamId, db);
 
     if (!team) {
-      throw new NotFoundException('Team not found');
+      throw new NotFoundException(APPLICATIONS_MESSAGES.TEAM_NOT_FOUND);
     }
 
     if (team.archivedAt !== null) {
       throw new ConflictException(
-        'Team is archived and cannot submit applications',
+        APPLICATIONS_MESSAGES.TEAM_ARCHIVED_CANNOT_SUBMIT,
       );
     }
 
     // 3. Verify requester is the team lead
     if (team.leaderId !== userId) {
       throw new ForbiddenException(
-        'Only team lead can submit applications on behalf of the team',
+        APPLICATIONS_MESSAGES.ONLY_TEAM_LEAD_CAN_SUBMIT,
       );
     }
   }

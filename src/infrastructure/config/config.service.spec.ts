@@ -67,6 +67,18 @@ describe('ConfigService', () => {
     );
   });
 
+  it('rejects a partially configured R2 setup', () => {
+    process.env.R2_ENDPOINT = 'https://account.r2.cloudflarestorage.com';
+    process.env.R2_BUCKET_NAME = 'nti-bucket';
+    // R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY intentionally omitted.
+
+    expect(() => new ConfigService()).toThrow(/Invalid environment variables/);
+  });
+
+  it('allows R2 configuration to be entirely omitted', () => {
+    expect(() => new ConfigService()).not.toThrow();
+  });
+
   it('exposes optional email logo url when configured', () => {
     process.env.EMAIL_LOGO_URL = 'https://cdn.example.com/icons/nti-logo.svg';
 

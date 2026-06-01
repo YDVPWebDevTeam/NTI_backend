@@ -24,6 +24,7 @@ import {
 } from './dto/create-system-invite.dto';
 import { SystemInviteResponseDto } from './dto/system-invite-response.dto';
 import { SystemInvitationRepository } from './system-invitation.repository';
+import { ADMIN_INVITES_MESSAGES } from './admin-invites.messages';
 
 @Injectable()
 export class AdminInvitesService {
@@ -49,7 +50,7 @@ export class AdminInvitesService {
       );
     if (activeInvitation) {
       throw new ConflictException(
-        'Active invitation for this email and role already exists',
+        ADMIN_INVITES_MESSAGES.ACTIVE_INVITATION_ALREADY_EXISTS,
       );
     }
 
@@ -83,7 +84,7 @@ export class AdminInvitesService {
   ): void {
     if (!isAdminRole(actorRole)) {
       throw new ForbiddenException(
-        'Only administrators can create system invitations',
+        ADMIN_INVITES_MESSAGES.ONLY_ADMINS_CAN_CREATE_INVITATIONS,
       );
     }
 
@@ -91,7 +92,9 @@ export class AdminInvitesService {
       actorRole === UserRole.ADMIN &&
       roleToAssign === SYSTEM_INVITABLE_ROLES.ADMIN
     ) {
-      throw new ForbiddenException('Only super admins can invite admins');
+      throw new ForbiddenException(
+        ADMIN_INVITES_MESSAGES.ONLY_SUPER_ADMINS_CAN_INVITE_ADMINS,
+      );
     }
   }
 

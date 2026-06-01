@@ -1,11 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InvitationStatus } from '../../../generated/prisma/enums';
 import { ensureAdminRole } from '../../auth/admin-role.helper';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import { OrganizationInviteItemDto } from '../../organization/dto/organization-invite-item.dto';
 import { OrganizationInviteRepository } from '../../organization/organization-invitation.repository';
 import { OrganizationRepository } from '../../organization/organization.repository';
-import type { OrgInvitation } from '../../../generated/prisma/client';
+import { toOrganizationInviteItemDto } from '../../organization/organization-invite.mapper';
+import { ADMIN_ORG_INVITES_MESSAGES } from './admin-org-invites.messages';
 
 @Injectable()
 export class AdminOrgInvitesService {
@@ -17,34 +17,30 @@ export class AdminOrgInvitesService {
   async listAll(
     actor: AuthenticatedUserContext,
   ): Promise<OrganizationInviteItemDto[]> {
-    ensureAdminRole(
-      actor.role,
-      'Only administrators can access organization invites',
-    );
+    ensureAdminRole(actor.role, ADMIN_ORG_INVITES_MESSAGES.ADMIN_ONLY_ACCESS);
 
     const now = new Date();
     const invites = await this.organizationInviteRepository.findMany({
       orderBy: [{ createdAt: 'desc' }],
     });
 
-    return invites.map((invite) => this.toInviteItemDto(invite, now));
+    return invites.map((invite) => toOrganizationInviteItemDto(invite, now));
   }
 
   async listByOrganization(
     actor: AuthenticatedUserContext,
     organizationId: string,
   ): Promise<OrganizationInviteItemDto[]> {
-    ensureAdminRole(
-      actor.role,
-      'Only administrators can access organization invites',
-    );
+    ensureAdminRole(actor.role, ADMIN_ORG_INVITES_MESSAGES.ADMIN_ONLY_ACCESS);
 
     const organization = await this.organizationRepository.findUnique({
       id: organizationId,
     });
 
     if (!organization) {
-      throw new NotFoundException('Organization not found');
+      throw new NotFoundException(
+        ADMIN_ORG_INVITES_MESSAGES.ORGANIZATION_NOT_FOUND,
+      );
     }
 
     const now = new Date();
@@ -53,50 +49,6 @@ export class AdminOrgInvitesService {
       orderBy: [{ createdAt: 'desc' }],
     });
 
-    return invites.map((invite) => this.toInviteItemDto(invite, now));
-  }
-
-  private toInviteItemDto(
-    invitation: OrgInvitation,
-    now: Date,
-  ): OrganizationInviteItemDto {
-    return {
-      id: invitation.id,
-      email: invitation.email,
-      status: this.resolveInvitationStatus(invitation, now),
-      roleToAssign: invitation.roleToAssign,
-      createdAt: invitation.createdAt,
-      expiresAt: invitation.expiresAt,
-      acceptedAt: invitation.acceptedAt,
-      revokedAt: invitation.revokedAt,
-    };
-  }
-
-  private resolveInvitationStatus(
-    invitation: OrgInvitation,
-    now: Date,
-  ): InvitationStatus {
-    if (
-      invitation.status === InvitationStatus.REVOKED ||
-      invitation.revokedAt !== null
-    ) {
-      return InvitationStatus.REVOKED;
-    }
-
-    if (
-      invitation.status === InvitationStatus.ACCEPTED ||
-      invitation.acceptedAt !== null
-    ) {
-      return InvitationStatus.ACCEPTED;
-    }
-
-    if (
-      invitation.status === InvitationStatus.EXPIRED ||
-      invitation.expiresAt <= now
-    ) {
-      return InvitationStatus.EXPIRED;
-    }
-
-    return InvitationStatus.PENDING;
+    return invites.map((invite) => toOrganizationInviteItemDto(invite, now));
   }
 }

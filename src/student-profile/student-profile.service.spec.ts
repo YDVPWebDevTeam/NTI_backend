@@ -2,9 +2,12 @@ jest.mock('./student-profile.repository', () => ({
   StudentProfileRepository: class StudentProfileRepository {},
 }));
 
-jest.mock('../applications/eligibility-signals.service', () => ({
-  EligibilitySignalsService: class EligibilitySignalsService {},
-}));
+jest.mock(
+  '../applications/eligibility-signals/eligibility-signals.service',
+  () => ({
+    EligibilitySignalsService: class EligibilitySignalsService {},
+  }),
+);
 
 import {
   BadRequestException,
@@ -18,7 +21,7 @@ import {
   StudentSkillLevel,
   UploadStatus,
 } from '../../generated/prisma/enums';
-import { EligibilitySignalsService } from '../applications/eligibility-signals.service';
+import { EligibilitySignalsService } from '../applications/eligibility-signals/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { ProfileNotFoundError } from './student-profile.errors';
 import { StudentProfileService } from './student-profile.service';

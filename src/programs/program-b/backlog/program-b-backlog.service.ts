@@ -13,12 +13,22 @@ import {
   BacklogItemStatus,
   FileVisibility,
   OrganizationStatus,
+  ProgramBBacklogDocumentCategory,
+  ProgramBDocumentVisibility,
   ProgramBTeamApplicationStatus,
   UploadStatus,
   UserRole,
   UserStatus,
 } from '../../../../generated/prisma/enums';
-import { CallsRepository } from '../../../applications/calls.repository';
+import {
+  isAdminRole,
+  isCompanyRole,
+  isReviewerRole,
+  isSameOrgCompanyMember,
+} from '../../../common/auth/role-groups';
+import { SERIALIZABLE_TX_OPTIONS } from '../../../common/prisma/transaction.constants';
+import { toProgramBDocumentDto } from '../common/program-b-document.mapper';
+import { CallsRepository } from '../../../applications/calls/calls.repository';
 import { isPrismaUniqueConstraintError } from '../../../common/prisma/prisma-error.utils';
 import type { AuthenticatedUserContext } from '../../../common/types/auth-user-context.type';
 import {
@@ -51,12 +61,11 @@ import {
   ProgramBBacklogDetailView,
   ProgramBBacklogRepository,
 } from './program-b-backlog.repository';
+import { PROGRAM_B_BACKLOG_MESSAGES } from './program-b-backlog.messages';
 
 @Injectable()
 export class ProgramBBacklogService {
-  private readonly backlogLifecycleTransactionOptions = {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-  } as const;
+  private readonly backlogLifecycleTransactionOptions = SERIALIZABLE_TX_OPTIONS;
 
   constructor(
     private readonly backlogRepository: ProgramBBacklogRepository,
@@ -94,7 +103,9 @@ export class ProgramBBacklogService {
     });
 
     if (!createdItem) {
-      throw new NotFoundException('Backlog item not found');
+      throw new NotFoundException(
+        PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+      );
     }
 
     return this.toBacklogItemDto(createdItem);
@@ -109,7 +120,9 @@ export class ProgramBBacklogService {
     const item = await this.getItemForOrganizationOrThrow(id, organization.id);
 
     if (item.status !== BacklogItemStatus.DRAFT) {
-      throw new ConflictException('Only draft backlog items may be updated');
+      throw new ConflictException(
+        PROGRAM_B_BACKLOG_MESSAGES.ONLY_DRAFT_MAY_BE_UPDATED,
+      );
     }
 
     const updateData: Prisma.BacklogItemUncheckedUpdateInput = {};
@@ -130,7 +143,9 @@ export class ProgramBBacklogService {
     }
 
     if (Object.keys(updateData).length === 0) {
-      throw new BadRequestException('Request body is empty');
+      throw new BadRequestException(
+        PROGRAM_B_BACKLOG_MESSAGES.REQUEST_BODY_EMPTY,
+      );
     }
 
     return this.backlogRepository.transaction(async (db) => {
@@ -141,7 +156,9 @@ export class ProgramBBacklogService {
       );
 
       if (result.count === 0) {
-        throw new ConflictException('Only draft backlog items may be updated');
+        throw new ConflictException(
+          PROGRAM_B_BACKLOG_MESSAGES.ONLY_DRAFT_MAY_BE_UPDATED,
+        );
       }
 
       const updatedItem = await this.backlogRepository.findDetailUnique(
@@ -150,7 +167,9 @@ export class ProgramBBacklogService {
       );
 
       if (!updatedItem) {
-        throw new NotFoundException('Backlog item not found');
+        throw new NotFoundException(
+          PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+        );
       }
 
       return this.toBacklogItemDto(updatedItem);
@@ -165,14 +184,18 @@ export class ProgramBBacklogService {
     const item = await this.getItemForOrganizationOrThrow(id, organization.id);
 
     if (item.status !== BacklogItemStatus.DRAFT) {
-      throw new ConflictException('Only draft backlog items may be deleted');
+      throw new ConflictException(
+        PROGRAM_B_BACKLOG_MESSAGES.ONLY_DRAFT_MAY_BE_DELETED,
+      );
     }
 
     return this.backlogRepository.transaction(async (db) => {
       const deleted = await this.backlogRepository.deleteDraftById(item.id, db);
 
       if (deleted.count === 0) {
-        throw new ConflictException('Only draft backlog items may be deleted');
+        throw new ConflictException(
+          PROGRAM_B_BACKLOG_MESSAGES.ONLY_DRAFT_MAY_BE_DELETED,
+        );
       }
 
       return this.toBacklogItemDto(item);
@@ -278,7 +301,9 @@ export class ProgramBBacklogService {
       item.status !== BacklogItemStatus.PUBLISHED ||
       !hasActiveCall
     ) {
-      throw new NotFoundException('Backlog item not found');
+      throw new NotFoundException(
+        PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+      );
     }
 
     return this.toBacklogItemDto(item);
@@ -289,15 +314,16 @@ export class ProgramBBacklogService {
     dto: AssignProductOwnerDto,
     user: AuthenticatedUserContext,
   ): Promise<ProgramBBacklogItemDto> {
-    const isAdmin =
-      user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
+    const isAdmin = isAdminRole(user.role);
 
     let item: ProgramBBacklogDetailView;
 
     if (isAdmin) {
       const found = await this.backlogRepository.findDetailUnique({ id });
       if (!found) {
-        throw new NotFoundException('Backlog item not found');
+        throw new NotFoundException(
+          PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+        );
       }
       item = found;
     } else {
@@ -307,7 +333,7 @@ export class ProgramBBacklogService {
 
     if (item.status === BacklogItemStatus.ARCHIVED) {
       throw new ConflictException(
-        'Product Owner cannot be assigned to an archived backlog item',
+        PROGRAM_B_BACKLOG_MESSAGES.PRODUCT_OWNER_CANNOT_BE_ASSIGNED_ARCHIVED,
       );
     }
 
@@ -339,12 +365,14 @@ export class ProgramBBacklogService {
       );
 
       if (!updatedItem) {
-        throw new NotFoundException('Backlog item not found');
+        throw new NotFoundException(
+          PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+        );
       }
 
       if (result.count === 0) {
         throw new ConflictException(
-          'Product Owner cannot be assigned in the current backlog state',
+          PROGRAM_B_BACKLOG_MESSAGES.PRODUCT_OWNER_CANNOT_BE_ASSIGNED_CURRENT_STATE,
         );
       }
 
@@ -376,7 +404,7 @@ export class ProgramBBacklogService {
 
       if (item.status !== BacklogItemStatus.DRAFT) {
         throw new ConflictException(
-          'Only draft backlog items may be published',
+          PROGRAM_B_BACKLOG_MESSAGES.ONLY_DRAFT_MAY_BE_PUBLISHED,
         );
       }
 
@@ -396,7 +424,7 @@ export class ProgramBBacklogService {
 
       if (result.count === 0) {
         throw new ConflictException(
-          'Only draft backlog items may be published',
+          PROGRAM_B_BACKLOG_MESSAGES.ONLY_DRAFT_MAY_BE_PUBLISHED,
         );
       }
 
@@ -406,7 +434,9 @@ export class ProgramBBacklogService {
       );
 
       if (!publishedItem) {
-        throw new NotFoundException('Backlog item not found');
+        throw new NotFoundException(
+          PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+        );
       }
 
       return this.toBacklogItemDto(publishedItem);
@@ -425,7 +455,7 @@ export class ProgramBBacklogService {
       item.status !== BacklogItemStatus.PUBLISHED
     ) {
       throw new ConflictException(
-        'Only draft or published backlog items may be archived',
+        PROGRAM_B_BACKLOG_MESSAGES.ONLY_DRAFT_OR_PUBLISHED_MAY_BE_ARCHIVED,
       );
     }
 
@@ -443,7 +473,7 @@ export class ProgramBBacklogService {
 
       if (result.count === 0) {
         throw new ConflictException(
-          'Only draft or published backlog items may be archived',
+          PROGRAM_B_BACKLOG_MESSAGES.ONLY_DRAFT_OR_PUBLISHED_MAY_BE_ARCHIVED,
         );
       }
 
@@ -453,7 +483,9 @@ export class ProgramBBacklogService {
       );
 
       if (!archivedItem) {
-        throw new NotFoundException('Backlog item not found');
+        throw new NotFoundException(
+          PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+        );
       }
 
       return this.toBacklogItemDto(archivedItem);
@@ -488,7 +520,7 @@ export class ProgramBBacklogService {
 
       if (candidate.status !== ProgramBTeamApplicationStatus.SUBMITTED) {
         throw new ConflictException(
-          'Only submitted candidates may be shortlisted',
+          PROGRAM_B_BACKLOG_MESSAGES.ONLY_SUBMITTED_MAY_BE_SHORTLISTED,
         );
       }
 
@@ -508,7 +540,7 @@ export class ProgramBBacklogService {
 
       if (result.count === 0) {
         throw new ConflictException(
-          'Only submitted candidates may be shortlisted',
+          PROGRAM_B_BACKLOG_MESSAGES.ONLY_SUBMITTED_MAY_BE_SHORTLISTED,
         );
       }
 
@@ -563,7 +595,7 @@ export class ProgramBBacklogService {
           candidate.status !== ProgramBTeamApplicationStatus.SHORTLISTED
         ) {
           throw new ConflictException(
-            'Only submitted or shortlisted candidates may be accepted',
+            PROGRAM_B_BACKLOG_MESSAGES.ONLY_SUBMITTED_OR_SHORTLISTED_MAY_BE_ACCEPTED,
           );
         }
 
@@ -589,7 +621,7 @@ export class ProgramBBacklogService {
 
         if (result.count === 0) {
           throw new ConflictException(
-            'Only submitted or shortlisted candidates may be accepted',
+            PROGRAM_B_BACKLOG_MESSAGES.ONLY_SUBMITTED_OR_SHORTLISTED_MAY_BE_ACCEPTED,
           );
         }
 
@@ -630,7 +662,7 @@ export class ProgramBBacklogService {
     } catch (error) {
       if (isPrismaUniqueConstraintError(error)) {
         throw new ConflictException(
-          'A candidate has already been accepted for this backlog item',
+          PROGRAM_B_BACKLOG_MESSAGES.CANDIDATE_ALREADY_ACCEPTED,
         );
       }
 
@@ -669,7 +701,7 @@ export class ProgramBBacklogService {
         candidate.status !== ProgramBTeamApplicationStatus.SHORTLISTED
       ) {
         throw new ConflictException(
-          'Only submitted or shortlisted candidates may be rejected',
+          PROGRAM_B_BACKLOG_MESSAGES.ONLY_SUBMITTED_OR_SHORTLISTED_MAY_BE_REJECTED,
         );
       }
 
@@ -694,7 +726,7 @@ export class ProgramBBacklogService {
 
       if (result.count === 0) {
         throw new ConflictException(
-          'Only submitted or shortlisted candidates may be rejected',
+          PROGRAM_B_BACKLOG_MESSAGES.ONLY_SUBMITTED_OR_SHORTLISTED_MAY_BE_REJECTED,
         );
       }
 
@@ -723,7 +755,7 @@ export class ProgramBBacklogService {
 
         if (backlogItem.status === BacklogItemStatus.ARCHIVED) {
           throw new ConflictException(
-            'Archived backlog items cannot create Program B projects',
+            PROGRAM_B_BACKLOG_MESSAGES.ARCHIVED_ITEMS_CANNOT_CREATE_PROJECTS,
           );
         }
 
@@ -755,13 +787,13 @@ export class ProgramBBacklogService {
 
         if (candidate.status !== ProgramBTeamApplicationStatus.ACCEPTED) {
           throw new ConflictException(
-            'Only accepted candidates may be handed off into a project',
+            PROGRAM_B_BACKLOG_MESSAGES.ONLY_ACCEPTED_MAY_HAND_OFF,
           );
         }
 
         if (!backlogItem.productOwnerUserId) {
           throw new ConflictException(
-            'Backlog item must have an active product owner before project handoff',
+            PROGRAM_B_BACKLOG_MESSAGES.ACTIVE_PRODUCT_OWNER_REQUIRED,
           );
         }
 
@@ -811,7 +843,7 @@ export class ProgramBBacklogService {
         }
 
         throw new ConflictException(
-          'A Program B project already exists for this candidate',
+          PROGRAM_B_BACKLOG_MESSAGES.PROJECT_ALREADY_EXISTS,
         );
       }
 
@@ -831,7 +863,9 @@ export class ProgramBBacklogService {
     );
 
     if (item.status === BacklogItemStatus.ARCHIVED) {
-      throw new ConflictException('Archived backlog items are read-only');
+      throw new ConflictException(
+        PROGRAM_B_BACKLOG_MESSAGES.ARCHIVED_ITEMS_ARE_READ_ONLY,
+      );
     }
 
     const upload = await this.filesService.requestUpload(user, {
@@ -916,7 +950,9 @@ export class ProgramBBacklogService {
     }
 
     if (document.uploadedFile.status !== UploadStatus.UPLOADED) {
-      throw new ConflictException('Document is not available for reading yet');
+      throw new ConflictException(
+        PROGRAM_B_BACKLOG_MESSAGES.DOCUMENT_NOT_AVAILABLE_FOR_READING,
+      );
     }
 
     const downloadUrl = await this.storageService.createPresignedDownloadUrl({
@@ -935,7 +971,7 @@ export class ProgramBBacklogService {
     actor: AuthenticatedUserContext,
     item: ProgramBBacklogDetailView,
   ): void {
-    if (actor.role === UserRole.ADMIN || actor.role === UserRole.SUPER_ADMIN) {
+    if (isAdminRole(actor.role)) {
       return;
     }
 
@@ -949,7 +985,7 @@ export class ProgramBBacklogService {
   private ensureActiveStudent(user: AuthenticatedUserContext): void {
     if (user.role !== UserRole.STUDENT || user.status !== UserStatus.ACTIVE) {
       throw new ForbiddenException(
-        'Only active student users may browse published backlog items',
+        PROGRAM_B_BACKLOG_MESSAGES.ONLY_ACTIVE_STUDENTS_MAY_BROWSE,
       );
     }
   }
@@ -957,7 +993,7 @@ export class ProgramBBacklogService {
   private async ensureActiveOrganizationMember(user: AuthenticatedUserContext) {
     if (!user.organizationId || user.status !== UserStatus.ACTIVE) {
       throw new ForbiddenException(
-        'Only active organization members may manage backlog items',
+        PROGRAM_B_BACKLOG_MESSAGES.ONLY_ACTIVE_ORG_MEMBERS_MAY_MANAGE,
       );
     }
 
@@ -967,7 +1003,7 @@ export class ProgramBBacklogService {
 
     if (!organization || organization.status !== OrganizationStatus.ACTIVE) {
       throw new ForbiddenException(
-        'Only active organization members may manage backlog items',
+        PROGRAM_B_BACKLOG_MESSAGES.ONLY_ACTIVE_ORG_MEMBERS_MAY_MANAGE,
       );
     }
 
@@ -983,21 +1019,17 @@ export class ProgramBBacklogService {
     });
 
     if (!item) {
-      throw new NotFoundException('Backlog item not found');
+      throw new NotFoundException(
+        PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+      );
     }
 
-    if (
-      user.role === UserRole.ADMIN ||
-      user.role === UserRole.SUPER_ADMIN ||
-      user.role === UserRole.EVALUATOR
-    ) {
+    if (isReviewerRole(user.role)) {
       return item;
     }
 
     if (
-      (user.role === UserRole.COMPANY_OWNER ||
-        user.role === UserRole.COMPANY_EMPLOYEE) &&
-      user.organizationId === item.organizationId &&
+      isSameOrgCompanyMember(user, item.organizationId) &&
       user.status === UserStatus.ACTIVE
     ) {
       return item;
@@ -1005,7 +1037,9 @@ export class ProgramBBacklogService {
 
     if (user.role === UserRole.STUDENT && user.status === UserStatus.ACTIVE) {
       if (item.status !== BacklogItemStatus.PUBLISHED) {
-        throw new NotFoundException('Backlog item not found');
+        throw new NotFoundException(
+          PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+        );
       }
 
       return item;
@@ -1025,7 +1059,9 @@ export class ProgramBBacklogService {
     );
 
     if (!item) {
-      throw new NotFoundException('Backlog item not found');
+      throw new NotFoundException(
+        PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+      );
     }
 
     if (item.organizationId !== organizationId) {
@@ -1046,7 +1082,9 @@ export class ProgramBBacklogService {
     );
 
     if (!document || document.backlogItemId !== backlogItemId) {
-      throw new NotFoundException('Program B backlog document not found');
+      throw new NotFoundException(
+        PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_DOCUMENT_NOT_FOUND,
+      );
     }
 
     return document;
@@ -1096,7 +1134,7 @@ export class ProgramBBacklogService {
     }
 
     throw new ConflictException(
-      'Could not assign a unique document version for this category',
+      PROGRAM_B_BACKLOG_MESSAGES.DOCUMENT_VERSION_CONFLICT,
     );
   }
 
@@ -1107,18 +1145,11 @@ export class ProgramBBacklogService {
     },
     user: AuthenticatedUserContext,
   ): boolean {
-    if (
-      user.role === UserRole.ADMIN ||
-      user.role === UserRole.SUPER_ADMIN ||
-      user.role === UserRole.EVALUATOR
-    ) {
+    if (isReviewerRole(user.role)) {
       return true;
     }
 
-    if (
-      user.role === UserRole.COMPANY_OWNER ||
-      user.role === UserRole.COMPANY_EMPLOYEE
-    ) {
+    if (isCompanyRole(user.role)) {
       return user.organizationId === item.organizationId;
     }
 
@@ -1143,7 +1174,9 @@ export class ProgramBBacklogService {
     );
 
     if (!candidate || candidate.backlogItemId !== backlogItemId) {
-      throw new NotFoundException('Program B candidate application not found');
+      throw new NotFoundException(
+        PROGRAM_B_BACKLOG_MESSAGES.CANDIDATE_APPLICATION_NOT_FOUND,
+      );
     }
 
     return candidate as ProgramBTeamApplication;
@@ -1154,7 +1187,7 @@ export class ProgramBBacklogService {
   ): void {
     if (backlogItem.status === BacklogItemStatus.ARCHIVED) {
       throw new ConflictException(
-        'Archived backlog items do not accept candidate decisions',
+        PROGRAM_B_BACKLOG_MESSAGES.ARCHIVED_ITEMS_DO_NOT_ACCEPT_DECISIONS,
       );
     }
 
@@ -1163,7 +1196,7 @@ export class ProgramBBacklogService {
       backlogItem.status !== BacklogItemStatus.IN_PAIRING
     ) {
       throw new ConflictException(
-        'Only published or pairing backlog items accept candidate decisions',
+        PROGRAM_B_BACKLOG_MESSAGES.ONLY_PUBLISHED_OR_PAIRING_ACCEPT_DECISIONS,
       );
     }
   }
@@ -1177,7 +1210,7 @@ export class ProgramBBacklogService {
     if (!productOwnerUserId) {
       if (required) {
         throw new BadRequestException(
-          'Product owner must be a member of the same organization',
+          PROGRAM_B_BACKLOG_MESSAGES.PRODUCT_OWNER_NOT_FROM_SAME_ORG,
         );
       }
 
@@ -1192,7 +1225,7 @@ export class ProgramBBacklogService {
 
     if (!productOwner) {
       throw new BadRequestException(
-        'Product owner must be a member of the same organization',
+        PROGRAM_B_BACKLOG_MESSAGES.PRODUCT_OWNER_NOT_FROM_SAME_ORG,
       );
     }
   }
@@ -1208,7 +1241,9 @@ export class ProgramBBacklogService {
     );
 
     if (!user) {
-      throw new NotFoundException('Target user not found');
+      throw new NotFoundException(
+        PROGRAM_B_BACKLOG_MESSAGES.TARGET_USER_NOT_FOUND,
+      );
     }
 
     const member = await this.userRepository.findActiveOrganizationMember(
@@ -1219,29 +1254,33 @@ export class ProgramBBacklogService {
 
     if (!member) {
       throw new ForbiddenException(
-        'Target user must be an active member of the same organization',
+        PROGRAM_B_BACKLOG_MESSAGES.TARGET_USER_MUST_BE_ACTIVE_ORG_MEMBER,
       );
     }
   }
 
   private ensurePublishReadiness(item: ProgramBBacklogDetailView): void {
     if (!item.title?.trim()) {
-      throw new BadRequestException('Title is required for publish');
+      throw new BadRequestException(
+        PROGRAM_B_BACKLOG_MESSAGES.TITLE_REQUIRED_FOR_PUBLISH,
+      );
     }
 
     if (!item.description?.trim()) {
-      throw new BadRequestException('Description is required for publish');
+      throw new BadRequestException(
+        PROGRAM_B_BACKLOG_MESSAGES.DESCRIPTION_REQUIRED_FOR_PUBLISH,
+      );
     }
 
     if (item.budget === null || item.budget === undefined || item.budget <= 0) {
       throw new BadRequestException(
-        'Budget must be greater than 0 for publish',
+        PROGRAM_B_BACKLOG_MESSAGES.BUDGET_MUST_BE_POSITIVE,
       );
     }
 
     if (!item.productOwnerUserId) {
       throw new BadRequestException(
-        'Product owner must be a member of the same organization',
+        PROGRAM_B_BACKLOG_MESSAGES.PRODUCT_OWNER_NOT_FROM_SAME_ORG,
       );
     }
   }
@@ -1276,7 +1315,8 @@ export class ProgramBBacklogService {
       });
     }
 
-    return and.length === 1 ? and[0] : { AND: and };
+    const [first] = and;
+    return and.length === 1 && first ? first : { AND: and };
   }
 
   private buildListOrderBy(
@@ -1287,8 +1327,8 @@ export class ProgramBBacklogService {
 
   private toBacklogDocumentDto(document: {
     id: string;
-    category: unknown;
-    visibility: unknown;
+    category: ProgramBBacklogDocumentCategory;
+    visibility: ProgramBDocumentVisibility;
     version: number;
     createdAt: Date;
     uploadedFile: {
@@ -1300,19 +1340,7 @@ export class ProgramBBacklogService {
       uploadedAt: Date | null;
     };
   }): ProgramBBacklogDocumentDto {
-    return {
-      id: document.id,
-      fileId: document.uploadedFile.id,
-      category: document.category as never,
-      visibility: document.visibility as never,
-      name: document.uploadedFile.originalName,
-      mimeType: document.uploadedFile.mimeType,
-      size: document.uploadedFile.size,
-      status: document.uploadedFile.status as never,
-      version: document.version,
-      uploadedAt: document.uploadedFile.uploadedAt ?? undefined,
-      createdAt: document.createdAt,
-    };
+    return toProgramBDocumentDto(document);
   }
 
   private toBacklogItemDto(

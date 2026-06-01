@@ -29,7 +29,7 @@ export default tseslint.config(
   {
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-floating-promises': 'warn',
+      '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       '@typescript-eslint/no-unused-vars': [
         'error',
@@ -41,7 +41,7 @@ export default tseslint.config(
           ignoreRestSiblings: true,
         },
       ],
-      "prettier/prettier": ["error", { endOfLine: "lf" }],
+      'prettier/prettier': ['error', { endOfLine: 'lf' }],
     },
   },
 );

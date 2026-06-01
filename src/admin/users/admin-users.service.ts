@@ -22,6 +22,7 @@ import {
 import { toAuthenticatedUserContext } from '../../user/user.mapper';
 import type { ListUsersQueryDto } from './dto/list-users-query.dto';
 import type { ListUsersResponseDto } from './dto/list-users-response.dto';
+import { ADMIN_USERS_MESSAGES } from './admin-users.messages';
 
 @Injectable()
 export class AdminUsersService {
@@ -100,7 +101,7 @@ export class AdminUsersService {
     const targetUser = await this.userService.findById(targetUserId);
 
     if (!targetUser) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(ADMIN_USERS_MESSAGES.USER_NOT_FOUND);
     }
 
     return toAuthenticatedUserContext(targetUser);
@@ -116,11 +117,13 @@ export class AdminUsersService {
     const targetUser = await this.userService.findById(targetUserId);
 
     if (!targetUser) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(ADMIN_USERS_MESSAGES.USER_NOT_FOUND);
     }
 
     if (actor.id === targetUser.id) {
-      throw new ForbiddenException('You cannot change your own account status');
+      throw new ForbiddenException(
+        ADMIN_USERS_MESSAGES.CANNOT_CHANGE_OWN_STATUS,
+      );
     }
 
     if (
@@ -129,7 +132,7 @@ export class AdminUsersService {
         targetUser.role === UserRole.ADMIN)
     ) {
       throw new ForbiddenException(
-        'Admins cannot change the status of other administrators',
+        ADMIN_USERS_MESSAGES.ADMINS_CANNOT_CHANGE_ADMIN_STATUS,
       );
     }
 

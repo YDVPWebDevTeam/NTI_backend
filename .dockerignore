@@ -1,0 +1,34 @@
+# Dependencies (reinstalled inside the image)
+node_modules
+npm-debug.log*
+
+# Build output (regenerated in the builder stage)
+dist
+generated
+
+# Secrets & local env (must never land in an image layer)
+.env
+.env.*
+!.env.example
+
+# VCS & tooling
+.git
+.gitignore
+.github
+.husky
+.vscode
+.idea
+
+# Tests & coverage
+coverage
+test
+**/*.spec.ts
+**/*.e2e-spec.ts
+
+# Docker & misc
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+README.md
+*.md
+.eslintcache

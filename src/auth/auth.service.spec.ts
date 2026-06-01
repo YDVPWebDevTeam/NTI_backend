@@ -67,8 +67,7 @@ import {
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
 import { ResetTokenService } from './reset-token/reset-token.service';
 import { AuthRegistrationService } from './auth-registration.service';
-import { OrganizationInviteRepository } from 'src/organization/organization-invitation.repository';
-import { OrganizationRepository } from 'src/organization/organization.repository';
+import { OrganizationInviteService } from 'src/organization/organization-invite.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -221,8 +220,15 @@ describe('AuthService', () => {
       resetTokens as unknown as ResetTokenService,
       queueService as unknown as QueueService,
       authRegistration as unknown as AuthRegistrationService,
-      organizationInvites as unknown as OrganizationInviteRepository,
-      organizations as unknown as OrganizationRepository,
+      new OrganizationInviteService(
+        organizations as never,
+        organizationInvites as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+      ),
     );
   });
 

@@ -14,6 +14,7 @@ import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { UserRole } from 'generated/prisma/enums';
 import { GetUserContext } from '../../../auth/decorators/get-user-context.decorator';
 import { Roles } from '../../../auth/decorators/roles.decorator';
+import { REVIEWER_ROLES } from '../../../common/auth/role-groups';
 import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../auth/guards/roles.guard';
 import type { AuthenticatedUserContext } from '../../../common/types/auth-user-context.type';
@@ -62,7 +63,7 @@ export class ProgramBProjectsController {
 
   @ApiOkResponse({ type: [ProgramBAssignableMentorDto] })
   @Get('assignable-mentors')
-  @Roles(UserRole.EVALUATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(...REVIEWER_ROLES)
   listAssignableMentors(@GetUserContext() user: AuthenticatedUserContext) {
     return this.projectsService.listAssignableMentors(user);
   }
@@ -253,7 +254,7 @@ export class ProgramBProjectsController {
   @ApiOkResponse({ type: ProgramBProjectDetailDto })
   @Post(':id/assign-mentor')
   @HttpCode(HttpStatus.OK)
-  @Roles(UserRole.EVALUATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(...REVIEWER_ROLES)
   assignMentor(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AssignProgramBMentorDto,

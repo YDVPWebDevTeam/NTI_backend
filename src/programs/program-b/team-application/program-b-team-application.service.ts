@@ -5,7 +5,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { CallsRepository } from '../../../applications/calls.repository';
+import { CallsRepository } from '../../../applications/calls/calls.repository';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { CreateTeamApplicationDto } from './dto/create-team-application.dto';
 import {
@@ -19,6 +19,7 @@ import {
 import { FilesService } from '../../../files/files.service';
 import { TeamService } from '../../../team/team.service';
 import { ProgramBBacklogService } from '../backlog/program-b-backlog.service';
+import { PROGRAM_B_TEAM_APPLICATION_MESSAGES } from './program-b-team-application.messages';
 
 type ApplicationWithCv = ProgramBTeamApplication & {
   cvAttachments: Array<
@@ -47,20 +48,26 @@ export class ProgramBTeamApplicationService {
     ]);
 
     if (!backlogItem) {
-      throw new NotFoundException('Backlog item not found');
+      throw new NotFoundException(
+        PROGRAM_B_TEAM_APPLICATION_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+      );
     }
     if (!hasActiveCall) {
-      throw new ConflictException('No active Program B call');
+      throw new ConflictException(
+        PROGRAM_B_TEAM_APPLICATION_MESSAGES.NO_ACTIVE_PROGRAM_B_CALL,
+      );
     }
     if (backlogItem.status !== BacklogItemStatus.PUBLISHED) {
-      throw new ConflictException('Backlog item must be published');
+      throw new ConflictException(
+        PROGRAM_B_TEAM_APPLICATION_MESSAGES.BACKLOG_ITEM_MUST_BE_PUBLISHED,
+      );
     }
 
     await this.teamService.ensureLeaderOwnedUnarchivedTeam(dto.teamId, userId);
 
     if (!dto.proposalText && !dto.proposalFileId) {
       throw new BadRequestException(
-        'Either proposalText or proposalFileId must be provided',
+        PROGRAM_B_TEAM_APPLICATION_MESSAGES.PROPOSAL_TEXT_OR_FILE_REQUIRED,
       );
     }
     if (dto.proposalFileId) {
@@ -68,10 +75,14 @@ export class ProgramBTeamApplicationService {
         dto.proposalFileId,
       );
       if (!proposalFile) {
-        throw new NotFoundException('Proposal file not found');
+        throw new NotFoundException(
+          PROGRAM_B_TEAM_APPLICATION_MESSAGES.PROPOSAL_FILE_NOT_FOUND,
+        );
       }
       if (proposalFile.status !== UploadStatus.UPLOADED) {
-        throw new BadRequestException('Proposal file is not in uploaded state');
+        throw new BadRequestException(
+          PROGRAM_B_TEAM_APPLICATION_MESSAGES.PROPOSAL_FILE_NOT_IN_UPLOADED_STATE,
+        );
       }
       const isMember = await this.teamService.isTeamMember(
         dto.teamId,
@@ -79,7 +90,7 @@ export class ProgramBTeamApplicationService {
       );
       if (!isMember) {
         throw new BadRequestException(
-          'Proposal file does not belong to a team member',
+          PROGRAM_B_TEAM_APPLICATION_MESSAGES.PROPOSAL_FILE_NOT_TEAM_MEMBER,
         );
       }
     }
@@ -140,10 +151,12 @@ export class ProgramBTeamApplicationService {
     return this.prisma.client.$transaction(async (tx) => {
       const callStillActive = await this.callsRepository.hasActiveProgramBCall(
         new Date(),
-        tx as never,
+        tx,
       );
       if (!callStillActive) {
-        throw new ConflictException('No active Program B call');
+        throw new ConflictException(
+          PROGRAM_B_TEAM_APPLICATION_MESSAGES.NO_ACTIVE_PROGRAM_B_CALL,
+        );
       }
 
       const application = await tx.programBTeamApplication.create({
@@ -211,7 +224,9 @@ export class ProgramBTeamApplicationService {
       });
 
     if (!application) {
-      throw new NotFoundException('Application not found');
+      throw new NotFoundException(
+        PROGRAM_B_TEAM_APPLICATION_MESSAGES.APPLICATION_NOT_FOUND,
+      );
     }
     return application;
   }
@@ -227,16 +242,20 @@ export class ProgramBTeamApplicationService {
       });
 
     if (!application) {
-      throw new NotFoundException('Application not found');
+      throw new NotFoundException(
+        PROGRAM_B_TEAM_APPLICATION_MESSAGES.APPLICATION_NOT_FOUND,
+      );
     }
 
     if (application.team.leaderId !== userId) {
-      throw new ForbiddenException('Only team leader can withdraw application');
+      throw new ForbiddenException(
+        PROGRAM_B_TEAM_APPLICATION_MESSAGES.ONLY_TEAM_LEADER_CAN_WITHDRAW,
+      );
     }
 
     if (application.status !== ProgramBTeamApplicationStatus.SUBMITTED) {
       throw new ConflictException(
-        'Withdrawal allowed only from SUBMITTED status',
+        PROGRAM_B_TEAM_APPLICATION_MESSAGES.WITHDRAWAL_ONLY_FROM_SUBMITTED,
       );
     }
 

@@ -7,6 +7,7 @@ const config: Config = {
     // Jest does not read TS baseUrl/path resolution automatically, so map
     // that alias explicitly to keep test-time resolution aligned.
     '^src/(.*)$': '<rootDir>/src/$1',
+    '^generated/(.*)$': '<rootDir>/generated/$1',
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   rootDir: '.',

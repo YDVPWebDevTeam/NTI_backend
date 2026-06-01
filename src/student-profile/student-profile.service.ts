@@ -5,7 +5,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { UploadStatus } from '../../generated/prisma/enums';
-import { EligibilitySignalsService } from '../applications/eligibility-signals.service';
+import { EligibilitySignalsService } from '../applications/eligibility-signals/eligibility-signals.service';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { GetMyStudentProfileResponseDto } from './dto/student-profile.dto';
 import { UpdateAcademicInformationDto } from './dto/update-academic-information.dto';
@@ -15,6 +15,7 @@ import {
   StudentProfileRepository,
   StudentProfileWithRelations,
 } from './student-profile.repository';
+import { STUDENT_PROFILE_MESSAGES } from './student-profile.messages';
 
 @Injectable()
 export class StudentProfileService {
@@ -29,7 +30,7 @@ export class StudentProfileService {
     const user = await this.repository.findUserIdentityById(authUser.id);
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(STUDENT_PROFILE_MESSAGES.USER_NOT_FOUND);
     }
 
     const profile = await this.repository.findByUserIdWithRelations(
@@ -61,7 +62,7 @@ export class StudentProfileService {
 
     if (!dto.academicDeclarationAccepted) {
       throw new UnprocessableEntityException(
-        'Academic declaration must be accepted',
+        STUDENT_PROFILE_MESSAGES.ACADEMIC_DECLARATION_REQUIRED,
       );
     }
 
@@ -92,7 +93,7 @@ export class StudentProfileService {
 
     if (!dto.skills.some((skill) => skill.isPrimary === true)) {
       throw new UnprocessableEntityException(
-        'At least one skill must be marked as primary',
+        STUDENT_PROFILE_MESSAGES.ONE_SKILL_MUST_BE_PRIMARY,
       );
     }
 
@@ -106,7 +107,7 @@ export class StudentProfileService {
       } catch (error) {
         if (this.isProfileNotFoundError(error)) {
           throw new UnprocessableEntityException(
-            'Academic information must be completed before professional skills',
+            STUDENT_PROFILE_MESSAGES.ACADEMIC_MUST_BE_COMPLETED,
           );
         }
 
@@ -130,38 +131,48 @@ export class StudentProfileService {
     ]);
 
     if (!university) {
-      throw new BadRequestException('Selected university does not exist');
+      throw new BadRequestException(
+        STUDENT_PROFILE_MESSAGES.UNIVERSITY_NOT_FOUND,
+      );
     }
 
     if (!faculty) {
-      throw new BadRequestException('Selected faculty does not exist');
+      throw new BadRequestException(STUDENT_PROFILE_MESSAGES.FACULTY_NOT_FOUND);
     }
 
     if (!specialization) {
-      throw new BadRequestException('Selected specialization does not exist');
+      throw new BadRequestException(
+        STUDENT_PROFILE_MESSAGES.SPECIALIZATION_NOT_FOUND,
+      );
     }
 
     if (!university.isActive) {
-      throw new BadRequestException('Selected university is not active');
+      throw new BadRequestException(
+        STUDENT_PROFILE_MESSAGES.UNIVERSITY_NOT_ACTIVE,
+      );
     }
 
     if (!faculty.isActive) {
-      throw new BadRequestException('Selected faculty is not active');
+      throw new BadRequestException(
+        STUDENT_PROFILE_MESSAGES.FACULTY_NOT_ACTIVE,
+      );
     }
 
     if (!specialization.isActive) {
-      throw new BadRequestException('Selected specialization is not active');
+      throw new BadRequestException(
+        STUDENT_PROFILE_MESSAGES.SPECIALIZATION_NOT_ACTIVE,
+      );
     }
 
     if (faculty.universityId !== dto.universityId) {
       throw new BadRequestException(
-        'Selected faculty does not belong to selected university',
+        STUDENT_PROFILE_MESSAGES.FACULTY_NOT_IN_UNIVERSITY,
       );
     }
 
     if (specialization.facultyId !== dto.facultyId) {
       throw new BadRequestException(
-        'Selected specialization does not belong to selected faculty',
+        STUDENT_PROFILE_MESSAGES.SPECIALIZATION_NOT_IN_FACULTY,
       );
     }
   }
@@ -177,13 +188,13 @@ export class StudentProfileService {
 
     if (!file) {
       throw new BadRequestException(
-        'File does not exist or does not belong to user',
+        STUDENT_PROFILE_MESSAGES.FILE_NOT_EXIST_OR_NOT_OWNED,
       );
     }
 
     if (file.status !== UploadStatus.UPLOADED) {
       throw new BadRequestException(
-        'File must be uploaded before being attached',
+        STUDENT_PROFILE_MESSAGES.FILE_MUST_BE_UPLOADED,
       );
     }
   }

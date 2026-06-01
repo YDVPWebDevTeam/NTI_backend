@@ -10,6 +10,10 @@ import {
   PrismaTransactionOptions,
   PrismaService,
 } from '../../../infrastructure/database';
+import {
+  isCompanyRole,
+  isReviewerRole,
+} from '../../../common/auth/role-groups';
 
 const userSummarySelect = {
   id: true,
@@ -256,18 +260,11 @@ export class ProgramBProjectsRepository {
     role: UserRole;
     organizationId: string | null;
   }): Prisma.ProgramBProjectWhereInput {
-    if (
-      user.role === UserRole.ADMIN ||
-      user.role === UserRole.SUPER_ADMIN ||
-      user.role === UserRole.EVALUATOR
-    ) {
+    if (isReviewerRole(user.role)) {
       return {};
     }
 
-    if (
-      user.role === UserRole.COMPANY_OWNER ||
-      user.role === UserRole.COMPANY_EMPLOYEE
-    ) {
+    if (isCompanyRole(user.role)) {
       if (!user.organizationId) {
         return { OR: [] };
       }

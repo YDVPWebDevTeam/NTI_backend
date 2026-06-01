@@ -3,7 +3,7 @@ import { IsDateString, IsOptional, IsString, MinLength } from 'class-validator';
 export class CreateNeedsInfoItemDto {
   @IsString()
   @MinLength(1)
-  message: string;
+  message!: string;
 
   @IsOptional()
   @IsDateString()

@@ -8,12 +8,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import type { StringValue } from 'ms';
-import { OrgInvitation, User } from '../../generated/prisma/client';
-import {
-  InvitationStatus,
-  UserRole,
-  UserStatus,
-} from '../../generated/prisma/enums';
+import { User } from '../../generated/prisma/client';
+import { UserRole, UserStatus } from '../../generated/prisma/enums';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
@@ -31,11 +27,10 @@ import { RegisterViaInviteDto } from './dto/register-via-invite.dto';
 import { isAdminRole } from './admin-role.helper';
 import { toAuthenticatedUserContext } from '../user/user.mapper';
 import { AuthRegistrationService } from './auth-registration.service';
-import { OrganizationInviteRepository } from '../organization/organization-invitation.repository';
+import { OrganizationInviteService } from '../organization/organization-invite.service';
 import { AcceptInviteOrgDto } from './dto/accept-invite-org.dto';
 import { getConfirmationPathByRole } from './confirmation-paths';
-import { OrganizationRepository } from '../organization/organization.repository';
-import { OrganizationStatus } from '../../generated/prisma/enums';
+import { AUTH_MESSAGES } from './auth.messages';
 
 export type AuthTokensResponse = {
   accessToken: string;
@@ -63,11 +58,6 @@ export type MessageResponse = {
   message: string;
 };
 
-const FORGOT_PASSWORD_SUCCESS_MESSAGE =
-  'If the email exists, a reset link was sent.';
-const RESET_PASSWORD_SUCCESS_MESSAGE = 'Password reset successfully.';
-const INVALID_RESET_TOKEN_MESSAGE = 'Invalid or expired password reset token';
-
 @Injectable()
 export class AuthService {
   public readonly refreshTokenValidityDays: number;
@@ -82,8 +72,7 @@ export class AuthService {
     private readonly resetTokenService: ResetTokenService,
     private readonly queueService: QueueService,
     private readonly authRegistrationService: AuthRegistrationService,
-    private readonly organizationInviteRepository: OrganizationInviteRepository,
-    private readonly organizationRepository: OrganizationRepository,
+    private readonly organizationInviteService: OrganizationInviteService,
   ) {
     this.refreshTokenValidityDays = parseInt(
       this.configService.jwtRefreshExpirationDays,
@@ -109,7 +98,7 @@ export class AuthService {
 
     if (!user) {
       throw new InternalServerErrorException(
-        'Registered user could not be loaded',
+        AUTH_MESSAGES.REGISTERED_USER_NOT_LOADED,
       );
     }
 
@@ -120,36 +109,11 @@ export class AuthService {
     const passwordHash = await this.hashingService.hashStrong(dto.password);
 
     const user = await this.usersService.transaction(async (transaction) => {
-      const invitation =
-        await this.organizationInviteRepository.findByTokenForUpdate(
+      const { invitation } =
+        await this.organizationInviteService.loadAcceptableInviteForRegistration(
           dto.token,
           transaction,
         );
-
-      if (!invitation) {
-        throw new BadRequestException('Invitation was not found');
-      }
-
-      const now = new Date();
-      this.assertOrganizationInvitationIsAcceptable(invitation, now);
-
-      const organization = await this.organizationRepository.findUnique(
-        { id: invitation.organizationId },
-        transaction,
-      );
-
-      if (!organization) {
-        throw new BadRequestException('Organization was not found');
-      }
-
-      if (
-        organization.status === OrganizationStatus.REJECTED ||
-        organization.status === OrganizationStatus.SUSPENDED
-      ) {
-        throw new BadRequestException(
-          'Organization is not accepting invitations',
-        );
-      }
 
       const existingUser = await this.usersService.findByEmail(
         invitation.email,
@@ -157,7 +121,7 @@ export class AuthService {
       );
 
       if (existingUser) {
-        throw new ConflictException('User is already registered');
+        throw new ConflictException(AUTH_MESSAGES.USER_ALREADY_REGISTERED);
       }
 
       const newUser = await this.usersService.create(
@@ -175,12 +139,9 @@ export class AuthService {
         transaction,
       );
 
-      await this.organizationInviteRepository.update(
-        { id: invitation.id },
-        {
-          status: InvitationStatus.ACCEPTED,
-          acceptedAt: now,
-        },
+      await this.organizationInviteService.markInviteAcceptedForRegistration(
+        invitation.id,
+        new Date(),
         transaction,
       );
 
@@ -208,19 +169,21 @@ export class AuthService {
     authUser: AuthenticatedUserContext,
   ): Promise<AuthTokensResponse> {
     if (!authUser.refreshTokenId) {
-      throw new UnauthorizedException('Refresh token context is required');
+      throw new UnauthorizedException(
+        AUTH_MESSAGES.REFRESH_TOKEN_CONTEXT_REQUIRED,
+      );
     }
 
     const user = await this.usersService.findById(authUser.id);
 
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException(AUTH_MESSAGES.USER_NOT_FOUND);
     }
 
     this.ensureUserCanAuthenticate(user);
     if (this.shouldRequirePasswordChange(user)) {
       await this.refreshTokenService.revokeById(authUser.refreshTokenId);
-      throw new UnauthorizedException('Password change is required');
+      throw new UnauthorizedException(AUTH_MESSAGES.PASSWORD_CHANGE_REQUIRED);
     }
 
     await this.refreshTokenService.revokeById(authUser.refreshTokenId);
@@ -234,11 +197,13 @@ export class AuthService {
 
   private ensureUserCanAuthenticate(user: User): void {
     if (user.status === UserStatus.SUSPENDED) {
-      throw new UnauthorizedException('User account is suspended');
+      throw new UnauthorizedException(AUTH_MESSAGES.ACCOUNT_SUSPENDED);
     }
 
     if (!user.isEmailConfirmed) {
-      throw new UnauthorizedException('Email confirmation is required');
+      throw new UnauthorizedException(
+        AUTH_MESSAGES.EMAIL_CONFIRMATION_REQUIRED,
+      );
     }
   }
 
@@ -248,7 +213,7 @@ export class AuthService {
     const user = await this.usersService.findById(verificationToken.userId);
 
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException(AUTH_MESSAGES.USER_NOT_FOUND);
     }
 
     const confirmedUser = await this.usersService.transaction(
@@ -302,13 +267,13 @@ export class AuthService {
 
     if (!user || user.email !== tokenPayload.email) {
       throw new UnauthorizedException(
-        'Invalid or expired password change token',
+        AUTH_MESSAGES.INVALID_PASSWORD_CHANGE_TOKEN,
       );
     }
 
     if (!isAdminRole(user.role) || !user.mustChangePassword) {
       throw new UnauthorizedException(
-        'Invalid or expired password change token',
+        AUTH_MESSAGES.INVALID_PASSWORD_CHANGE_TOKEN,
       );
     }
 
@@ -343,7 +308,7 @@ export class AuthService {
     const user = await this.usersService.findByEmail(email);
 
     if (!user) {
-      return { message: FORGOT_PASSWORD_SUCCESS_MESSAGE };
+      return { message: AUTH_MESSAGES.FORGOT_PASSWORD_EMAIL_SENT };
     }
 
     const resetToken = await this.resetTokenService.createForUser(user.id);
@@ -354,7 +319,7 @@ export class AuthService {
       token: resetToken.token,
     });
 
-    return { message: FORGOT_PASSWORD_SUCCESS_MESSAGE };
+    return { message: AUTH_MESSAGES.FORGOT_PASSWORD_EMAIL_SENT };
   }
 
   async resetPassword(
@@ -368,7 +333,7 @@ export class AuthService {
       );
 
       if (!resetToken) {
-        throw new BadRequestException(INVALID_RESET_TOKEN_MESSAGE);
+        throw new BadRequestException(AUTH_MESSAGES.INVALID_RESET_TOKEN);
       }
 
       await this.usersService.update(
@@ -388,7 +353,7 @@ export class AuthService {
       );
     });
 
-    return { message: RESET_PASSWORD_SUCCESS_MESSAGE };
+    return { message: AUTH_MESSAGES.RESET_PASSWORD_SUCCESS };
   }
 
   private async issueAuthTokens(user: User): Promise<AuthTokensResponse> {
@@ -433,44 +398,11 @@ export class AuthService {
     };
   }
 
-  private assertOrganizationInvitationIsAcceptable(
-    invitation: Pick<
-      OrgInvitation,
-      'status' | 'acceptedAt' | 'revokedAt' | 'expiresAt'
-    >,
-    now: Date,
-  ): void {
-    if (
-      invitation.status === InvitationStatus.REVOKED ||
-      invitation.revokedAt !== null
-    ) {
-      throw new BadRequestException('Invitation has been canceled');
-    }
-
-    if (
-      invitation.status === InvitationStatus.EXPIRED ||
-      invitation.expiresAt <= now
-    ) {
-      throw new BadRequestException('Invitation has expired');
-    }
-
-    if (
-      invitation.status === InvitationStatus.ACCEPTED ||
-      invitation.acceptedAt !== null
-    ) {
-      throw new ConflictException('Invitation has already been accepted');
-    }
-
-    if (invitation.status !== InvitationStatus.PENDING) {
-      throw new BadRequestException('Invitation is not active');
-    }
-  }
-
   private async authenticateByCredentials(dto: LoginDto): Promise<User> {
     const user = await this.usersService.findByEmail(dto.email);
 
     if (!user) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException(AUTH_MESSAGES.INVALID_EMAIL_OR_PASSWORD);
     }
 
     const isPasswordValid = await this.hashingService.verifyStrong(
@@ -479,7 +411,7 @@ export class AuthService {
     );
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException(AUTH_MESSAGES.INVALID_EMAIL_OR_PASSWORD);
     }
 
     this.ensureUserCanAuthenticate(user);
@@ -509,7 +441,7 @@ export class AuthService {
   ): void {
     const isAdmin = isAdminRole(user.role);
     if (options.requireAdmin !== isAdmin) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException(AUTH_MESSAGES.INVALID_EMAIL_OR_PASSWORD);
     }
   }
 
@@ -553,7 +485,7 @@ export class AuthService {
       return payload;
     } catch {
       throw new UnauthorizedException(
-        'Invalid or expired password change token',
+        AUTH_MESSAGES.INVALID_PASSWORD_CHANGE_TOKEN,
       );
     }
   }
@@ -568,15 +500,17 @@ export class AuthService {
     const value = Number(match[1]);
     const unit = match[2];
 
-    const multiplier = {
+    const multipliers: Record<string, number> = {
       s: 1_000,
       m: 60_000,
       h: 3_600_000,
       d: 86_400_000,
-    }[unit];
+    };
+
+    const multiplier = unit ? multipliers[unit] : undefined;
 
     if (!multiplier) {
-      throw new Error(`Unsupported duration unit: ${unit}`);
+      throw new Error(`Unsupported duration unit: ${unit ?? duration}`);
     }
 
     return new Date(Date.now() + value * multiplier);

@@ -89,18 +89,18 @@ import {
   UserStatus,
 } from 'generated/prisma/enums';
 import type { AuthenticatedUserContext } from 'src/common/types/auth-user-context.type';
-import { ConfigService } from 'src/infrastructure/config';
-import { HashingService } from 'src/infrastructure/hashing';
 import { QueueService } from 'src/infrastructure/queue';
 import { UserRepository } from 'src/user/user.repository';
 import type { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
 import type { UpdateOrganizationMemberRoleDto } from './dto/update-organization-member-role.dto';
-import { OrganizationInviteRepository } from './organization-invitation.repository';
 import { OrganizationRepository } from './organization.repository';
 import { OrganizationService } from './organization.service';
+import { OrganizationAccessService } from './organization-access.service';
+import { OrganizationInviteService } from './organization-invite.service';
 
 describe('OrganizationService', () => {
   let service: OrganizationService;
+  let inviteService: OrganizationInviteService;
 
   let organizationRepository: {
     findUnique: jest.Mock;
@@ -231,13 +231,23 @@ describe('OrganizationService', () => {
       organizationInvitationExpirationDays: 7,
     };
 
+    const organizationAccess = new OrganizationAccessService(
+      organizationRepository as never,
+    );
     service = new OrganizationService(
       organizationRepository as unknown as OrganizationRepository,
       userRepository as unknown as UserRepository,
       queueService as unknown as QueueService,
-      organizationInviteRepository as unknown as OrganizationInviteRepository,
-      hashingService as unknown as HashingService,
-      configService as unknown as ConfigService,
+      organizationAccess,
+    );
+    inviteService = new OrganizationInviteService(
+      organizationRepository as never,
+      organizationInviteRepository as never,
+      userRepository as never,
+      queueService as never,
+      hashingService as never,
+      configService as never,
+      organizationAccess,
     );
   });
 
@@ -350,7 +360,7 @@ describe('OrganizationService', () => {
         revokedAt: null,
       });
 
-      await service.createInvite(
+      await inviteService.createInvite(
         'org-1',
         {
           email: 'employee@example.com',
@@ -392,7 +402,7 @@ describe('OrganizationService', () => {
 
       organizationInviteRepository.count.mockResolvedValue(1);
 
-      const result = await service.listInvites(
+      const result = await inviteService.listInvites(
         'org-1',
         { page: 1, limit: 20, sort: 'createdAt', order: 'desc' },
         owner,
@@ -429,7 +439,7 @@ describe('OrganizationService', () => {
       });
 
       await expect(
-        service.listInvites(
+        inviteService.listInvites(
           'org-2',
           { page: 1, limit: 20, sort: 'createdAt', order: 'desc' },
           owner,
@@ -463,7 +473,11 @@ describe('OrganizationService', () => {
         revokedAt: now,
       });
 
-      const result = await service.revokeInvite('org-1', 'invite-1', owner);
+      const result = await inviteService.revokeInvite(
+        'org-1',
+        'invite-1',
+        owner,
+      );
 
       expect(organizationInviteRepository.update).toHaveBeenCalledWith(
         { id: 'invite-1' },
@@ -503,7 +517,7 @@ describe('OrganizationService', () => {
       });
 
       await expect(
-        service.resendInvite('org-1', 'invite-1', owner),
+        inviteService.resendInvite('org-1', 'invite-1', owner),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
@@ -527,7 +541,7 @@ describe('OrganizationService', () => {
       });
       organizationRepository.findUnique.mockResolvedValue(existingOrganization);
 
-      const result = await service.validateInviteToken('token-1');
+      const result = await inviteService.validateInviteToken('token-1');
 
       expect(result).toEqual({
         email: 'employee@example.com',
@@ -556,9 +570,9 @@ describe('OrganizationService', () => {
         status: OrganizationStatus.SUSPENDED,
       });
 
-      await expect(service.validateInviteToken('token-1')).rejects.toThrow(
-        'Organization is not accepting invitations',
-      );
+      await expect(
+        inviteService.validateInviteToken('token-1'),
+      ).rejects.toThrow('Organization is not accepting invitations');
     });
 
     it('rejects validation when the invitation role is not organization-invitable', async () => {
@@ -579,7 +593,7 @@ describe('OrganizationService', () => {
       organizationRepository.findUnique.mockResolvedValue(existingOrganization);
 
       await expect(
-        service.validateInviteToken('token-1'),
+        inviteService.validateInviteToken('token-1'),
       ).rejects.toBeInstanceOf(InternalServerErrorException);
     });
   });
@@ -652,7 +666,7 @@ describe('OrganizationService', () => {
         updatedAt: new Date('2026-01-02T00:00:00.000Z'),
       });
 
-      const result = await service.acceptInvite('token-1', {
+      const result = await inviteService.acceptInvite('token-1', {
         id: 'user-2',
         email: 'candidate@example.com',
         role: UserRole.STUDENT,
@@ -691,7 +705,7 @@ describe('OrganizationService', () => {
       organizationRepository.findUnique.mockResolvedValue(existingOrganization);
 
       await expect(
-        service.acceptInvite('token-1', employee),
+        inviteService.acceptInvite('token-1', employee),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
@@ -714,7 +728,7 @@ describe('OrganizationService', () => {
       organizationRepository.findUnique.mockResolvedValue(existingOrganization);
 
       await expect(
-        service.acceptInvite('token-1', {
+        inviteService.acceptInvite('token-1', {
           id: 'user-2',
           email: 'candidate@example.com',
           role: UserRole.STUDENT,

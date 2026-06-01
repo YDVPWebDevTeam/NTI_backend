@@ -64,15 +64,17 @@ import { MentorAssignmentDto } from './dto/mentor-assignment.dto';
 import { NeedsInfoItemDto } from './dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
 import { NeedsInfoThreadDto } from './dto/needs-info-thread.dto';
-import { ProgramAMentorshipNoteDto } from './dto/program-a-mentorship-note.dto';
+import { ProgramAMentorshipNoteDto } from '../programs/program-a/dto/program-a-mentorship-note.dto';
 import { PublicCallDto } from './dto/public-call.dto';
 import { PublicCallsQueryDto } from './dto/public-calls-query.dto';
 import { PublicCallsResponseDto } from './dto/public-calls-response.dto';
 import { ResubmitApplicationDto } from './dto/resubmit-application.dto';
 import { SetActiveSectionVersionDto } from './dto/set-active-section-version.dto';
 import { UpsertIdeaOverviewSectionDto } from './dto/upsert-idea-overview-section.dto';
-import { ApplicationSectionsService } from './application-sections.service';
+import { ApplicationSectionsService } from './sections/application-sections.service';
 import { ApplicationsService } from './applications.service';
+import { ProgramAMentorshipService } from '../programs/program-a/program-a-mentorship.service';
+import { CallsService } from './calls/calls.service';
 
 @ApiTags('Applications')
 @Controller('applications')
@@ -80,6 +82,8 @@ export class ApplicationsController {
   constructor(
     private readonly applicationsService: ApplicationsService,
     private readonly sectionsService: ApplicationSectionsService,
+    private readonly mentorshipService: ProgramAMentorshipService,
+    private readonly callsService: CallsService,
   ) {}
 
   @GetPublicCallsApi()
@@ -87,7 +91,7 @@ export class ApplicationsController {
   listPublicCalls(
     @Query() query: PublicCallsQueryDto,
   ): Promise<PublicCallsResponseDto> {
-    return this.applicationsService.listPublicCalls(query);
+    return this.callsService.listPublicCalls(query);
   }
 
   @GetPublicActiveCallsApi()
@@ -95,7 +99,7 @@ export class ApplicationsController {
   listActivePublicCalls(
     @Query() query: PublicCallsQueryDto,
   ): Promise<PublicCallsResponseDto> {
-    return this.applicationsService.listActivePublicCalls(query);
+    return this.callsService.listActivePublicCalls(query);
   }
 
   @GetPublicCallByIdApi()
@@ -103,7 +107,7 @@ export class ApplicationsController {
   findPublicCallById(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<PublicCallDto> {
-    return this.applicationsService.findPublicCallById(id);
+    return this.callsService.findPublicCallById(id);
   }
 
   @CreateApplicationApi()
@@ -254,7 +258,7 @@ export class ApplicationsController {
     @GetUserContext() user: AuthenticatedUserContext,
     @Body() dto: AssignMentorDto,
   ): Promise<MentorAssignmentDto> {
-    return this.applicationsService.assignMentor(id, user, dto);
+    return this.mentorshipService.assignMentor(id, user, dto);
   }
 
   @CreateMentorshipNoteApi()
@@ -265,7 +269,7 @@ export class ApplicationsController {
     @GetUserContext() user: AuthenticatedUserContext,
     @Body() dto: CreateMentorshipNoteDto,
   ): Promise<ProgramAMentorshipNoteDto> {
-    return this.applicationsService.createMentorshipNote(id, user, dto);
+    return this.mentorshipService.createMentorshipNote(id, user, dto);
   }
 
   @GetMentorshipNotesApi()
@@ -275,7 +279,7 @@ export class ApplicationsController {
     @Param('id', ParseUUIDPipe) id: string,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ProgramAMentorshipNoteDto[]> {
-    return this.applicationsService.listMentorshipNotes(id, user);
+    return this.mentorshipService.listMentorshipNotes(id, user);
   }
 
   @ListApplicationSectionsApi()

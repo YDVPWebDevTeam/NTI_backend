@@ -5,6 +5,14 @@ import { QUEUE_NAMES } from '../queue.constants';
 import { EMAIL_JOBS } from '../queue.types';
 import type { EmailJobData, EmailJobName } from '../queue.types';
 import { MailerService } from '../../mailer/mailer.service';
+import {
+  logJobCompleted,
+  logJobFailed,
+  logWorkerError,
+  resolveJobHandler,
+} from './queue-processor.helpers';
+
+const EMAIL_JOB_LABEL = 'email';
 
 type EmailJobHandlers = {
   [K in EmailJobName]: (data: EmailJobData[K]) => Promise<void>;
@@ -156,11 +164,7 @@ export class EmailProcessor extends WorkerHost {
   };
 
   async process(job: Job<EmailJobData[EmailJobName]>): Promise<void> {
-    const handler = this.handlers[job.name as EmailJobName];
-
-    if (!handler) {
-      throw new Error(`No handler found for job: ${job.name}`);
-    }
+    const handler = resolveJobHandler(this.handlers, job.name, EMAIL_JOB_LABEL);
 
     this.logger.log(`Processing email job "${job.name}" (${job.id})`);
     await handler(job.data as never);
@@ -168,7 +172,7 @@ export class EmailProcessor extends WorkerHost {
 
   @OnWorkerEvent('completed')
   onCompleted(job: Job<EmailJobData[EmailJobName]>): void {
-    this.logger.log(`Completed email job "${job.name}" (${job.id})`);
+    logJobCompleted(this.logger, EMAIL_JOB_LABEL, job);
   }
 
   @OnWorkerEvent('failed')
@@ -176,16 +180,11 @@ export class EmailProcessor extends WorkerHost {
     job: Job<EmailJobData[EmailJobName]> | undefined,
     error: Error,
   ): void {
-    const jobName = job?.name ?? 'unknown';
-    const jobId = job?.id ?? 'unknown';
-    this.logger.error(
-      `Failed email job "${jobName}" (${jobId}): ${error.message}`,
-      error.stack,
-    );
+    logJobFailed(this.logger, EMAIL_JOB_LABEL, job, error);
   }
 
   @OnWorkerEvent('error')
   onError(error: Error): void {
-    this.logger.error(`Email worker error: ${error.message}`, error.stack);
+    logWorkerError(this.logger, EMAIL_JOB_LABEL, error);
   }
 }

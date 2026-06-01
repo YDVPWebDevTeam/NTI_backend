@@ -48,8 +48,9 @@ RUN npx prisma generate
 EXPOSE 3001
 CMD ["npm", "run", "start:dev"]
 
-# --- Production (API): slim runtime image -----------------------------------
-FROM chromium AS production
+# Holds everything both entrypoints need. The API (`production`) and the worker
+# only differ by CMD, so they both inherit from here.
+FROM chromium AS runtime
 ENV NODE_ENV=production
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
@@ -61,9 +62,13 @@ COPY package*.json ./
 COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+FROM runtime AS worker
+CMD ["node", "dist/src/worker"]
+
+# --- Production (API): MUST stay the LAST stage -----------------------------
+# Render (and `docker build` with no --target) builds the last stage, so the
+# API is the default target and binds the HTTP port without any override.
+FROM runtime AS production
 EXPOSE 3001
 CMD ["sh", "-c", "DATABASE_URL=${DIRECT_URL:-$DATABASE_URL} npx prisma migrate deploy && node dist/src/main"]
-
-# --- Worker: same image as production, different entrypoint -----------------
-FROM production AS worker
-CMD ["node", "dist/src/worker"]

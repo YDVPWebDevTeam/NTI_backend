@@ -23,6 +23,7 @@ import { FilesService } from '../../../files';
 import { UserRepository } from '../../../user/user.repository';
 import { CompleteProgramBDocumentUploadDto } from '../backlog/dto/complete-program-b-document-upload.dto';
 import { ProgramBDocumentDownloadDto } from '../backlog/dto/program-b-backlog-document.dto';
+import { ProgramBAssignableMentorDto } from './dto/program-b-assignable-mentor.dto';
 import { AssignProgramBMentorDto } from './dto/assign-program-b-mentor.dto';
 import {
   CreateProgramBFinalAcceptanceDto,
@@ -389,6 +390,21 @@ export class ProgramBProjectsService {
 
       return this.toProjectDetailDto(updatedProject);
     }, this.projectWriteTransactionOptions);
+  }
+
+  async listAssignableMentors(
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramBAssignableMentorDto[]> {
+    this.ensureMentorAssignmentAuthor(user);
+
+    const mentors = await this.userRepository.findActiveMentors();
+
+    return mentors.map((mentor) => ({
+      id: mentor.id,
+      firstName: mentor.firstName,
+      lastName: mentor.lastName,
+      email: mentor.email,
+    }));
   }
 
   async recordFinalAcceptance(

@@ -5,6 +5,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
+import { CallsRepository } from '../../../applications/calls.repository';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { CreateTeamApplicationDto } from './dto/create-team-application.dto';
 import {
@@ -32,6 +33,7 @@ export class ProgramBTeamApplicationService {
     private uploadedFileService: FilesService,
     private teamService: TeamService,
     private backlogItemService: ProgramBBacklogService,
+    private callsRepository: CallsRepository,
   ) {}
 
   async submitApplication(
@@ -39,9 +41,16 @@ export class ProgramBTeamApplicationService {
     backlogItemId: string,
     dto: CreateTeamApplicationDto,
   ): Promise<ApplicationWithCv> {
-    const backlogItem = await this.backlogItemService.findOne(backlogItemId);
+    const [backlogItem, hasActiveCall] = await Promise.all([
+      this.backlogItemService.findOne(backlogItemId),
+      this.callsRepository.hasActiveProgramBCall(new Date()),
+    ]);
+
     if (!backlogItem) {
       throw new NotFoundException('Backlog item not found');
+    }
+    if (!hasActiveCall) {
+      throw new ConflictException('No active Program B call');
     }
     if (backlogItem.status !== BacklogItemStatus.PUBLISHED) {
       throw new ConflictException('Backlog item must be published');
@@ -129,6 +138,14 @@ export class ProgramBTeamApplicationService {
     }
 
     return this.prisma.client.$transaction(async (tx) => {
+      const callStillActive = await this.callsRepository.hasActiveProgramBCall(
+        new Date(),
+        tx as never,
+      );
+      if (!callStillActive) {
+        throw new ConflictException('No active Program B call');
+      }
+
       const application = await tx.programBTeamApplication.create({
         data: {
           backlogItemId,

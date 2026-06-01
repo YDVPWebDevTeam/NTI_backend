@@ -222,10 +222,10 @@ export const devFixturesSeed: SeedTask = {
     await client.query(
       `INSERT INTO "Faculty" (id, "universityId", name, "shortName", "isActive", "createdAt", "updatedAt")
        VALUES
-         ($1, $5, 'Fakulta elektrotechniky a informatiky', 'FEI', true, $9, $9),
-         ($2, $5, 'Fakulta informatiky a informačných technológií', 'FIIT', true, $9, $9),
-         ($3, $6, 'Fakulta matematiky, fyziky a informatiky', 'FMFI', true, $9, $9),
-         ($4, $7, 'Národohospodárska fakulta', 'NHF', true, $9, $9)
+         ($1, $5, 'Fakulta elektrotechniky a informatiky', 'FEI', true, $8, $8),
+         ($2, $5, 'Fakulta informatiky a informačných technológií', 'FIIT', true, $8, $8),
+         ($3, $6, 'Fakulta matematiky, fyziky a informatiky', 'FMFI', true, $8, $8),
+         ($4, $7, 'Národohospodárska fakulta', 'NHF', true, $8, $8)
        ON CONFLICT ("universityId", name) DO NOTHING`,
       [
         IDS.facFEI,
@@ -235,7 +235,6 @@ export const devFixturesSeed: SeedTask = {
         univSTUId,
         univUKId,
         univEKONId,
-        null,
         now,
       ],
     );

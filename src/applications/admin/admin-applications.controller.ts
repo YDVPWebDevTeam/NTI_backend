@@ -10,7 +10,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '../../../generated/prisma/enums';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { REVIEWER_ROLES } from '../../common/auth/role-groups';
@@ -38,6 +38,7 @@ import { OptionalApplicationTransitionNoteDto } from '../dto/optional-applicatio
 import { ProgramAMilestoneDto } from '../../programs/program-a/dto/program-a-milestone.dto';
 import { UpdateProgramAMilestoneDto } from '../../programs/program-a/dto/update-program-a-milestone.dto';
 import { InternalProgramAApplicationDto } from '../../programs/program-a/dto/internal-program-a-application.dto';
+import { UpdateApplicationGrantBudgetDto } from '../dto/update-application-grant-budget.dto';
 
 @ApiTags('Admin')
 @Controller('admin/applications')
@@ -178,6 +179,18 @@ export class AdminApplicationsController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ApplicationDetailDto> {
     return this.applicationsService.complete(id, user);
+  }
+
+  @ApiOkResponse({ type: ApplicationDetailDto })
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @Patch(':id/grant-budget')
+  updateGrantBudget(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateApplicationGrantBudgetDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ApplicationDetailDto> {
+    return this.applicationsService.updateGrantBudget(id, dto, user);
   }
 
   @ArchiveApplicationApi()

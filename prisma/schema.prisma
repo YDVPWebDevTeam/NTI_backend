@@ -413,6 +413,7 @@ model Application {
   decisionById      String?
   decisionBy        User?   @relation("ApplicationDecisionBy", fields: [decisionById], references: [id])
   decisionRationale String?
+  grantBudget       Int?
 
   evaluations ApplicationEvaluation[]
 
@@ -816,6 +817,7 @@ model ProgramBProject {
 
   acceptedByCompanyAt DateTime?
   acceptedByNtiAt     DateTime?
+  rewardPerMember     Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

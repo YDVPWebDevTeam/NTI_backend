@@ -60,6 +60,7 @@ import {
   toNeedsInfoReplyDto,
 } from './application.mappers';
 import { APPLICATIONS_MESSAGES } from './applications.messages';
+import { UpdateApplicationGrantBudgetDto } from './dto/update-application-grant-budget.dto';
 
 type RequiredDocumentSlot = {
   documentType: DocumentType;
@@ -967,6 +968,32 @@ export class ApplicationsService {
       },
       reason,
     );
+  }
+
+  async updateGrantBudget(
+    applicationId: string,
+    dto: UpdateApplicationGrantBudgetDto,
+    user: AuthenticatedUserContext,
+  ): Promise<ApplicationDetailDto> {
+    if (!this.applicationAccess.isReviewerSideUser(user)) {
+      throw new ForbiddenException(
+        APPLICATIONS_MESSAGES.ONLY_REVIEWER_CAN_CREATE_EVALUATIONS,
+      );
+    }
+
+    await this.applicationsRepository.update(
+      { id: applicationId },
+      { grantBudget: dto.grantBudget ?? null },
+    );
+
+    const refreshed =
+      await this.applicationsRepository.findByIdWithRelations(applicationId);
+
+    if (!refreshed) {
+      throw new NotFoundException(APPLICATIONS_MESSAGES.APPLICATION_NOT_FOUND);
+    }
+
+    return toDetailDto(refreshed);
   }
 
   private async loadWorkflowApplicationOrThrow(

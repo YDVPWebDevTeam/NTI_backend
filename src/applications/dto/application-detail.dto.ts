@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ApplicationStatus } from '../../../generated/prisma/enums';
 
 export class ApplicationDetailDto {
@@ -28,6 +28,9 @@ export class ApplicationDetailDto {
 
   @ApiProperty({ required: false, nullable: true })
   decisionRationale!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, example: 5000 })
+  grantBudget!: number | null;
 
   @ApiProperty()
   createdAt!: Date;

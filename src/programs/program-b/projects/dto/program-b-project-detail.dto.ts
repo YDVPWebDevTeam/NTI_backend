@@ -137,6 +137,13 @@ export class ProgramBProjectDetailDto {
   @ApiPropertyOptional()
   acceptedByNtiAt?: Date;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Reward per team member in EUR, set by the company or admin.',
+    example: 800,
+  })
+  rewardPerMember?: number | null;
+
   @ApiProperty({ type: [ProgramBMilestoneDto] })
   milestones!: ProgramBMilestoneDto[];
 

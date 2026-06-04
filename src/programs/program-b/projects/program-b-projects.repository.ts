@@ -110,6 +110,7 @@ const projectDetailSelect = {
   status: true,
   acceptedByCompanyAt: true,
   acceptedByNtiAt: true,
+  rewardPerMember: true,
   createdAt: true,
   updatedAt: true,
   productOwnerUser: {

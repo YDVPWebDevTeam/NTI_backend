@@ -251,6 +251,7 @@ export class ApplicationsRepository extends BaseRepository<
       decidedAt: true,
       decisionById: true,
       decisionRationale: true,
+      grantBudget: true,
       createdAt: true,
       updatedAt: true,
       call: {
@@ -318,6 +319,7 @@ export class ApplicationsRepository extends BaseRepository<
       decidedAt: true,
       decisionById: true,
       decisionRationale: true,
+      grantBudget: true,
       createdAt: true,
       updatedAt: true,
       call: {

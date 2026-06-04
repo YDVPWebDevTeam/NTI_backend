@@ -52,6 +52,7 @@ import {
   ProgramBProjectDocumentUploadDto,
 } from './dto/program-b-project-document.dto';
 import { UpdateProgramBMilestoneDto } from './dto/update-program-b-milestone.dto';
+import { UpdateProgramBProjectRewardDto } from './dto/update-program-b-project-reward.dto';
 import {
   ProgramBProjectDetailView,
   ProgramBProjectExecutionView,
@@ -465,6 +466,41 @@ export class ProgramBProjectsService {
           db,
         );
       }
+
+      const detail = await this.projectsRepository.findProjectDetail(
+        projectId,
+        db,
+      );
+
+      if (!detail) {
+        throw new NotFoundException(
+          PROGRAM_B_PROJECTS_MESSAGES.PROJECT_NOT_FOUND,
+        );
+      }
+
+      return this.toProjectDetailDto(detail);
+    }, this.projectWriteTransactionOptions);
+  }
+
+  async updateReward(
+    projectId: string,
+    dto: UpdateProgramBProjectRewardDto,
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramBProjectDetailDto> {
+    return this.projectsRepository.transaction(async (db) => {
+      const project = await this.loadProjectOrThrow(projectId, db);
+
+      this.ensureProjectWritable(project);
+
+      if (!isReviewerRole(user.role)) {
+        await this.ensureCompanySideProjectMember(project, user, db);
+      }
+
+      await this.projectsRepository.updateProject(
+        project.id,
+        { rewardPerMember: dto.rewardPerMember ?? null },
+        db,
+      );
 
       const detail = await this.projectsRepository.findProjectDetail(
         projectId,
@@ -987,6 +1023,7 @@ export class ProgramBProjectsService {
       },
       acceptedByCompanyAt: project.acceptedByCompanyAt ?? undefined,
       acceptedByNtiAt: project.acceptedByNtiAt ?? undefined,
+      rewardPerMember: project.rewardPerMember ?? null,
       milestones: (project.milestones ?? []).map((milestone) =>
         this.toMilestoneDto(milestone),
       ),

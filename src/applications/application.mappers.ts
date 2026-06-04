@@ -35,6 +35,7 @@ export function toDetailDto(
     decidedAt: application.decidedAt,
     decisionById: application.decisionById,
     decisionRationale: application.decisionRationale,
+    grantBudget: application.grantBudget,
     createdAt: application.createdAt,
     updatedAt: application.updatedAt,
   };

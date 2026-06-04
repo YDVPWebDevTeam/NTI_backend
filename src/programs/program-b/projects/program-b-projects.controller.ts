@@ -38,6 +38,7 @@ import {
   ProgramBProjectDocumentUploadDto,
 } from './dto/program-b-project-document.dto';
 import { UpdateProgramBMilestoneDto } from './dto/update-program-b-milestone.dto';
+import { UpdateProgramBProjectRewardDto } from './dto/update-program-b-project-reward.dto';
 import { ProgramBProjectsService } from './program-b-projects.service';
 
 @ApiTags('Program B Projects')
@@ -249,6 +250,23 @@ export class ProgramBProjectsController {
     @GetUserContext() user: AuthenticatedUserContext,
   ) {
     return this.projectsService.requestDocumentDownload(id, documentId, user);
+  }
+
+  @ApiOkResponse({ type: ProgramBProjectDetailDto })
+  @HttpCode(HttpStatus.OK)
+  @Patch(':id/reward')
+  @Roles(
+    UserRole.COMPANY_OWNER,
+    UserRole.COMPANY_EMPLOYEE,
+    UserRole.ADMIN,
+    UserRole.SUPER_ADMIN,
+  )
+  updateReward(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateProgramBProjectRewardDto,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ) {
+    return this.projectsService.updateReward(id, dto, user);
   }
 
   @ApiOkResponse({ type: ProgramBProjectDetailDto })

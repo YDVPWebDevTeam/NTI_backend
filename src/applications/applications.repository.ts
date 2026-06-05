@@ -120,6 +120,45 @@ export class ApplicationsRepository extends BaseRepository<
     });
   }
 
+  listSubmittedForTeam(teamId: string, db?: PrismaDbClient) {
+    return (db ?? this.prisma.client).application.findMany({
+      where: {
+        teamId,
+        submittedAt: {
+          not: null,
+        },
+        status: {
+          not: ApplicationStatus.DRAFT,
+        },
+      },
+      orderBy: [
+        {
+          submittedAt: 'desc',
+        },
+        {
+          createdAt: 'desc',
+        },
+      ],
+      select: {
+        id: true,
+        callId: true,
+        teamId: true,
+        status: true,
+        submittedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        call: {
+          select: {
+            id: true,
+            title: true,
+            type: true,
+            status: true,
+          },
+        },
+      },
+    });
+  }
+
   createDraft(
     callId: string,
     teamId: string,

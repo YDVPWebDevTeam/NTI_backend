@@ -58,9 +58,11 @@ import {
   toInternalProgramAApplicationDto,
   toNeedsInfoItemDto,
   toNeedsInfoReplyDto,
+  toStudentApplicationSummaryDto,
 } from './application.mappers';
 import { APPLICATIONS_MESSAGES } from './applications.messages';
 import { UpdateApplicationGrantBudgetDto } from './dto/update-application-grant-budget.dto';
+import { StudentApplicationSummaryDto } from './dto/student-application-summary.dto';
 
 type RequiredDocumentSlot = {
   documentType: DocumentType;
@@ -108,6 +110,36 @@ export class ApplicationsService {
 
     return applications.map((application) =>
       toInternalProgramAApplicationDto(application),
+    );
+  }
+
+  async listSubmittedForCurrentTeam(
+    user: AuthenticatedUserContext,
+  ): Promise<StudentApplicationSummaryDto[]> {
+    const teams = await this.teamRepository.findActiveByUserId(user.id);
+
+    if (teams.length === 0) {
+      return [];
+    }
+
+    if (teams.length > 1) {
+      throw new ConflictException(
+        'Multiple active teams found for current user',
+      );
+    }
+
+    const [team] = teams;
+
+    if (!team) {
+      return [];
+    }
+
+    const applications = await this.applicationsRepository.listSubmittedForTeam(
+      team.id,
+    );
+
+    return applications.map((application) =>
+      toStudentApplicationSummaryDto(application),
     );
   }
 

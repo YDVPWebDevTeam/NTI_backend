@@ -40,6 +40,7 @@ import {
   SetActiveSectionVersionApi,
   SubmitApplicationApi,
   UpsertIdeaOverviewSectionApi,
+  ListSubmittedCurrentTeamApplicationsApi,
 } from './api-docs';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationDocumentDto } from './dto/application-document.dto';
@@ -75,6 +76,7 @@ import { ApplicationSectionsService } from './sections/application-sections.serv
 import { ApplicationsService } from './applications.service';
 import { ProgramAMentorshipService } from '../programs/program-a/program-a-mentorship.service';
 import { CallsService } from './calls/calls.service';
+import { StudentApplicationSummaryDto } from './dto/student-application-summary.dto';
 
 @ApiTags('Applications')
 @Controller('applications')
@@ -118,6 +120,15 @@ export class ApplicationsController {
     @Body() dto: CreateApplicationDto,
   ): Promise<ApplicationDetailDto> {
     return this.applicationsService.createDraft(user, dto);
+  }
+
+  @ListSubmittedCurrentTeamApplicationsApi()
+  @Get('team/current/submitted')
+  @UseGuards(JwtAuthGuard)
+  listSubmittedForCurrentTeam(
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<StudentApplicationSummaryDto[]> {
+    return this.applicationsService.listSubmittedForCurrentTeam(user);
   }
 
   @GetApplicationApi()

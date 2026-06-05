@@ -41,6 +41,7 @@ import { RequiredDocumentsResponseDto } from '../dto/required-documents-response
 import { ResubmitApplicationDto } from '../dto/resubmit-application.dto';
 import { SetActiveSectionVersionDto } from '../dto/set-active-section-version.dto';
 import { UpsertIdeaOverviewSectionDto } from '../dto/upsert-idea-overview-section.dto';
+import { StudentApplicationSummaryDto } from '../dto/student-application-summary.dto';
 
 export const CreateApplicationApi = () =>
   createApiDecorator({
@@ -67,6 +68,26 @@ export const CreateApplicationApi = () =>
       }),
       ApiNotFoundResponse({
         description: 'Related entities were not found.',
+      }),
+    ],
+  });
+
+export const ListSubmittedCurrentTeamApplicationsApi = () =>
+  createApiDecorator({
+    summary: 'List submitted applications for current team',
+    description:
+      'Returns submitted applications for the current student team so the dashboard can show application statuses and needs-info alerts.',
+    successResponse: {
+      status: 200,
+      type: StudentApplicationSummaryDto,
+      isArray: true,
+      description: 'Submitted applications for the current team.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiConflictResponse({
+        description: 'Current user has multiple active teams.',
       }),
     ],
   });

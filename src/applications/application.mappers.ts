@@ -21,6 +21,7 @@ import { ApplicationEvaluationWithScores } from './evaluations/application-evalu
 import { ApplicationWithRelations } from './applications.repository';
 import { ProgramAMentorshipNoteWithAuthor } from '../programs/program-a/program-a-mentorship.repository';
 import { ProgramAMilestoneWithApplication } from '../programs/program-a/program-a-milestones.repository';
+import { StudentApplicationSummaryDto } from './dto/student-application-summary.dto';
 
 export function toDetailDto(
   application: ApplicationWithRelations,
@@ -168,6 +169,38 @@ export function toApplicationEvaluationDto(
     })),
     createdAt: evaluation.createdAt,
     updatedAt: evaluation.updatedAt,
+  };
+}
+
+export function toStudentApplicationSummaryDto(application: {
+  id: string;
+  callId: string;
+  teamId: string;
+  status: ApplicationStatus;
+  submittedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  call: {
+    id: string;
+    title: string;
+    type: ProgramType;
+    status: CallStatus;
+  };
+}): StudentApplicationSummaryDto {
+  return {
+    id: application.id,
+    callId: application.callId,
+    teamId: application.teamId,
+    status: application.status,
+    submittedAt: application.submittedAt,
+    createdAt: application.createdAt,
+    updatedAt: application.updatedAt,
+    call: {
+      id: application.call.id,
+      title: application.call.title,
+      type: application.call.type,
+      status: application.call.status,
+    },
   };
 }
 

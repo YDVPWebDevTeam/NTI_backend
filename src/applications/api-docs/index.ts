@@ -32,4 +32,5 @@ export {
   StartApplicationOnboardingApi,
   SubmitApplicationApi,
   UpsertIdeaOverviewSectionApi,
+  ListSubmittedCurrentTeamApplicationsApi,
 } from './applications-api-docs.decorators';

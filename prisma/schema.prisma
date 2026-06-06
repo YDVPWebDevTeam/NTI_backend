@@ -1318,3 +1318,26 @@ model StudentProject {
 
   @@index([studentProfileId])
 }
+
+enum ContactSubmissionStatus {
+  NEW
+  REVIEWED
+  RESOLVED
+}
+
+model ContactSubmission {
+  id      String  @id @default(uuid())
+  name    String
+  email   String
+  subject String
+  message String
+  topic   String?
+
+  status ContactSubmissionStatus @default(NEW)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+}

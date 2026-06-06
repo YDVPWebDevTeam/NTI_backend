@@ -72,6 +72,14 @@ class InternalProgramAEligibilitySignalSummaryDto {
   failed!: number;
 }
 
+class InternalProgramAEvaluationSummaryDto {
+  @ApiProperty()
+  total!: number;
+
+  @ApiProperty()
+  evaluatedByCurrentUser!: boolean;
+}
+
 export class InternalProgramAApplicationDto {
   @ApiProperty()
   id!: string;
@@ -102,6 +110,9 @@ export class InternalProgramAApplicationDto {
 
   @ApiProperty()
   eligibilitySignalSummary!: InternalProgramAEligibilitySignalSummaryDto;
+
+  @ApiProperty()
+  evaluationSummary!: InternalProgramAEvaluationSummaryDto;
 
   @ApiProperty()
   createdAt!: Date;

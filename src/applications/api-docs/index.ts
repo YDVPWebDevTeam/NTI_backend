@@ -16,6 +16,7 @@ export {
   GetEligibilitySignalsApi,
   GetMentorshipNotesApi,
   GetNeedsInfoThreadApi,
+  ListMyMentoredProgramAApplicationsApi,
   GetPublicActiveCallsApi,
   GetPublicCallByIdApi,
   GetPublicCallsApi,

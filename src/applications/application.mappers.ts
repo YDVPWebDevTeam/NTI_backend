@@ -15,10 +15,12 @@ import { NeedsInfoItemDto } from './dto/needs-info-item.dto';
 import { NeedsInfoReplyDto } from './dto/needs-info-reply.dto';
 import { ProgramAMentorshipNoteDto } from '../programs/program-a/dto/program-a-mentorship-note.dto';
 import { ProgramAMilestoneDto } from '../programs/program-a/dto/program-a-milestone.dto';
+import { ProgramAMentoredApplicationDto } from '../programs/program-a/dto/program-a-mentored-application.dto';
 import { PublicCallDto } from './dto/public-call.dto';
 import { ApplicationDocumentsRepository } from './documents/application-documents.repository';
 import { ApplicationEvaluationWithScores } from './evaluations/application-evaluations.repository';
 import { ApplicationWithRelations } from './applications.repository';
+import { ProgramAMentoredApplicationListItem } from './applications.repository';
 import { ProgramAMentorshipNoteWithAuthor } from '../programs/program-a/program-a-mentorship.repository';
 import { ProgramAMilestoneWithApplication } from '../programs/program-a/program-a-milestones.repository';
 import { StudentApplicationSummaryDto } from './dto/student-application-summary.dto';
@@ -299,6 +301,29 @@ export function toProgramAMilestoneDto(
     progressNote: milestone.progressNote,
     createdAt: milestone.createdAt,
     updatedAt: milestone.updatedAt,
+  };
+}
+
+export function toProgramAMentoredApplicationDto(
+  application: ProgramAMentoredApplicationListItem,
+): ProgramAMentoredApplicationDto {
+  return {
+    id: application.id,
+    status: application.status,
+    teamId: application.teamId,
+    teamName: application.team.name,
+    teamMembers: application.team.members.map((member) => ({
+      id: member.user.id,
+      firstName: member.user.firstName,
+      lastName: member.user.lastName,
+      email: member.user.email,
+    })),
+    callId: application.callId,
+    callTitle: application.call.title,
+    mentorUserId: application.mentorUserId as string,
+    assignedAt: application.mentorAssignedAt ?? undefined,
+    createdAt: application.createdAt,
+    updatedAt: application.updatedAt,
   };
 }
 

@@ -27,6 +27,8 @@ export const APPLICATIONS_MESSAGES = {
     'Evaluator has already submitted an evaluation for this application',
   ONLY_REVIEWER_CAN_LIST_INTERNAL:
     'Only reviewer-side users can list internal Program A applications',
+  ONLY_MENTOR_CAN_LIST_MENTORED_PROGRAM_A:
+    'Only mentors can list assigned Program A applications',
   ONLY_REVIEWER_CAN_CREATE_EVALUATIONS:
     'Only reviewer-side users can create application evaluations',
   ONLY_REVIEWER_CAN_VIEW_EVALUATIONS:

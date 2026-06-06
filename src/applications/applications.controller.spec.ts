@@ -20,6 +20,7 @@ describe('ApplicationsController', () => {
   let controller: ApplicationsController;
   let applicationsService: {
     createDraft: jest.Mock;
+    listMyMentoredProgramAApplications: jest.Mock;
     findById: jest.Mock;
     attachDocument: jest.Mock;
     getDocumentCompleteness: jest.Mock;
@@ -45,6 +46,9 @@ describe('ApplicationsController', () => {
   beforeEach(() => {
     applicationsService = {
       createDraft: jest.fn().mockResolvedValue({ id: 'application-1' }),
+      listMyMentoredProgramAApplications: jest
+        .fn()
+        .mockResolvedValue([{ id: 'application-1' }]),
       findById: jest.fn().mockResolvedValue({ id: 'application-1' }),
       attachDocument: jest.fn().mockResolvedValue({ id: 'document-1' }),
       getDocumentCompleteness: jest.fn().mockResolvedValue({
@@ -146,6 +150,17 @@ describe('ApplicationsController', () => {
       user,
     );
     expect(result).toEqual({ id: 'application-1' });
+  });
+
+  it('delegates mentor-scoped Program A listing to the applications service', async () => {
+    const user = { id: 'mentor-1', email: 'mentor@example.com' } as never;
+
+    const result = await controller.listMyMentoredProgramAApplications(user);
+
+    expect(
+      applicationsService.listMyMentoredProgramAApplications,
+    ).toHaveBeenCalledWith(user);
+    expect(result).toEqual([{ id: 'application-1' }]);
   });
 
   it('delegates document attachment', async () => {

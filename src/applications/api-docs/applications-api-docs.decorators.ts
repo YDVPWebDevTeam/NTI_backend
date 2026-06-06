@@ -37,6 +37,7 @@ import { ProgramAMentorshipNoteDto } from '../../programs/program-a/dto/program-
 import { PublicCallDto } from '../dto/public-call.dto';
 import { PUBLIC_CALL_SORT_VALUES } from '../dto/public-calls-query.dto';
 import { PublicCallsResponseDto } from '../dto/public-calls-response.dto';
+import { ProgramAMentoredApplicationDto } from '../dto/program-a-mentored-application.dto';
 import { RequiredDocumentsResponseDto } from '../dto/required-documents-response.dto';
 import { ResubmitApplicationDto } from '../dto/resubmit-application.dto';
 import { SetActiveSectionVersionDto } from '../dto/set-active-section-version.dto';
@@ -88,6 +89,27 @@ export const ListSubmittedCurrentTeamApplicationsApi = () =>
       ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
       ApiConflictResponse({
         description: 'Current user has multiple active teams.',
+      }),
+    ],
+  });
+
+export const ListMyMentoredProgramAApplicationsApi = () =>
+  createApiDecorator({
+    summary: 'List current mentor assigned Program A applications',
+    description:
+      'Returns Program A applications assigned to the current authenticated mentor for mentor workspace summary views.',
+    successResponse: {
+      status: 200,
+      type: ProgramAMentoredApplicationDto,
+      isArray: true,
+      description: 'Program A applications assigned to the current mentor.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiForbiddenResponse({
+        description:
+          'Only users with mentor role can access the mentor-scoped Program A list.',
       }),
     ],
   });

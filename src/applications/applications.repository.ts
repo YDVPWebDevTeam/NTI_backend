@@ -16,6 +16,12 @@ export type ApplicationEligibilityView = Prisma.ApplicationGetPayload<{
   select: ReturnType<ApplicationsRepository['applicationEligibilitySelect']>;
 }>;
 
+export type ProgramAMentoredApplicationListItem = Prisma.ApplicationGetPayload<{
+  select: ReturnType<
+    ApplicationsRepository['programAMentoredApplicationSelect']
+  >;
+}>;
+
 @Injectable()
 export class ApplicationsRepository extends BaseRepository<
   Application,
@@ -133,6 +139,22 @@ export class ApplicationsRepository extends BaseRepository<
           },
         },
       },
+    });
+  }
+
+  listMyMentoredProgramAApplications(
+    mentorUserId: string,
+    db?: PrismaDbClient,
+  ): Promise<ProgramAMentoredApplicationListItem[]> {
+    return (db ?? this.prisma.client).application.findMany({
+      where: {
+        call: {
+          type: ProgramType.PROGRAM_A,
+        },
+        mentorUserId,
+      },
+      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+      select: this.programAMentoredApplicationSelect(),
     });
   }
 
@@ -477,6 +499,44 @@ export class ApplicationsRepository extends BaseRepository<
                       profileSubjectsAverage: true,
                     },
                   },
+                },
+              },
+            },
+            orderBy: {
+              userId: 'asc',
+            },
+          },
+        },
+      },
+    } as const;
+  }
+
+  private programAMentoredApplicationSelect() {
+    return {
+      id: true,
+      status: true,
+      callId: true,
+      teamId: true,
+      mentorUserId: true,
+      mentorAssignedAt: true,
+      createdAt: true,
+      updatedAt: true,
+      call: {
+        select: {
+          title: true,
+        },
+      },
+      team: {
+        select: {
+          name: true,
+          members: {
+            select: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
                 },
               },
             },

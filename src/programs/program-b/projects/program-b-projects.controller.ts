@@ -106,7 +106,7 @@ export class ProgramBProjectsController {
   }
 
   @Post(':id/milestones')
-  @Roles(UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE)
+  @Roles(UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE, UserRole.MENTOR)
   createMilestone(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateProgramBMilestoneDto,
@@ -116,7 +116,7 @@ export class ProgramBProjectsController {
   }
 
   @Patch(':id/milestones/:milestoneId')
-  @Roles(UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE)
+  @Roles(UserRole.COMPANY_OWNER, UserRole.COMPANY_EMPLOYEE, UserRole.MENTOR)
   updateMilestone(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('milestoneId', ParseUUIDPipe) milestoneId: string,

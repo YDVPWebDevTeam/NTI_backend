@@ -109,7 +109,7 @@ export class ProgramBProjectsService {
       const project = await this.loadProjectOrThrow(projectId, db);
 
       this.ensureProjectWritable(project);
-      await this.ensureCompanySideProjectMember(project, user, db);
+      await this.ensureMilestoneManagementAccess(project, user, db);
       await this.promoteBacklogToRealizationIfNeeded(project, db);
 
       return this.projectsRepository.createMilestone(
@@ -143,7 +143,7 @@ export class ProgramBProjectsService {
       const project = await this.loadProjectOrThrow(projectId, db);
 
       this.ensureProjectWritable(project);
-      await this.ensureCompanySideProjectMember(project, user, db);
+      await this.ensureMilestoneManagementAccess(project, user, db);
       await this.promoteBacklogToRealizationIfNeeded(project, db);
 
       const result = await this.projectsRepository.updateMilestoneForProject(
@@ -594,6 +594,41 @@ export class ProgramBProjectsService {
       throw new ConflictException(
         PROGRAM_B_PROJECTS_MESSAGES.CLOSED_PROJECTS_ARE_READ_ONLY,
       );
+    }
+  }
+
+  private async ensureMilestoneManagementAccess(
+    project: ProgramBProjectExecutionView,
+    user: AuthenticatedUserContext,
+    db?: PrismaDbClient,
+  ): Promise<void> {
+    const forbiddenMessage =
+      PROGRAM_B_PROJECTS_MESSAGES.ONLY_COMPANY_MEMBERS_OR_ASSIGNED_MENTORS_MAY_MANAGE_MILESTONES;
+
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new ForbiddenException(forbiddenMessage);
+    }
+
+    const isAssignedMentor =
+      user.role === UserRole.MENTOR && project.mentorUserId === user.id;
+
+    if (isAssignedMentor) {
+      return;
+    }
+
+    if (!isSameOrgCompanyMember(user, project.backlogItem.organizationId)) {
+      throw new ForbiddenException(forbiddenMessage);
+    }
+
+    const organizationMember =
+      await this.userRepository.findActiveOrganizationMember(
+        project.backlogItem.organizationId,
+        user.id,
+        db,
+      );
+
+    if (!organizationMember) {
+      throw new ForbiddenException(forbiddenMessage);
     }
   }
 

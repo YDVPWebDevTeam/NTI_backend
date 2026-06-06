@@ -81,6 +81,7 @@ describe('ApplicationsService', () => {
     updateStatusIfCurrent: jest.Mock;
     updateDecisionIfCurrent: jest.Mock;
     listInternalProgramAApplications: jest.Mock;
+    listMyMentoredProgramAApplications: jest.Mock;
   };
   let applicationDocumentsRepository: {
     deactivateActiveBySlot: jest.Mock;
@@ -297,6 +298,7 @@ describe('ApplicationsService', () => {
       updateStatusIfCurrent: jest.fn(),
       updateDecisionIfCurrent: jest.fn(),
       listInternalProgramAApplications: jest.fn(),
+      listMyMentoredProgramAApplications: jest.fn(),
       transaction: jest.fn((fn: (db: never) => Promise<unknown>) =>
         fn({ tx: 'db-client' } as never),
       ),
@@ -614,6 +616,36 @@ describe('ApplicationsService', () => {
     expect(result.id).toBe('application-1');
   });
 
+  it('allows assigned mentor to view any assigned application', async () => {
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...detailApplication,
+      mentorUserId: 'mentor-1',
+    });
+
+    const result = await service.findById('application-1', {
+      id: 'mentor-1',
+      email: 'mentor@example.com',
+      role: UserRole.MENTOR,
+    } as never);
+
+    expect(result.id).toBe('application-1');
+  });
+
+  it('forbids unrelated mentor from viewing application', async () => {
+    applicationsRepository.findByIdWithRelations.mockResolvedValue({
+      ...detailApplication,
+      mentorUserId: 'mentor-1',
+    });
+
+    await expect(
+      service.findById('application-1', {
+        id: 'mentor-2',
+        email: 'other-mentor@example.com',
+        role: UserRole.MENTOR,
+      } as never),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
   it('forbids non-team member from viewing application', async () => {
     applicationsRepository.findByIdWithRelations.mockResolvedValue(
       detailApplication,
@@ -784,6 +816,119 @@ describe('ApplicationsService', () => {
 
       expect(
         applicationsRepository.listInternalProgramAApplications,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('mentor-scoped Program A application list', () => {
+    it('lists assigned Program A applications for the current mentor', async () => {
+      applicationsRepository.listMyMentoredProgramAApplications.mockResolvedValue(
+        [
+          {
+            id: 'application-1',
+            status: ApplicationStatus.ACTIVE_PROJECT,
+            callId: 'call-1',
+            teamId: 'team-1',
+            mentorUserId: 'mentor-1',
+            mentorAssignedAt: new Date('2026-05-02T10:00:00.000Z'),
+            createdAt: new Date('2026-04-30T10:00:00.000Z'),
+            updatedAt: new Date('2026-05-03T10:00:00.000Z'),
+            call: {
+              id: 'call-1',
+              title: 'Program A Call',
+            },
+            team: {
+              id: 'team-1',
+              name: 'Alpha Team',
+              members: [
+                {
+                  userId: 'student-1',
+                  user: {
+                    id: 'student-1',
+                    firstName: 'Ava',
+                    lastName: 'Stone',
+                    email: 'ava@example.com',
+                  },
+                },
+                {
+                  userId: 'student-2',
+                  user: {
+                    id: 'student-2',
+                    firstName: 'Ben',
+                    lastName: 'Lake',
+                    email: 'ben@example.com',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      );
+
+      const result = await service.listMyMentoredProgramAApplications({
+        id: 'mentor-1',
+        email: 'mentor@example.com',
+        role: UserRole.MENTOR,
+      } as never);
+
+      expect(
+        applicationsRepository.listMyMentoredProgramAApplications,
+      ).toHaveBeenCalledWith('mentor-1');
+      expect(result).toEqual([
+        {
+          id: 'application-1',
+          status: ApplicationStatus.ACTIVE_PROJECT,
+          teamId: 'team-1',
+          teamName: 'Alpha Team',
+          teamMembers: [
+            {
+              id: 'student-1',
+              firstName: 'Ava',
+              lastName: 'Stone',
+              email: 'ava@example.com',
+            },
+            {
+              id: 'student-2',
+              firstName: 'Ben',
+              lastName: 'Lake',
+              email: 'ben@example.com',
+            },
+          ],
+          callId: 'call-1',
+          callTitle: 'Program A Call',
+          mentorUserId: 'mentor-1',
+          assignedAt: new Date('2026-05-02T10:00:00.000Z'),
+          createdAt: new Date('2026-04-30T10:00:00.000Z'),
+          updatedAt: new Date('2026-05-03T10:00:00.000Z'),
+        },
+      ]);
+    });
+
+    it('returns empty array when mentor has no assigned Program A applications', async () => {
+      applicationsRepository.listMyMentoredProgramAApplications.mockResolvedValue(
+        [],
+      );
+
+      const result = await service.listMyMentoredProgramAApplications({
+        id: 'mentor-1',
+        email: 'mentor@example.com',
+        role: UserRole.MENTOR,
+      } as never);
+
+      expect(result).toEqual([]);
+    });
+
+    it('forbids non-mentor users from mentor-scoped Program A list', async () => {
+      await expect(
+        service.listMyMentoredProgramAApplications({
+          id: 'admin-1',
+          email: 'admin@example.com',
+          role: UserRole.ADMIN,
+        } as never),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(
+        applicationsRepository.listMyMentoredProgramAApplications,
       ).not.toHaveBeenCalled();
     });
   });

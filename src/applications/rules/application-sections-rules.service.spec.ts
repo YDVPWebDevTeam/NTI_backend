@@ -6,6 +6,7 @@ describe('ApplicationSectionsRulesService', () => {
   let service: ApplicationSectionsRulesService;
 
   const application = {
+    mentorUserId: 'mentor-1',
     team: {
       leaderId: 'user-1',
       members: [{ userId: 'user-1' }, { userId: 'user-2' }],
@@ -56,6 +57,26 @@ describe('ApplicationSectionsRulesService', () => {
     ).toThrow(ForbiddenException);
   });
 
+  it('assertReadAccess allows assigned mentor', () => {
+    expect(() =>
+      service.assertReadAccess(application, {
+        id: 'mentor-1',
+        email: 'mentor@example.com',
+        role: UserRole.MENTOR,
+      } as never),
+    ).not.toThrow();
+  });
+
+  it('assertReadAccess rejects unrelated mentor', () => {
+    expect(() =>
+      service.assertReadAccess(application, {
+        id: 'mentor-2',
+        email: 'other-mentor@example.com',
+        role: UserRole.MENTOR,
+      } as never),
+    ).toThrow(ForbiddenException);
+  });
+
   it('assertWriteAccess allows team lead only', () => {
     expect(() =>
       service.assertWriteAccess(application, {
@@ -72,6 +93,16 @@ describe('ApplicationSectionsRulesService', () => {
         id: 'user-2',
         email: 'member@example.com',
         role: UserRole.STUDENT,
+      } as never),
+    ).toThrow(ForbiddenException);
+  });
+
+  it('assertWriteAccess rejects assigned mentor', () => {
+    expect(() =>
+      service.assertWriteAccess(application, {
+        id: 'mentor-1',
+        email: 'mentor@example.com',
+        role: UserRole.MENTOR,
       } as never),
     ).toThrow(ForbiddenException);
   });

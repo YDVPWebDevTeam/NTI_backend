@@ -11,6 +11,7 @@ import {
   DocumentType,
   NeedsInfoItemStatus,
   ProgramType,
+  UserRole,
   UploadStatus,
 } from '../../generated/prisma/enums';
 import { isTeamMember } from '../common/auth/role-groups';
@@ -30,6 +31,7 @@ import { ApplicationEvaluationDto } from './dto/application-evaluation.dto';
 import { AttachApplicationDocumentDto } from './dto/attach-application-document.dto';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { InternalProgramAApplicationDto } from '../programs/program-a/dto/internal-program-a-application.dto';
+import { ProgramAMentoredApplicationDto } from '../programs/program-a/dto/program-a-mentored-application.dto';
 import {
   ApplicationDecision,
   CreateApplicationDecisionDto,
@@ -56,6 +58,7 @@ import {
   toApplicationStatusEventDto,
   toDetailDto,
   toInternalProgramAApplicationDto,
+  toProgramAMentoredApplicationDto,
   toNeedsInfoItemDto,
   toNeedsInfoReplyDto,
   toStudentApplicationSummaryDto,
@@ -112,6 +115,25 @@ export class ApplicationsService {
 
     return applications.map((application) =>
       toInternalProgramAApplicationDto(application),
+    );
+  }
+
+  async listMyMentoredProgramAApplications(
+    user: AuthenticatedUserContext,
+  ): Promise<ProgramAMentoredApplicationDto[]> {
+    if (user.role !== UserRole.MENTOR) {
+      throw new ForbiddenException(
+        APPLICATIONS_MESSAGES.ONLY_MENTOR_CAN_LIST_MENTORED_PROGRAM_A,
+      );
+    }
+
+    const applications =
+      await this.applicationsRepository.listMyMentoredProgramAApplications(
+        user.id,
+      );
+
+    return applications.map((application) =>
+      toProgramAMentoredApplicationDto(application),
     );
   }
 

@@ -29,6 +29,7 @@ import {
   GetEligibilitySignalsApi,
   GetMentorshipNotesApi,
   GetNeedsInfoThreadApi,
+  ListMyMentoredProgramAApplicationsApi,
   GetPublicActiveCallsApi,
   GetPublicCallByIdApi,
   GetPublicCallsApi,
@@ -77,6 +78,7 @@ import { ApplicationsService } from './applications.service';
 import { ProgramAMentorshipService } from '../programs/program-a/program-a-mentorship.service';
 import { CallsService } from './calls/calls.service';
 import { StudentApplicationSummaryDto } from './dto/student-application-summary.dto';
+import { ProgramAMentoredApplicationDto } from './dto/program-a-mentored-application.dto';
 
 @ApiTags('Applications')
 @Controller('applications')
@@ -129,6 +131,15 @@ export class ApplicationsController {
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<StudentApplicationSummaryDto[]> {
     return this.applicationsService.listSubmittedForCurrentTeam(user);
+  }
+
+  @ListMyMentoredProgramAApplicationsApi()
+  @Get('program-a/my-mentored')
+  @UseGuards(JwtAuthGuard)
+  listMyMentoredProgramAApplications(
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ProgramAMentoredApplicationDto[]> {
+    return this.applicationsService.listMyMentoredProgramAApplications(user);
   }
 
   @GetApplicationApi()

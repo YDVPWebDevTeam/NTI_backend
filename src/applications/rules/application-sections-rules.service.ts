@@ -4,7 +4,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import type { ApplicationWithRelations } from '../applications.repository';
-import { ApplicationStatus } from '../../../generated/prisma/enums';
+import { ApplicationStatus, UserRole } from '../../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
 import {
   isAdminRole,
@@ -28,6 +28,10 @@ export class ApplicationSectionsRulesService {
     user: AuthenticatedUserContext,
   ): void {
     if (isReviewerRole(user.role)) {
+      return;
+    }
+
+    if (user.role === UserRole.MENTOR && application.mentorUserId === user.id) {
       return;
     }
 

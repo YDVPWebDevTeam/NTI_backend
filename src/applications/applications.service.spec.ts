@@ -713,6 +713,10 @@ describe('ApplicationsService', () => {
                 reason: 'Missing academic evidence',
               },
             ],
+            _count: {
+              evaluations: 2,
+            },
+            evaluations: [{ id: 'evaluation-1' }],
           },
         ],
       );
@@ -726,6 +730,9 @@ describe('ApplicationsService', () => {
       expect(
         applicationsRepository.listInternalProgramAApplications,
       ).toHaveBeenCalledTimes(1);
+      expect(
+        applicationsRepository.listInternalProgramAApplications,
+      ).toHaveBeenCalledWith('evaluator-1');
 
       expect(result).toEqual([
         {
@@ -755,6 +762,10 @@ describe('ApplicationsService', () => {
             total: 2,
             passed: 1,
             failed: 1,
+          },
+          evaluationSummary: {
+            total: 2,
+            evaluatedByCurrentUser: true,
           },
           createdAt: new Date('2026-04-30T10:00:00.000Z'),
           updatedAt: new Date('2026-05-02T10:00:00.000Z'),

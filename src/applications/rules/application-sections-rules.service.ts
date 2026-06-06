@@ -6,7 +6,11 @@ import {
 import type { ApplicationWithRelations } from '../applications.repository';
 import { ApplicationStatus } from '../../../generated/prisma/enums';
 import type { AuthenticatedUserContext } from '../../common/types/auth-user-context.type';
-import { isAdminRole, isTeamMember } from '../../common/auth/role-groups';
+import {
+  isAdminRole,
+  isReviewerRole,
+  isTeamMember,
+} from '../../common/auth/role-groups';
 import { APPLICATIONS_MESSAGES } from '../applications.messages';
 
 @Injectable()
@@ -23,7 +27,7 @@ export class ApplicationSectionsRulesService {
     application: ApplicationWithRelations,
     user: AuthenticatedUserContext,
   ): void {
-    if (isAdminRole(user.role)) {
+    if (isReviewerRole(user.role)) {
       return;
     }
 

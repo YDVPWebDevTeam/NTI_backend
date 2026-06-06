@@ -41,18 +41,34 @@ export class ApplicationEvaluationsRepository extends BaseRepository<
     },
     db?: PrismaDbClient,
   ): Promise<ApplicationEvaluationWithScores> {
-    return (db ?? this.prisma.client).applicationEvaluation.create({
-      data: {
+    const scoresCreate = data.scores.map((score) => ({
+      criterionCode: score.criterionCode,
+      score: new Prisma.Decimal(score.score),
+      comment: score.comment,
+    }));
+
+    return (db ?? this.prisma.client).applicationEvaluation.upsert({
+      where: {
+        applicationId_evaluatorId: {
+          applicationId: data.applicationId,
+          evaluatorId: data.evaluatorId,
+        },
+      },
+      create: {
         applicationId: data.applicationId,
         evaluatorId: data.evaluatorId,
         recommendation: data.recommendation,
         comment: data.comment,
         scores: {
-          create: data.scores.map((score) => ({
-            criterionCode: score.criterionCode,
-            score: new Prisma.Decimal(score.score),
-            comment: score.comment,
-          })),
+          create: scoresCreate,
+        },
+      },
+      update: {
+        recommendation: data.recommendation,
+        comment: data.comment,
+        scores: {
+          deleteMany: {},
+          create: scoresCreate,
         },
       },
       include: {

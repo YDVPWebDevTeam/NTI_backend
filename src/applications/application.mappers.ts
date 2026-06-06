@@ -298,6 +298,12 @@ export function toInternalProgramAApplicationDto(application: {
     passed: boolean;
     reason: string | null;
   }>;
+  _count: {
+    evaluations: number;
+  };
+  evaluations: Array<{
+    id: string;
+  }>;
 }): InternalProgramAApplicationDto {
   return {
     id: application.id,
@@ -317,6 +323,10 @@ export function toInternalProgramAApplicationDto(application: {
         .length,
       failed: application.eligibilitySignals.filter((signal) => !signal.passed)
         .length,
+    },
+    evaluationSummary: {
+      total: application._count.evaluations,
+      evaluatedByCurrentUser: application.evaluations.length > 0,
     },
     createdAt: application.createdAt,
     updatedAt: application.updatedAt,

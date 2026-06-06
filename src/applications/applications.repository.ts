@@ -63,7 +63,10 @@ export class ApplicationsRepository extends BaseRepository<
     });
   }
 
-  listInternalProgramAApplications(db?: PrismaDbClient) {
+  listInternalProgramAApplications(
+    currentEvaluatorId: string,
+    db?: PrismaDbClient,
+  ) {
     return (db ?? this.prisma.client).application.findMany({
       where: {
         call: {
@@ -114,6 +117,19 @@ export class ApplicationsRepository extends BaseRepository<
             code: true,
             passed: true,
             reason: true,
+          },
+        },
+        _count: {
+          select: {
+            evaluations: true,
+          },
+        },
+        evaluations: {
+          where: {
+            evaluatorId: currentEvaluatorId,
+          },
+          select: {
+            id: true,
           },
         },
       },

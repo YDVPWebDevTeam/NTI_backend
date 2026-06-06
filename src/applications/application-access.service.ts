@@ -322,7 +322,7 @@ export class ApplicationAccessService {
     application: ApplicationWithRelations | ApplicationWorkflowView,
     user: AuthenticatedUserContext,
   ): void {
-    if (isAdminRole(user.role)) {
+    if (this.isReviewerSideUser(user)) {
       return;
     }
 

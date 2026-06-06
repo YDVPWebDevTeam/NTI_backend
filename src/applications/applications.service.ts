@@ -104,7 +104,9 @@ export class ApplicationsService {
     }
 
     const applications =
-      await this.applicationsRepository.listInternalProgramAApplications();
+      await this.applicationsRepository.listInternalProgramAApplications(
+        user.id,
+      );
 
     return applications.map((application) =>
       toInternalProgramAApplicationDto(application),

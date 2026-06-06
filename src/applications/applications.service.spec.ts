@@ -704,6 +704,21 @@ describe('ApplicationsService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('forbids assigned mentor from viewing document completeness', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      mentorUserId: 'mentor-1',
+    });
+
+    await expect(
+      service.getDocumentCompleteness('application-1', {
+        id: 'mentor-1',
+        email: 'mentor@example.com',
+        role: UserRole.MENTOR,
+      } as never),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
   describe('internal Program A application list', () => {
     it('lists internal Program A applications for reviewer-side user', async () => {
       applicationsRepository.listInternalProgramAApplications.mockResolvedValue(

@@ -5,14 +5,14 @@ class ProgramAMentoredTeamMemberDto {
   @ApiProperty()
   id!: string;
 
-  @ApiPropertyOptional()
-  firstName?: string;
+  @ApiProperty()
+  firstName!: string;
 
-  @ApiPropertyOptional()
-  lastName?: string;
+  @ApiProperty()
+  lastName!: string;
 
-  @ApiPropertyOptional()
-  email?: string;
+  @ApiProperty()
+  email!: string;
 }
 
 export class ProgramAMentoredApplicationDto {
@@ -31,17 +31,17 @@ export class ProgramAMentoredApplicationDto {
   @ApiProperty()
   teamName!: string;
 
-  @ApiPropertyOptional({ type: ProgramAMentoredTeamMemberDto, isArray: true })
-  teamMembers?: ProgramAMentoredTeamMemberDto[];
+  @ApiProperty({ type: ProgramAMentoredTeamMemberDto, isArray: true })
+  teamMembers!: ProgramAMentoredTeamMemberDto[];
 
   @ApiProperty()
   callId!: string;
 
-  @ApiPropertyOptional()
-  callTitle?: string;
+  @ApiProperty()
+  callTitle!: string;
 
-  @ApiPropertyOptional()
-  mentorUserId?: string;
+  @ApiProperty()
+  mentorUserId!: string;
 
   @ApiPropertyOptional()
   assignedAt?: Date;

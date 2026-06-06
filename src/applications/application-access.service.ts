@@ -326,6 +326,21 @@ export class ApplicationAccessService {
       return;
     }
 
+    if (!isTeamMember(application.team, user.id)) {
+      throw new ForbiddenException(
+        APPLICATIONS_MESSAGES.NO_PERMISSION_VIEW_APPLICATION,
+      );
+    }
+  }
+
+  validateApplicationDetailAccess(
+    application: ApplicationWithRelations | ApplicationWorkflowView,
+    user: AuthenticatedUserContext,
+  ): void {
+    if (this.isReviewerSideUser(user)) {
+      return;
+    }
+
     if (user.role === UserRole.MENTOR && application.mentorUserId === user.id) {
       return;
     }

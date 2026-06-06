@@ -225,7 +225,7 @@ export class ApplicationsService {
       throw new NotFoundException(APPLICATIONS_MESSAGES.APPLICATION_NOT_FOUND);
     }
 
-    this.applicationAccess.validateApplicationAccess(
+    this.applicationAccess.validateApplicationDetailAccess(
       application,
       requestingUser,
     );

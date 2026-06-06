@@ -1,5 +1,23 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ApplicationStatus } from '../../../generated/prisma/enums';
+import { MentorshipNoteAuthorDto } from './mentorship-note-author.dto';
+
+export class ApplicationMentorAssignmentDto {
+  @ApiPropertyOptional({ format: 'uuid' })
+  mentorUserId?: string | null;
+
+  @ApiPropertyOptional({ type: MentorshipNoteAuthorDto })
+  mentor?: MentorshipNoteAuthorDto | null;
+
+  @ApiPropertyOptional()
+  assignedAt?: Date | null;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  assignedById?: string | null;
+
+  @ApiPropertyOptional({ type: MentorshipNoteAuthorDto })
+  assignedBy?: MentorshipNoteAuthorDto | null;
+}
 
 export class ApplicationDetailDto {
   @ApiProperty({ example: 'f6c90688-c973-40ca-8f3b-c55667cc6f77' })
@@ -31,6 +49,9 @@ export class ApplicationDetailDto {
 
   @ApiPropertyOptional({ nullable: true, example: 5000 })
   grantBudget!: number | null;
+
+  @ApiPropertyOptional({ type: ApplicationMentorAssignmentDto })
+  mentorAssignment?: ApplicationMentorAssignmentDto | null;
 
   @ApiProperty()
   createdAt!: Date;

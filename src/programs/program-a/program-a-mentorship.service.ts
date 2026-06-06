@@ -155,7 +155,7 @@ export class ProgramAMentorshipService {
 
     this.applicationAccess.ensureProgramAMentorshipWorkflow(application);
     this.applicationAccess.ensureMentorAssigned(application);
-    this.applicationAccess.ensureMentorshipAccess(application, user);
+    this.applicationAccess.ensureMentorshipReadAccess(application, user);
 
     const notes = await this.programAMentorshipRepository.listNotes(
       application.id,

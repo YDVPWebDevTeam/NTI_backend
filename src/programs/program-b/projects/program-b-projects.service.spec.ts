@@ -167,6 +167,27 @@ describe('ProgramBProjectsService', () => {
     organizationId: null,
   } as const;
 
+  const assignedMentor = {
+    id: 'mentor-1',
+    email: 'mentor@example.com',
+    role: UserRole.MENTOR,
+    status: UserStatus.ACTIVE,
+    organizationId: null,
+  } as const;
+
+  const unassignedMentor = {
+    id: 'mentor-2',
+    email: 'mentor-2@example.com',
+    role: UserRole.MENTOR,
+    status: UserStatus.ACTIVE,
+    organizationId: null,
+  } as const;
+
+  const inactiveAssignedMentor = {
+    ...assignedMentor,
+    status: UserStatus.PENDING,
+  } as const;
+
   const activeProject = {
     id: 'project-1',
     backlogItemId: 'backlog-1',
@@ -281,6 +302,65 @@ describe('ProgramBProjectsService', () => {
     );
 
     expect(result).toBe(milestone);
+  });
+
+  it('creates a milestone for the assigned mentor', async () => {
+    const milestone = {
+      id: 'milestone-1',
+      projectId: 'project-1',
+      title: 'Mentor checkpoint',
+      status: ProgramBMilestoneStatus.PLANNED,
+    };
+
+    projectsRepository.createMilestone.mockResolvedValue(milestone);
+
+    const result = await service.createMilestone(
+      'project-1',
+      {
+        title: 'Mentor checkpoint',
+        status: ProgramBMilestoneStatus.PLANNED,
+      },
+      assignedMentor as never,
+    );
+
+    expect(userRepository.findActiveOrganizationMember).not.toHaveBeenCalled();
+
+    expect(projectsRepository.createMilestone).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'project-1',
+        title: 'Mentor checkpoint',
+        status: ProgramBMilestoneStatus.PLANNED,
+      }),
+      { tx: 'db-client' },
+    );
+
+    expect(result).toBe(milestone);
+  });
+
+  it('rejects an unassigned mentor from creating milestones', async () => {
+    await expect(
+      service.createMilestone(
+        'project-1',
+        { title: 'Unauthorized checkpoint' },
+        unassignedMentor as never,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(userRepository.findActiveOrganizationMember).not.toHaveBeenCalled();
+    expect(projectsRepository.createMilestone).not.toHaveBeenCalled();
+  });
+
+  it('rejects an inactive assigned mentor from creating milestones', async () => {
+    await expect(
+      service.createMilestone(
+        'project-1',
+        { title: 'Inactive mentor checkpoint' },
+        inactiveAssignedMentor as never,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(userRepository.findActiveOrganizationMember).not.toHaveBeenCalled();
+    expect(projectsRepository.createMilestone).not.toHaveBeenCalled();
   });
 
   it('allows company owners to manage milestones without team membership check', async () => {
@@ -513,6 +593,57 @@ describe('ProgramBProjectsService', () => {
     expect(result.title).toBe('Updated');
   });
 
+  it('updates a milestone for the assigned mentor', async () => {
+    projectsRepository.updateMilestoneForProject.mockResolvedValue({
+      count: 1,
+    });
+
+    projectsRepository.findMilestoneForProject.mockResolvedValue({
+      id: 'milestone-1',
+      projectId: 'project-1',
+      title: 'Updated by mentor',
+      status: ProgramBMilestoneStatus.IN_PROGRESS,
+    });
+
+    const result = await service.updateMilestone(
+      'project-1',
+      'milestone-1',
+      {
+        title: 'Updated by mentor',
+        status: ProgramBMilestoneStatus.IN_PROGRESS,
+      },
+      assignedMentor as never,
+    );
+
+    expect(userRepository.findActiveOrganizationMember).not.toHaveBeenCalled();
+
+    expect(projectsRepository.updateMilestoneForProject).toHaveBeenCalledWith(
+      'project-1',
+      'milestone-1',
+      {
+        title: 'Updated by mentor',
+        status: ProgramBMilestoneStatus.IN_PROGRESS,
+      },
+      { tx: 'db-client' },
+    );
+
+    expect(result.title).toBe('Updated by mentor');
+  });
+
+  it('rejects an unassigned mentor from updating milestones', async () => {
+    await expect(
+      service.updateMilestone(
+        'project-1',
+        'milestone-1',
+        { title: 'Unauthorized update' },
+        unassignedMentor as never,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(userRepository.findActiveOrganizationMember).not.toHaveBeenCalled();
+    expect(projectsRepository.updateMilestoneForProject).not.toHaveBeenCalled();
+  });
+
   it('rejects empty milestone update body', async () => {
     await expect(
       service.updateMilestone(
@@ -539,13 +670,7 @@ describe('ProgramBProjectsService', () => {
     const result = await service.createMentoringNote(
       'project-1',
       { note: 'Review deployment plan' },
-      {
-        id: 'mentor-1',
-        email: 'mentor@example.com',
-        role: UserRole.MENTOR,
-        status: UserStatus.ACTIVE,
-        organizationId: null,
-      } as never,
+      assignedMentor as never,
     );
 
     expect(projectsRepository.createMentoringNote).toHaveBeenCalledWith(
@@ -593,13 +718,7 @@ describe('ProgramBProjectsService', () => {
       service.createMentoringNote(
         'project-1',
         { note: 'Review deployment plan' },
-        {
-          id: 'mentor-2',
-          email: 'mentor-2@example.com',
-          role: UserRole.MENTOR,
-          status: UserStatus.ACTIVE,
-          organizationId: null,
-        } as never,
+        unassignedMentor as never,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
@@ -611,13 +730,7 @@ describe('ProgramBProjectsService', () => {
       service.createMentoringNote(
         'project-1',
         { note: 'Review deployment plan' },
-        {
-          id: 'mentor-1',
-          email: 'mentor@example.com',
-          role: UserRole.MENTOR,
-          status: UserStatus.PENDING,
-          organizationId: null,
-        } as never,
+        inactiveAssignedMentor as never,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
 

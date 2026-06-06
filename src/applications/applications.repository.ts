@@ -523,17 +523,14 @@ export class ApplicationsRepository extends BaseRepository<
       updatedAt: true,
       call: {
         select: {
-          id: true,
           title: true,
         },
       },
       team: {
         select: {
-          id: true,
           name: true,
           members: {
             select: {
-              userId: true,
               user: {
                 select: {
                   id: true,

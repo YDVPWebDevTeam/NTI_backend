@@ -242,6 +242,27 @@ export class ApplicationAccessService {
     );
   }
 
+  ensureMentorshipReadAccess(
+    application: ApplicationWorkflowView,
+    user: AuthenticatedUserContext,
+  ): void {
+    if (isAdminRole(user.role)) {
+      return;
+    }
+
+    if (user.role === UserRole.MENTOR && application.mentorUserId === user.id) {
+      return;
+    }
+
+    if (isTeamMember(application.team, user.id)) {
+      return;
+    }
+
+    throw new ForbiddenException(
+      APPLICATIONS_MESSAGES.ONLY_ADMIN_OR_MENTOR_CAN_ACCESS_NOTES,
+    );
+  }
+
   ensureArchivedApplicationIsReadOnlyForNonAdmin(
     application: ApplicationWorkflowView,
     user: AuthenticatedUserContext,

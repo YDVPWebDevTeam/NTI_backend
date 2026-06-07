@@ -1617,6 +1617,43 @@ describe('ApplicationsService', () => {
     expect(result.map((note) => note.id)).toEqual(['note-1', 'note-2']);
   });
 
+  it('allows team member to list mentorship notes for their application', async () => {
+    applicationsRepository.findByIdForWorkflow.mockResolvedValue({
+      ...workflowApplication,
+      status: ApplicationStatus.ACTIVE_PROJECT,
+      mentorUserId: 'mentor-1',
+    });
+    programAMentorshipRepository.listNotes.mockResolvedValue([
+      {
+        id: 'note-1',
+        applicationId: 'application-1',
+        authorId: 'mentor-1',
+        content: 'Shared update',
+        createdAt: new Date('2026-05-13T08:00:00.000Z'),
+        author: {
+          id: 'mentor-1',
+          email: 'mentor@example.com',
+          firstName: 'Mina',
+          lastName: 'Tor',
+        },
+      },
+    ]);
+
+    const result = await mentorshipService.listMentorshipNotes(
+      'application-1',
+      {
+        id: 'user-2',
+        email: 'member@example.com',
+        role: UserRole.STUDENT,
+      } as never,
+    );
+
+    expect(programAMentorshipRepository.listNotes).toHaveBeenCalledWith(
+      'application-1',
+    );
+    expect(result.map((note) => note.id)).toEqual(['note-1']);
+  });
+
   describe('Program A milestones', () => {
     const approvedProgramAApplication = {
       ...workflowApplication,

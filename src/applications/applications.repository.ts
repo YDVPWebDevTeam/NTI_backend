@@ -379,6 +379,22 @@ export class ApplicationsRepository extends BaseRepository<
           status: true,
         },
       },
+      mentorUser: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+      mentorAssignedBy: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
     } as const;
   }
 

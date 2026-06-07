@@ -39,6 +39,17 @@ export function toDetailDto(
     decisionById: application.decisionById,
     decisionRationale: application.decisionRationale,
     grantBudget: application.grantBudget,
+    mentorAssignment: {
+      mentorUserId: application.mentorUserId,
+      mentor: application.mentorUser
+        ? toMentorshipNoteAuthorDto(application.mentorUser)
+        : null,
+      assignedAt: application.mentorAssignedAt,
+      assignedById: application.mentorAssignedById,
+      assignedBy: application.mentorAssignedBy
+        ? toMentorshipNoteAuthorDto(application.mentorAssignedBy)
+        : null,
+    },
     createdAt: application.createdAt,
     updatedAt: application.updatedAt,
   };

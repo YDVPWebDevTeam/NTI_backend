@@ -22,12 +22,10 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends chromium fonts-liberation ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# --- Dependencies: full install, cached on package files only ---------------
 FROM base AS deps
 COPY package*.json ./
 RUN npm ci
 
-# --- Builder: generate Prisma client + compile TypeScript -------------------
 FROM deps AS builder
 COPY . .
 RUN npx prisma generate && npm run build
@@ -48,8 +46,6 @@ RUN npx prisma generate
 EXPOSE 3001
 CMD ["npm", "run", "start:dev"]
 
-# Holds everything both entrypoints need. The API (`production`) and the worker
-# only differ by CMD, so they both inherit from here.
 FROM chromium AS runtime
 ENV NODE_ENV=production
 COPY --from=prod-deps /app/node_modules ./node_modules
@@ -58,7 +54,6 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/generated ./generated
 COPY package*.json ./
-# Prisma CLI lives in dev deps, so pull it from the builder for `migrate deploy`.
 COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma

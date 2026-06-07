@@ -31,7 +31,10 @@ x-app-base: &app-base
 services:
   app:
     <<: *app-base
-    command: sh -c "npx prisma migrate deploy && npm run start:dev"
+    # Regenerate the client on every boot so the anonymous /app/generated
+    # volume always matches the current schema; a stale client otherwise
+    # survives across rebuilds and breaks compilation on schema changes.
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run start:dev"
     ports:
       - '3001:3001'
     healthcheck:
@@ -49,7 +52,7 @@ services:
   worker:
     <<: *app-base
     profiles: ['worker']
-    command: npm run start:worker:dev
+    command: sh -c "npx prisma generate && npm run start:worker:dev"
 
   postgres:
     image: postgres:16-alpine

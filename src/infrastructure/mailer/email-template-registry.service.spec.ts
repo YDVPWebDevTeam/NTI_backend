@@ -22,17 +22,17 @@ describe('EmailTemplateRegistryService', () => {
   it('renders user confirmation with shared layout and text fallback', () => {
     const result = service.render(EMAIL_TEMPLATES.USER_CONFIRMATION, {
       token: 'confirm-token',
-      confirmationPath: '/register/student',
+      confirmationPath: '/verify-email',
     });
 
     expect(result.subject).toBe('Email confirmation');
     expect(result.html).toContain('Confirm your email');
     expect(result.html).toContain(
-      'https://app.nti.test/register/student?token=confirm-token',
+      'https://app.nti.test/verify-email?token=confirm-token',
     );
     expect(result.html).toContain('NTI automated email');
     expect(result.text).toContain(
-      'Confirm email: https://app.nti.test/register/student?token=confirm-token',
+      'Confirm email: https://app.nti.test/verify-email?token=confirm-token',
     );
   });
 

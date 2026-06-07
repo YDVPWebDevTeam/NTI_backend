@@ -76,7 +76,7 @@ describe('EmailProcessor', () => {
       data: {
         email: 'student@example.com',
         token: 'confirm-token',
-        confirmationPath: '/register/student',
+        confirmationPath: '/verify-email',
       },
     } as Job<
       {
@@ -93,7 +93,7 @@ describe('EmailProcessor', () => {
     expect(mailerService.sendConfirmationEmail).toHaveBeenCalledWith(
       'student@example.com',
       'confirm-token',
-      '/register/student',
+      '/verify-email',
     );
   });
 

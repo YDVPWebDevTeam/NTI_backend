@@ -19,7 +19,6 @@ x-app-base: &app-base
     TSC_WATCHFILE: UsePolling
   volumes:
     - .:/app
-    # Keep the image's node_modules / generated client instead of the host's.
     - /app/node_modules
     - /app/generated
   depends_on:
@@ -31,12 +30,17 @@ x-app-base: &app-base
 services:
   app:
     <<: *app-base
-    command: sh -c "npx prisma migrate deploy && npm run start:dev"
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run start:dev"
     ports:
       - '3001:3001'
     healthcheck:
       test:
-        ['CMD', 'node', '-e', "require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -49,7 +53,7 @@ services:
   worker:
     <<: *app-base
     profiles: ['worker']
-    command: npm run start:worker:dev
+    command: sh -c "npx prisma generate && npm run start:worker:dev"
 
   postgres:
     image: postgres:16-alpine

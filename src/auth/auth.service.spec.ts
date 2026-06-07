@@ -721,7 +721,7 @@ describe('AuthService', () => {
       {
         email: unconfirmedUser.email,
         token: 'new-verification-token',
-        confirmationPath: '/register/student',
+        confirmationPath: '/verify-email',
       },
     );
   });

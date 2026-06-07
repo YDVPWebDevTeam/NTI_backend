@@ -1,7 +1,7 @@
 import { UserRole } from '../../generated/prisma/enums';
 
 export const CONFIRMATION_PATHS = {
-  STUDENT: '/register/student',
+  STUDENT: '/verify-email',
   COMPANY_OWNER: '/register/company-owner/confirm-email',
 } as const;
 

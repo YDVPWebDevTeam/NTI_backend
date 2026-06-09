@@ -518,7 +518,7 @@ describe('ProgramBBacklogService', () => {
     expect(backlogRepository.findMany).not.toHaveBeenCalled();
   });
 
-  it('throws NotFoundException for findPublishedById when no active call exists', async () => {
+  it('throws NotFoundException for findById when no active call exists', async () => {
     const callsRepository = {
       hasActiveProgramBCall: jest.fn().mockResolvedValue(false),
     };
@@ -535,7 +535,7 @@ describe('ProgramBBacklogService', () => {
     backlogRepository.findDetailUnique.mockResolvedValue(publishedItem);
 
     await expect(
-      localService.findPublishedById('item-1', student as never),
+      localService.findById('item-1', student as never),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 

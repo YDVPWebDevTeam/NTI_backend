@@ -285,25 +285,26 @@ export class ProgramBBacklogService {
     return this.backlogRepository.findDetailUnique({ id });
   }
 
-  async findPublishedById(
+  async findById(
     id: string,
     user: AuthenticatedUserContext,
   ): Promise<ProgramBBacklogItemDto> {
-    this.ensureActiveStudent(user);
+    // Resolves the item with role-aware access: same-org company members
+    // (the owners/employees who created it) and reviewers see any status,
+    // students only see published items.
+    const item = await this.ensureBacklogReadAccess(id, user);
 
-    const [item, hasActiveCall] = await Promise.all([
-      this.backlogRepository.findDetailUnique({ id }),
-      this.callsRepository.hasActiveProgramBCall(new Date()),
-    ]);
-
-    if (
-      !item ||
-      item.status !== BacklogItemStatus.PUBLISHED ||
-      !hasActiveCall
-    ) {
-      throw new NotFoundException(
-        PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+    // Students may additionally only browse while a call is active.
+    if (user.role === UserRole.STUDENT) {
+      const hasActiveCall = await this.callsRepository.hasActiveProgramBCall(
+        new Date(),
       );
+
+      if (!hasActiveCall) {
+        throw new NotFoundException(
+          PROGRAM_B_BACKLOG_MESSAGES.BACKLOG_ITEM_NOT_FOUND,
+        );
+      }
     }
 
     return this.toBacklogItemDto(item);

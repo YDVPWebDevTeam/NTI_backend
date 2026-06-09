@@ -100,12 +100,19 @@ export class ProgramBBacklogController {
   @ApiOkResponse({ type: ProgramBBacklogItemDto })
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.STUDENT)
-  findPublishedById(
+  @Roles(
+    UserRole.STUDENT,
+    UserRole.COMPANY_OWNER,
+    UserRole.COMPANY_EMPLOYEE,
+    UserRole.ADMIN,
+    UserRole.SUPER_ADMIN,
+    UserRole.EVALUATOR,
+  )
+  findById(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUserContext() user: AuthenticatedUserContext,
   ): Promise<ProgramBBacklogItemDto> {
-    return this.backlogService.findPublishedById(id, user);
+    return this.backlogService.findById(id, user);
   }
 
   @UpdateProgramBBacklogItemApi()

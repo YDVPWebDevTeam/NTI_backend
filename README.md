@@ -29,6 +29,48 @@ If you are new to the codebase, start with:
 3. `prisma/schema.prisma` for the domain model
 4. `src/app.controller.ts` for health endpoints
 
+## Backend Flow Diagram
+
+```mermaid
+flowchart TD
+    FE[Frontend / Admin UI] --> API[NestJS API<br/>src/main.ts + src/app.module.ts]
+    API --> AUTH[Auth + Account]
+    API --> CORE[Organization + Team + Invites]
+    API --> STUDENT[Student Profile]
+    API --> APPS[Applications]
+    API --> PROGA[Program A]
+    API --> PROGB[Program B]
+    API --> REPORTS[Reports + Export API]
+    API --> CONTACT[Contact]
+    API --> FILES[Files + Document Flows]
+
+    AUTH --> DB[(PostgreSQL + Prisma)]
+    CORE --> DB
+    STUDENT --> DB
+    APPS --> DB
+    PROGA --> DB
+    PROGB --> DB
+    REPORTS --> DB
+    CONTACT --> DB
+    FILES --> DB
+
+    FILES --> R2[Cloudflare R2 / Object Storage]
+    REPORTS --> PDF[PDF Renderer]
+    PDF --> QUEUE[BullMQ Queues]
+    API --> QUEUE
+    QUEUE --> REDIS[(Redis)]
+    WORKER[Worker<br/>src/worker.ts] --> QUEUE
+    WORKER --> REDIS
+    WORKER --> MAIL[Email Processor]
+    WORKER --> PDFJOBS[PDF / Export Processors]
+    MAIL --> BREVO[Brevo Email API]
+    PDFJOBS --> R2
+
+    APPS --> FLOW[Application Lifecycle]
+    FLOW --> PROGA
+    FLOW --> PROGB
+```
+
 ## Prerequisites
 
 - Node.js 22+

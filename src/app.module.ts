@@ -29,6 +29,8 @@ import { ReportExportProcessor } from './reports/report-export/report-export.pro
 import { ReportsModule } from './reports/reports.module';
 import { ContactModule } from './contact/contact.module';
 import { ConversationsModule } from './conversations/conversations.module';
+import { UniversityEmailDomainModule } from './university-email-domain/university-email-domain.module';
+import { StudentEmailModule } from './student-email/student-email.module';
 
 const queueProcessorProviders =
   process.env.RUN_QUEUE_PROCESSORS === 'true'
@@ -69,6 +71,8 @@ const queueProcessorProviders =
     ReportsModule,
     ContactModule,
     ConversationsModule,
+    UniversityEmailDomainModule,
+    StudentEmailModule,
   ],
   controllers: [AppController],
   providers: [

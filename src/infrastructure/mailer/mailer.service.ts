@@ -260,4 +260,24 @@ export class MailerService {
       data,
     );
   }
+
+  async sendStudentEmailVerificationEmail(
+    email: string,
+    token: string,
+  ): Promise<void> {
+    await this.sendTemplate(email, EMAIL_TEMPLATES.STUDENT_EMAIL_VERIFICATION, {
+      token,
+    });
+  }
+
+  async sendUniversityDomainRequestedEmail(
+    email: string,
+    data: EmailTemplateDataByName[typeof EMAIL_TEMPLATES.UNIVERSITY_DOMAIN_REQUESTED],
+  ): Promise<void> {
+    await this.sendTemplate(
+      email,
+      EMAIL_TEMPLATES.UNIVERSITY_DOMAIN_REQUESTED,
+      data,
+    );
+  }
 }

@@ -22,6 +22,10 @@ export class UserService {
     return this.users.findMany(undefined, db);
   }
 
+  findAdmins(db?: PrismaDbClient): Promise<User[] | null> {
+    return this.users.findAdmins(db);
+  }
+
   async create(
     data: Prisma.UserUncheckedCreateInput,
     db?: PrismaDbClient,

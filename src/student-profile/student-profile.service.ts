@@ -46,6 +46,7 @@ export class StudentProfileService {
         completion: {
           academicInformationCompleted: false,
           professionalSkillsCompleted: false,
+          studentEmailConfirmed: user.isStudentEmailConfirmed,
           profileCompleted: false,
         },
       };
@@ -248,9 +249,11 @@ export class StudentProfileService {
       completion: {
         academicInformationCompleted: this.isAcademicCompleted(profile),
         professionalSkillsCompleted: this.isProfessionalCompleted(profile),
+        studentEmailConfirmed: profile.user.isStudentEmailConfirmed,
         profileCompleted:
           this.isAcademicCompleted(profile) &&
-          this.isProfessionalCompleted(profile),
+          this.isProfessionalCompleted(profile) &&
+          profile.user.isStudentEmailConfirmed,
       },
     };
   }

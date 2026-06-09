@@ -353,6 +353,41 @@ export class EmailTemplateRegistryService {
             subject: 'Mentor assigned to your Program B project',
           }),
       },
+      [EMAIL_TEMPLATES.STUDENT_EMAIL_VERIFICATION]: {
+        render: (data) =>
+          this.createActionEmail({
+            title: 'Confirm your student email',
+            preheader:
+              'Confirm your university email address to continue your NTI onboarding.',
+            intro: [
+              'You added a student (university) email to your NTI account.',
+              'Confirm this address to verify your student status and continue with onboarding.',
+            ],
+            cta: {
+              label: 'Confirm student email',
+              url: `${this.configService.frontUrl}/verify-student-email?token=${encodeURIComponent(data.token)}`,
+            },
+            note: 'This confirmation link is single-use and should only be used by the account owner.',
+            subject: 'Confirm your student email',
+          }),
+      },
+      [EMAIL_TEMPLATES.UNIVERSITY_DOMAIN_REQUESTED]: {
+        render: (data) =>
+          this.createActionEmail({
+            title: 'University domain request',
+            preheader: 'A student requested a new university email domain.',
+            intro: [
+              `${data.requestedByEmail} requested that the university email domain "${data.domain}" be added to the approved list.`,
+              'Open the admin panel to review the request and approve or reject it.',
+            ],
+            cta: {
+              label: 'Review domain requests',
+              url: `${this.configService.frontUrl}/admin/university-email-domains`,
+            },
+            note: data.note ? `Note from requester: ${data.note}` : undefined,
+            subject: 'New university email domain request',
+          }),
+      },
     };
   }
 }

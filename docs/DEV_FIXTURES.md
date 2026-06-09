@@ -5,6 +5,37 @@ All accounts use password: **`Dev1234!`**
 
 ---
 
+## Extended dataset (v2)
+
+The seed now produces a larger dataset on top of the curated core documented
+below. Approximate totals after `npm run seed:dev`:
+
+| Entity | Count | Notes |
+|---|---|---|
+| Students | 45 | `student01..student15` curated; `student16..student45` generated |
+| Teams | 12 | Alpha..Epsilon + Zeta, Eta, Theta, Iota, Kappa, Lambda, Mu |
+| Organizations | 8 (+1 from `003`) | adds CloudBridge, MediTech, EduSpark, LogiFlow |
+| Mentors | 5 | adds `mentor4@dev.local`, `mentor5@dev.local` |
+| Evaluators | 3 | adds `evaluator3@dev.local` |
+| Backlog items | 24 | spread across all `BacklogItemStatus` values |
+| Program A applications | 12 | **one per `ApplicationStatus`** (full pipeline) |
+| Program B projects | 6 | statuses ACTIVE / BLOCKED / COMPLETED / CLOSED |
+
+**Newly seeded content types:** project & application **conversations + messages**
+(INTERNAL and PARTICIPANTS channels), **student portfolio projects**, **uploaded
+CV files** linked to student profiles, and **application sections** for every
+non-draft Program A application.
+
+Additional company owners (password `Dev1234!`):
+`owner@cloudbridge.dev.local`, `owner@meditech.dev.local`,
+`owner@eduspark.dev.local`, `owner@logiflow.dev.local`.
+
+> The curated core (stable, hand-written records) is documented in the tables
+> below; generated records (`student16+`, teams Zeta–Mu, extra backlog/projects)
+> use random UUIDs and coherent but templated content.
+
+---
+
 ## System Users
 
 | Email | Role | Name |

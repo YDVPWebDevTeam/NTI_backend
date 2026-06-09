@@ -19,6 +19,8 @@ import { isPrismaUniqueConstraintError } from '../common/prisma/prisma-error.uti
 import { SERIALIZABLE_TX_OPTIONS } from '../common/prisma/transaction.constants';
 import type { AuthenticatedUserContext } from '../common/types/auth-user-context.type';
 import { FilesRepository } from '../files/files.repository';
+import { FilesService } from '../files/files.service';
+import type { DownloadUrlDto } from '../files/dto/download-url.dto';
 import { TeamRepository } from '../team/team.repository';
 import { EMAIL_JOBS, QueueService } from '../infrastructure/queue';
 import { ApplicationDocumentsRepository } from './documents/application-documents.repository';
@@ -93,6 +95,7 @@ export class ApplicationsService {
     private readonly applicationRulesService: ApplicationRulesService,
     private readonly teamRepository: TeamRepository,
     private readonly filesRepository: FilesRepository,
+    private readonly filesService: FilesService,
     private readonly needsInfoRepository: NeedsInfoRepository,
     private readonly eligibilitySignalsService: EligibilitySignalsService,
     private readonly queueService: QueueService,
@@ -317,6 +320,59 @@ export class ApplicationsService {
     }
 
     return toApplicationDocumentDto(document);
+  }
+
+  async listDocuments(
+    applicationId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<ApplicationDocumentDto[]> {
+    const application =
+      await this.applicationsRepository.findByIdWithRelations(applicationId);
+
+    if (!application) {
+      throw new NotFoundException(APPLICATIONS_MESSAGES.APPLICATION_NOT_FOUND);
+    }
+
+    this.applicationAccess.validateApplicationDetailAccess(application, user);
+
+    const documents =
+      await this.applicationDocumentsRepository.listActiveByApplication(
+        applicationId,
+      );
+
+    return documents.map(toApplicationDocumentDto);
+  }
+
+  async requestDocumentDownloadUrl(
+    applicationId: string,
+    documentId: string,
+    user: AuthenticatedUserContext,
+  ): Promise<DownloadUrlDto> {
+    const application =
+      await this.applicationsRepository.findByIdWithRelations(applicationId);
+
+    if (!application) {
+      throw new NotFoundException(APPLICATIONS_MESSAGES.APPLICATION_NOT_FOUND);
+    }
+
+    this.applicationAccess.validateApplicationDetailAccess(application, user);
+
+    const document =
+      await this.applicationDocumentsRepository.findByIdForApplication(
+        applicationId,
+        documentId,
+      );
+
+    if (!document) {
+      throw new NotFoundException(
+        APPLICATIONS_MESSAGES.APPLICATION_DOCUMENT_NOT_FOUND,
+      );
+    }
+
+    return this.filesService.createDownloadUrlForFile(
+      document.uploadedFile,
+      'attachment',
+    );
   }
 
   async getDocumentCompleteness(

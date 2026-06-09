@@ -20,6 +20,7 @@ import { ApplicationDetailDto } from '../dto/application-detail.dto';
 import { ApplicationDocumentDto } from '../dto/application-document.dto';
 import { ApplicationEvaluationDto } from '../dto/application-evaluation.dto';
 import { AttachApplicationDocumentDto } from '../dto/attach-application-document.dto';
+import { DownloadUrlDto } from '../../files/dto/download-url.dto';
 import { CreateApplicationDto } from '../dto/create-application.dto';
 import { CreateApplicationDecisionDto } from '../dto/create-application-decision.dto';
 import { CreateApplicationEvaluationDto } from '../dto/create-application-evaluation.dto';
@@ -276,6 +277,47 @@ export const GetApplicationDocumentCompletenessApi = () =>
       ApiBadRequestResponse({ description: 'Invalid application id format.' }),
       ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
       ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const ListApplicationDocumentsApi = () =>
+  createApiDecorator({
+    summary: 'List application documents',
+    description:
+      'Returns the active documents attached to an application with file metadata. Accessible to team members and reviewer-side users.',
+    successResponse: {
+      status: 200,
+      type: ApplicationDocumentDto,
+      isArray: true,
+      description: 'Active documents attached to the application.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid application id format.' }),
+      ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
+      ApiNotFoundResponse({ description: 'Application was not found.' }),
+    ],
+  });
+
+export const RequestApplicationDocumentDownloadUrlApi = () =>
+  createApiDecorator({
+    summary: 'Request application document download URL',
+    description:
+      'Returns a temporary download URL for an attached application document. Accessible to team members and reviewer-side users.',
+    successResponse: {
+      status: 200,
+      type: DownloadUrlDto,
+      description: 'Download URL for the requested application document.',
+    },
+    extraDecorators: [ApiBearerAuth('access-token')],
+    errors: [
+      ApiUnauthorizedResponse({ description: 'Authentication is required.' }),
+      ApiBadRequestResponse({ description: 'Invalid identifier format.' }),
+      ApiForbiddenResponse({ description: 'Insufficient permissions.' }),
+      ApiNotFoundResponse({
+        description: 'Application or document was not found.',
+      }),
     ],
   });
 

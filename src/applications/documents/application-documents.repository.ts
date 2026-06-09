@@ -49,6 +49,35 @@ export class ApplicationDocumentsRepository extends BaseRepository<
     });
   }
 
+  listActiveByApplication(
+    applicationId: string,
+    db?: PrismaDbClient,
+  ): Promise<ApplicationDocumentWithFile[]> {
+    return (db ?? this.prisma.client).applicationDocument.findMany({
+      where: {
+        applicationId,
+        isActive: true,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      select: this.documentWithFileSelect(),
+    });
+  }
+
+  findByIdForApplication(
+    applicationId: string,
+    documentId: string,
+    db?: PrismaDbClient,
+  ): Promise<ApplicationDocumentWithFile | null> {
+    return (db ?? this.prisma.client).applicationDocument.findFirst({
+      where: {
+        id: documentId,
+        applicationId,
+        isActive: true,
+      },
+      select: this.documentWithFileSelect(),
+    });
+  }
+
   findLatestVersionNumberBySlot(
     applicationId: string,
     documentType: Prisma.ApplicationDocumentUncheckedCreateInput['documentType'],

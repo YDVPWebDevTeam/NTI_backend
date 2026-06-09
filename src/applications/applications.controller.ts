@@ -34,8 +34,10 @@ import {
   GetPublicCallByIdApi,
   GetPublicCallsApi,
   GetSectionHistoryApi,
+  ListApplicationDocumentsApi,
   ListApplicationEvaluationsApi,
   ListApplicationSectionsApi,
+  RequestApplicationDocumentDownloadUrlApi,
   ReplyToNeedsInfoItemApi,
   ResubmitApplicationApi,
   SetActiveSectionVersionApi,
@@ -45,6 +47,7 @@ import {
 } from './api-docs';
 import { ApplicationDetailDto } from './dto/application-detail.dto';
 import { ApplicationDocumentDto } from './dto/application-document.dto';
+import { DownloadUrlDto } from '../files/dto/download-url.dto';
 import { ApplicationEvaluationDto } from './dto/application-evaluation.dto';
 import { ApplicationSectionDto } from './dto/application-section.dto';
 import { ApplicationSectionHistoryDto } from './dto/application-section-history.dto';
@@ -161,6 +164,31 @@ export class ApplicationsController {
     @Body() dto: AttachApplicationDocumentDto,
   ): Promise<ApplicationDocumentDto> {
     return this.applicationsService.attachDocument(id, user, dto);
+  }
+
+  @ListApplicationDocumentsApi()
+  @Get(':id/documents')
+  @UseGuards(JwtAuthGuard)
+  listDocuments(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<ApplicationDocumentDto[]> {
+    return this.applicationsService.listDocuments(id, user);
+  }
+
+  @RequestApplicationDocumentDownloadUrlApi()
+  @Get(':id/documents/:documentId/download-url')
+  @UseGuards(JwtAuthGuard)
+  requestDocumentDownloadUrl(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+    @GetUserContext() user: AuthenticatedUserContext,
+  ): Promise<DownloadUrlDto> {
+    return this.applicationsService.requestDocumentDownloadUrl(
+      id,
+      documentId,
+      user,
+    );
   }
 
   @GetApplicationDocumentCompletenessApi()

@@ -4,6 +4,7 @@ export const APPLICATIONS_MESSAGES = {
   CALL_NOT_FOUND: 'Call not found',
   TEAM_NOT_FOUND: 'Team not found',
   SECTION_NOT_FOUND: 'Section not found',
+  APPLICATION_DOCUMENT_NOT_FOUND: 'Application document not found',
   VERSION_NOT_FOUND_IN_HISTORY: 'Version not found in history',
   ACTIVE_APPLICATION_ALREADY_EXISTS:
     'An active application for this team and call already exists',

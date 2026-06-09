@@ -164,6 +164,24 @@ export class FilesService {
       throw new NotFoundException(FILES_MESSAGES.FILE_NOT_FOUND);
     }
 
+    return this.createDownloadUrlForFile(file, disposition);
+  }
+
+  /**
+   * Builds a read URL for an already-resolved file record without enforcing
+   * file ownership. Callers are responsible for authorizing access to the
+   * owning entity first (e.g. application document access checks).
+   */
+  async createDownloadUrlForFile(
+    file: {
+      id: string;
+      key: string;
+      originalName: string;
+      visibility: FileVisibility | null;
+      status: UploadStatus;
+    },
+    disposition: FileUrlDisposition = 'inline',
+  ): Promise<DownloadUrlDto> {
     const visibility = this.normalizeVisibility(file.visibility);
 
     if (file.status !== UploadStatus.UPLOADED) {

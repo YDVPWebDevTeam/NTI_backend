@@ -110,6 +110,9 @@ describe('ApplicationsService', () => {
   let filesRepository: {
     findByIdForOwners: jest.Mock;
   };
+  let filesService: {
+    createDownloadUrlForFile: jest.Mock;
+  };
   let programAMentorshipRepository: {
     createNote: jest.Mock;
     listNotes: jest.Mock;
@@ -339,6 +342,10 @@ describe('ApplicationsService', () => {
       findByIdForOwners: jest.fn(),
     };
 
+    filesService = {
+      createDownloadUrlForFile: jest.fn(),
+    };
+
     programAMentorshipRepository = {
       createNote: jest.fn(),
       listNotes: jest.fn(),
@@ -386,6 +393,7 @@ describe('ApplicationsService', () => {
       applicationRulesService as never,
       teamRepository as never,
       filesRepository as never,
+      filesService as never,
       needsInfoRepository as never,
       eligibilitySignalsService as never,
       queueService as never,

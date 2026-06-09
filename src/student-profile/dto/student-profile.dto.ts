@@ -20,6 +20,12 @@ export class StudentProfileUserDto {
 
   @ApiProperty()
   email!: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  studentEmail!: string | null;
+
+  @ApiProperty()
+  isStudentEmailConfirmed!: boolean;
 }
 
 export class StudentProfileDataDto {
@@ -136,6 +142,9 @@ export class StudentProfileCompletionDto {
 
   @ApiProperty()
   professionalSkillsCompleted!: boolean;
+
+  @ApiProperty()
+  studentEmailConfirmed!: boolean;
 
   @ApiProperty()
   profileCompleted!: boolean;

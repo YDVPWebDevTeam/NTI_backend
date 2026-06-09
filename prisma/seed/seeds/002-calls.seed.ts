@@ -36,22 +36,41 @@ export const callsSeed: SeedTask = {
     ];
 
     for (const call of calls) {
-      const existingCall = await context.client.query<CallRow>(
-        'SELECT id FROM "Call" WHERE type = $1 LIMIT 1',
+      // Fetch every call of this type (oldest first) so we can converge on a
+      // single canonical row. Earlier non-idempotent seed runs could leave
+      // duplicate calls of the same type behind; "UPDATE ... LIMIT 1" never
+      // cleaned those up, which surfaced as duplicate open-call cards in the UI.
+      const existingCalls = await context.client.query<CallRow>(
+        'SELECT id FROM "Call" WHERE type = $1 ORDER BY "createdAt" ASC',
         [call.type],
       );
 
-      if (existingCall.rowCount && existingCall.rowCount > 0) {
+      if (existingCalls.rowCount && existingCalls.rowCount > 0) {
+        const [canonical, ...duplicates] = existingCalls.rows;
+
         await context.client.query(
           `UPDATE "Call" SET title = $1, status = $2, "opensAt" = $3, "closesAt" = $4, "updatedAt" = NOW() WHERE id = $5`,
-          [
-            call.title,
-            call.status,
-            call.opensAt,
-            call.closesAt,
-            existingCall.rows[0].id,
-          ],
+          [call.title, call.status, call.opensAt, call.closesAt, canonical.id],
         );
+
+        // Remove stray duplicates of the same type, but only when they carry no
+        // applications — deleting a Call cascades to its applications, so we
+        // never drop a call that real data depends on.
+        for (const duplicate of duplicates) {
+          const linkedApplications = await context.client.query<{
+            count: string;
+          }>(
+            'SELECT COUNT(*)::text AS count FROM "Application" WHERE "callId" = $1',
+            [duplicate.id],
+          );
+
+          if (Number(linkedApplications.rows[0]?.count ?? '0') === 0) {
+            await context.client.query('DELETE FROM "Call" WHERE id = $1', [
+              duplicate.id,
+            ]);
+          }
+        }
+
         continue;
       }
 

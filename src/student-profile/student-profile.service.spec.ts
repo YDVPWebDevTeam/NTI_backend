@@ -84,6 +84,8 @@ describe('StudentProfileService', () => {
       firstName: 'Test',
       lastName: 'Student',
       email: authUser.email,
+      studentEmail: 'test.student@ukf.sk',
+      isStudentEmailConfirmed: true,
     },
     skills: [
       {
@@ -107,6 +109,8 @@ describe('StudentProfileService', () => {
         firstName: 'Test',
         lastName: 'Student',
         email: authUser.email,
+        studentEmail: 'test.student@ukf.sk',
+        isStudentEmailConfirmed: true,
       }),
       findByUserIdWithRelations: jest.fn().mockResolvedValue(baseProfile()),
       findUniversityById: jest
@@ -237,6 +241,7 @@ describe('StudentProfileService', () => {
     expect(result.completion).toEqual({
       academicInformationCompleted: true,
       professionalSkillsCompleted: true,
+      studentEmailConfirmed: true,
       profileCompleted: true,
     });
   });
@@ -255,6 +260,7 @@ describe('StudentProfileService', () => {
     expect(result.completion).toEqual({
       academicInformationCompleted: true,
       professionalSkillsCompleted: false,
+      studentEmailConfirmed: true,
       profileCompleted: false,
     });
   });

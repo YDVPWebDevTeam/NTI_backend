@@ -240,6 +240,13 @@ model User {
 
   confirmationToken EmailVerificationToken?
 
+  studentEmail            String?                        @unique
+  isStudentEmailConfirmed Boolean                        @default(false)
+  studentEmailToken       StudentEmailVerificationToken?
+
+  universityDomainsRequested UniversityEmailDomain[] @relation("DomainRequestedBy")
+  universityDomainsReviewed  UniversityEmailDomain[] @relation("DomainReviewedBy")
+
   isAdminConfirmed Boolean @default(false) @map("isAdminConfirmed")
 
   teams TeamMember[]
@@ -1082,6 +1089,48 @@ model EmailVerificationToken {
   acceptedAt DateTime?
 
   @@index([expiresAt])
+}
+
+model StudentEmailVerificationToken {
+  id    String @id @default(uuid())
+  token String @unique
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  email String
+
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  acceptedAt DateTime?
+
+  @@index([expiresAt])
+}
+
+enum UniversityEmailDomainStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model UniversityEmailDomain {
+  id     String                      @id @default(uuid())
+  domain String                      @unique
+  status UniversityEmailDomainStatus @default(PENDING)
+
+  requestedById String?
+  requestedBy   User?   @relation("DomainRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+
+  reviewedById String?
+  reviewedBy   User?   @relation("DomainReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  requestNote String?
+  reviewNote  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
 }
 
 model RefreshToken {

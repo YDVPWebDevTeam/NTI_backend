@@ -20,6 +20,8 @@ const studentProfileInclude = {
       firstName: true,
       lastName: true,
       email: true,
+      studentEmail: true,
+      isStudentEmailConfirmed: true,
     },
   },
   skills: {
@@ -73,6 +75,8 @@ export class StudentProfileRepository extends BaseRepository<
     firstName: string;
     lastName: string;
     email: string;
+    studentEmail: string | null;
+    isStudentEmailConfirmed: boolean;
   } | null> {
     return (db ?? this.prisma.client).user.findUnique({
       where: { id: userId },
@@ -81,6 +85,8 @@ export class StudentProfileRepository extends BaseRepository<
         firstName: true,
         lastName: true,
         email: true,
+        studentEmail: true,
+        isStudentEmailConfirmed: true,
       },
     });
   }

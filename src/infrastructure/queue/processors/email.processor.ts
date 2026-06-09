@@ -194,6 +194,32 @@ export class EmailProcessor extends WorkerHost {
         teamName: data.teamName,
       });
     },
+    [EMAIL_JOBS.STUDENT_EMAIL_VERIFICATION]: async (data) => {
+      await this.mailerService.sendStudentEmailVerificationEmail(
+        data.email,
+        data.token,
+      );
+    },
+    [EMAIL_JOBS.UNIVERSITY_DOMAIN_REQUESTED]: async (data) => {
+      this.logger.log(`University domain requested: ${data.domain}`);
+
+      if (!data.adminEmails || data.adminEmails.length === 0) {
+        this.logger.warn(
+          'No admins found for UNIVERSITY_DOMAIN_REQUESTED email',
+        );
+        return;
+      }
+
+      await Promise.allSettled(
+        data.adminEmails.map((adminEmail) =>
+          this.mailerService.sendUniversityDomainRequestedEmail(adminEmail, {
+            domain: data.domain,
+            requestedByEmail: data.requestedByEmail,
+            note: data.note,
+          }),
+        ),
+      );
+    },
   };
 
   async process(job: Job<EmailJobData[EmailJobName]>): Promise<void> {

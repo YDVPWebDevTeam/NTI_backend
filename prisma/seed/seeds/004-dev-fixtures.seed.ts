@@ -1475,20 +1475,1044 @@ export const devFixturesSeed: SeedTask = {
           [randomUUID(), IDS.paApp01, IDS.mentor2, note, now],
         );
       }
+
+      // Submitted application sections (read-only content shown in project view).
+      // Without these rows every application renders "No application sections
+      // found." in the student/mentor/review UIs.
+      const applicationSectionContent: Record<
+        string,
+        Record<string, unknown>
+      > = {
+        idea_overview: {
+          problem:
+            'Onboarding nových zamestnancov je manuálny, roztrieštený medzi viacero nástrojov a trvá v priemere dva týždne.',
+          solution:
+            'Jednotná platforma, ktorá automatizuje úlohy, dokumenty a prístupy podľa roly nového zamestnanca.',
+          targetUsers:
+            'HR oddelenia stredných a veľkých firiem a ich noví zamestnanci.',
+          valueProposition:
+            'Skrátenie času onboardingu o 60 % a jednotný prehľad o stave každého nástupu.',
+        },
+        category_and_stack: {
+          category: 'Web Applications',
+          stackTags: ['TypeScript', 'NestJS', 'React', 'PostgreSQL'],
+        },
+        team_setup: {
+          leaderRole:
+            'Vedúci tímu zastrešuje produktovú víziu a koordináciu s mentorom.',
+          memberResponsibilities:
+            'Backend (API a integrácie), frontend (UI a stavy) a QA s dôrazom na automatizované testy.',
+        },
+        execution_plan: {
+          roadmapSummary:
+            'MVP s definíciou rolí, následne integrácie s HR systémami a notifikácie.',
+          plannedMilestones:
+            'Kick-off → prototyp → beta verzia → finálne odovzdanie.',
+          timelineSummary:
+            'Realizácia rozdelená do štyroch míľnikov počas jedného semestra.',
+        },
+        business_case: {
+          market:
+            'Slovenské a české firmy s 50+ zamestnancami a pravidelným náborom.',
+          monetization: 'SaaS predplatné podľa počtu aktívnych používateľov.',
+          expectedImpact:
+            'Úspora desiatok hodín HR práce mesačne a lepšia skúsenosť nových zamestnancov.',
+        },
+        risks: {
+          topRisks:
+            'Integrácia s rôznorodými HR systémami a ochrana osobných údajov (GDPR).',
+          mitigations:
+            'Modulárne konektory, šifrovanie citlivých dát a včasná právna konzultácia.',
+        },
+      };
+
+      const applicationsWithSections = [
+        { id: IDS.paApp01, authorId: IDS.student01 },
+        { id: IDS.paApp02, authorId: IDS.student04 },
+        { id: IDS.paApp03, authorId: IDS.student06 },
+        { id: IDS.paApp04, authorId: IDS.student09 },
+      ];
+
+      for (const target of applicationsWithSections) {
+        for (const [key, value] of Object.entries(applicationSectionContent)) {
+          await client.query(
+            `INSERT INTO "ApplicationSection" (id, "applicationId", key, "valueJson", version, "activeVersion", "updatedById", "updatedAt")
+             VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8)
+             ON CONFLICT ("applicationId", key) DO NOTHING`,
+            [
+              randomUUID(),
+              target.id,
+              key,
+              JSON.stringify(value),
+              1,
+              1,
+              target.authorId,
+              now,
+            ],
+          );
+        }
+      }
     }
 
     // -----------------------------------------------------------------------
     // Summary
     // -----------------------------------------------------------------------
+    // =======================================================================
+    // EXTENDED FIXTURES — larger dataset (~3x): more orgs, mentors, students,
+    // teams, backlog, full Program A pipeline, Program B variety, plus newly
+    // seeded content types (conversations & messages, student projects, CVs).
+    // =======================================================================
+    const daysAgo = (n: number) => new Date(now.getTime() - n * 86_400_000);
+    const daysAhead = (n: number) => new Date(now.getTime() + n * 86_400_000);
+
+    // Local helper: create an UPLOADED file row (e.g. a CV or attachment).
+    const makeUploadedFile = async (
+      ownerId: string,
+      originalName: string,
+      purpose: string,
+      entityType: string,
+      entityId: string | null,
+    ): Promise<string> => {
+      const fileId = randomUUID();
+      await client.query(
+        `INSERT INTO "UploadedFile" (
+           id, "ownerId", key, "originalName", "mimeType", size,
+           purpose, "entityType", "entityId", visibility, status,
+           "uploadUrlExpiresAt", "uploadedAt", "createdAt", "updatedAt"
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PRIVATE','UPLOADED',$10,$11,$11,$11)
+         ON CONFLICT (key) DO NOTHING`,
+        [
+          fileId,
+          ownerId,
+          `dev-fixtures/${fileId}/${originalName}`,
+          originalName,
+          'application/pdf',
+          120_000,
+          purpose,
+          entityType,
+          entityId,
+          daysAhead(7),
+          now,
+        ],
+      );
+      return fileId;
+    };
+
+    // Local helper: create a conversation with an ordered list of messages.
+    const makeConversation = async (opts: {
+      channel: 'INTERNAL' | 'PARTICIPANTS';
+      applicationId?: string;
+      projectId?: string;
+      messages: Array<[string, string]>; // [authorUserId, body]
+    }): Promise<void> => {
+      const conversationId = randomUUID();
+      await client.query(
+        `INSERT INTO "Conversation" (id, channel, "programBProjectId", "applicationId", "createdAt", "updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$5)
+         ON CONFLICT DO NOTHING`,
+        [
+          conversationId,
+          opts.channel,
+          opts.projectId ?? null,
+          opts.applicationId ?? null,
+          now,
+        ],
+      );
+      for (let i = 0; i < opts.messages.length; i++) {
+        const [authorUserId, body] = opts.messages[i];
+        await client.query(
+          `INSERT INTO "ConversationMessage" (id, "conversationId", "authorUserId", body, "createdAt", "updatedAt")
+           VALUES ($1,$2,$3,$4,$5,$5)
+           ON CONFLICT DO NOTHING`,
+          [
+            randomUUID(),
+            conversationId,
+            authorUserId,
+            body,
+            daysAgo(opts.messages.length - i),
+          ],
+        );
+      }
+    };
+
+    // Local helper: six Program A application sections with coherent content.
+    const seedApplicationSections = async (
+      applicationId: string,
+      authorId: string,
+      idea: {
+        problem: string;
+        solution: string;
+        category: string;
+        stack: string[];
+      },
+    ): Promise<void> => {
+      const sections: Record<string, Record<string, unknown>> = {
+        idea_overview: {
+          problem: idea.problem,
+          solution: idea.solution,
+          targetUsers:
+            'Cieľová skupina definovaná v rámci analýzy trhu a používateľského výskumu.',
+          valueProposition:
+            'Jasná pridaná hodnota oproti existujúcim riešeniam na trhu.',
+        },
+        category_and_stack: { category: idea.category, stackTags: idea.stack },
+        team_setup: {
+          leaderRole:
+            'Vedúci tímu zastrešuje produktovú víziu a komunikáciu s mentorom.',
+          memberResponsibilities:
+            'Rozdelené role pre backend, frontend a QA s jasnými zodpovednosťami.',
+        },
+        execution_plan: {
+          roadmapSummary:
+            'MVP, následne iteratívne rozširovanie funkcionality podľa spätnej väzby.',
+          plannedMilestones:
+            'Kick-off, prototyp, beta verzia, finálne odovzdanie.',
+          timelineSummary:
+            'Realizácia rozdelená do štyroch míľnikov počas jedného semestra.',
+        },
+        business_case: {
+          market:
+            'Stredné a veľké firmy v regióne s preukázanou potrebou tohto riešenia.',
+          monetization:
+            'SaaS predplatné, prípadne licenčný model pre enterprise zákazníkov.',
+          expectedImpact:
+            'Merateľná úspora času a nákladov pre cieľové organizácie.',
+        },
+        risks: {
+          topRisks:
+            'Technická integrácia s externými systémami a dodržanie GDPR.',
+          mitigations:
+            'Modulárna architektúra, šifrovanie a včasné právne konzultácie.',
+        },
+      };
+      for (const [key, value] of Object.entries(sections)) {
+        await client.query(
+          `INSERT INTO "ApplicationSection" (id, "applicationId", key, "valueJson", version, "activeVersion", "updatedById", "updatedAt")
+           VALUES ($1,$2,$3,$4::jsonb,1,1,$5,$6)
+           ON CONFLICT ("applicationId", key) DO NOTHING`,
+          [
+            randomUUID(),
+            applicationId,
+            key,
+            JSON.stringify(value),
+            authorId,
+            now,
+          ],
+        );
+      }
+    };
+
+    // ----- Extra mentors & evaluator -----------------------------------------
+    const extraStaff = [
+      {
+        id: randomUUID(),
+        firstName: 'Adriána',
+        lastName: 'Kollárová',
+        email: 'mentor4@dev.local',
+        role: 'MENTOR',
+      },
+      {
+        id: randomUUID(),
+        firstName: 'Boris',
+        lastName: 'Tóth',
+        email: 'mentor5@dev.local',
+        role: 'MENTOR',
+      },
+      {
+        id: randomUUID(),
+        firstName: 'Marek',
+        lastName: 'Šulek',
+        email: 'evaluator3@dev.local',
+        role: 'EVALUATOR',
+      },
+    ];
+    for (const u of extraStaff) {
+      await upsertUser(client, u.id, { ...u, passwordHash: pw, now });
+    }
+    const mentorPool = [
+      IDS.mentor1,
+      IDS.mentor2,
+      IDS.mentor3,
+      extraStaff[0].id,
+      extraStaff[1].id,
+    ];
+
+    // ----- 4 more organizations + owners -------------------------------------
+    const extraOrgs = [
+      {
+        id: randomUUID(),
+        name: 'CloudBridge s.r.o.',
+        ico: '55555555',
+        sector: 'Cloud',
+        desc: 'Cloudové a DevOps riešenia pre podniky.',
+        web: 'https://cloudbridge.dev',
+        ownerId: randomUUID(),
+        ownerEmail: 'owner@cloudbridge.dev.local',
+        ownerFirst: 'Igor',
+        ownerLast: 'Mráz',
+      },
+      {
+        id: randomUUID(),
+        name: 'MediTech a.s.',
+        ico: '66666666',
+        sector: 'Healthcare',
+        desc: 'Digitálne zdravotnícke aplikácie a telemedicína.',
+        web: 'https://meditech.sk',
+        ownerId: randomUUID(),
+        ownerEmail: 'owner@meditech.dev.local',
+        ownerFirst: 'Soňa',
+        ownerLast: 'Hrušková',
+      },
+      {
+        id: randomUUID(),
+        name: 'EduSpark s.r.o.',
+        ico: '77777777',
+        sector: 'Education',
+        desc: 'E-learning platformy a vzdelávacie nástroje.',
+        web: 'https://eduspark.sk',
+        ownerId: randomUUID(),
+        ownerEmail: 'owner@eduspark.dev.local',
+        ownerFirst: 'Patrik',
+        ownerLast: 'Vavro',
+      },
+      {
+        id: randomUUID(),
+        name: 'LogiFlow s.r.o.',
+        ico: '88888888',
+        sector: 'Logistics',
+        desc: 'Optimalizácia logistiky a dodávateľských reťazcov.',
+        web: 'https://logiflow.sk',
+        ownerId: randomUUID(),
+        ownerEmail: 'owner@logiflow.dev.local',
+        ownerFirst: 'Veronika',
+        ownerLast: 'Bartošová',
+      },
+    ];
+    for (const o of extraOrgs) {
+      await client.query(
+        `INSERT INTO "Organization" (id, name, ico, sector, description, website, status, "createdAt", "updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,'ACTIVE',$7,$7)
+         ON CONFLICT (ico) DO NOTHING`,
+        [o.id, o.name, o.ico, o.sector, o.desc, o.web, now],
+      );
+      const resolvedOrgId = (
+        await client.query<{ id: string }>(
+          `SELECT id FROM "Organization" WHERE ico = $1 LIMIT 1`,
+          [o.ico],
+        )
+      ).rows[0].id;
+      o.id = resolvedOrgId;
+      await upsertUser(client, o.ownerId, {
+        firstName: o.ownerFirst,
+        lastName: o.ownerLast,
+        email: o.ownerEmail,
+        passwordHash: pw,
+        role: 'COMPANY_OWNER',
+        organizationId: resolvedOrgId,
+        now,
+      });
+      const resolvedOwnerId = (
+        await client.query<{ id: string }>(
+          `SELECT id FROM "User" WHERE email = $1 LIMIT 1`,
+          [o.ownerEmail],
+        )
+      ).rows[0].id;
+      o.ownerId = resolvedOwnerId;
+    }
+    const allOrgs = [
+      { id: orgTechNovaId, ownerId: ownerTechNovaDbId },
+      { id: orgGreenId, ownerId: ownerGreenDbId },
+      { id: orgDataId, ownerId: ownerDataDbId },
+      { id: orgStartupId, ownerId: ownerStartupDbId },
+      ...extraOrgs.map((o) => ({ id: o.id, ownerId: o.ownerId })),
+    ];
+
+    // ----- 30 more students (16..45) with profiles, skills, projects, CVs ----
+    const academicCombos: Array<[string, string, string]> = [
+      [univSTUId, facFEIId, specSoftEngId],
+      [univSTUId, facFIITId, specAIId],
+      [univUKId, facMFFId, specCSId],
+      [univEKONId, facNHFId, specFinanceId],
+    ];
+    const focusPool: string[][] = [
+      ['SOFTWARE_DEVELOPMENT', 'WEB_APPLICATIONS'],
+      ['AI_AND_DATA'],
+      ['MOBILE_DEVELOPMENT'],
+      ['DEVOPS_AND_INFRASTRUCTURE', 'SOFTWARE_DEVELOPMENT'],
+      ['UI_UX_DESIGN', 'PRODUCT_PROJECT_MANAGEMENT'],
+      ['QA_AND_TESTING'],
+      ['GAME_DEVELOPMENT'],
+      ['IOT_AND_EMBEDDED'],
+    ];
+    const rolePool: string[][] = [
+      ['FULLSTACK'],
+      ['AI_DATA'],
+      ['MOBILE'],
+      ['DEVOPS', 'BACKEND'],
+      ['UI_UX', 'PRODUCT_MANAGER'],
+      ['QA'],
+      ['GAME_DEV'],
+      ['EMBEDDED'],
+    ];
+    const skillPool: Array<[string, string, number]> = [
+      ['TypeScript', 'ADVANCED', 18],
+      ['React', 'INTERMEDIATE', 10],
+      ['Node.js', 'ADVANCED', 14],
+      ['Python', 'ADVANCED', 22],
+      ['Go', 'INTERMEDIATE', 8],
+      ['Docker', 'INTERMEDIATE', 10],
+      ['PostgreSQL', 'ADVANCED', 16],
+      ['Figma', 'INTERMEDIATE', 12],
+      ['Kubernetes', 'BEGINNER', 5],
+      ['Rust', 'BEGINNER', 4],
+      ['Swift', 'INTERMEDIATE', 9],
+      ['Vue.js', 'INTERMEDIATE', 11],
+    ];
+    const moreStudentNames: Array<[string, string]> = [
+      ['Patrik', 'Strelec'],
+      ['Romana', 'Kucharová'],
+      ['Samuel', 'Vlk'],
+      ['Tatiana', 'Holubová'],
+      ['Viktor', 'Adamec'],
+      ['Zdenka', 'Lišková'],
+      ['Andrej', 'Mojžiš'],
+      ['Bianka', 'Páleníková'],
+      ['Dávid', 'Krupa'],
+      ['Emília', 'Sláviková'],
+      ['František', 'Bahna'],
+      ['Gabriela', 'Šimo'],
+      ['Hugo', 'Repka'],
+      ['Ivana', 'Danková'],
+      ['Jakub', 'Ondruš'],
+      ['Klára', 'Vince'],
+      ['Lukáš', 'Benko'],
+      ['Magdaléna', 'Tóthová'],
+      ['Norbert', 'Hric'],
+      ['Olívia', 'Sokolová'],
+      ['Peter', 'Greguš'],
+      ['Radka', 'Mihálová'],
+      ['Šimon', 'Ďuriš'],
+      ['Terézia', 'Kollár'],
+      ['Urban', 'Pavlík'],
+      ['Vanesa', 'Hudec'],
+      ['Western', 'Krajčí'],
+      ['Xénia', 'Bagranová'],
+      ['Yuri', 'Smolen'],
+      ['Zara', 'Vrabec'],
+    ];
+    const newStudents: Array<{ userId: string; profileId: string }> = [];
+    for (let j = 0; j < moreStudentNames.length; j++) {
+      const num = 16 + j;
+      const [firstName, lastName] = moreStudentNames[j] as [string, string];
+      const userId = randomUUID();
+      const profileId = randomUUID();
+      const email = `student${num}@dev.local`;
+      const [univId, facId, specId] = academicCombos[j % academicCombos.length];
+      const degree = j % 2 === 0 ? 'MASTER' : 'BACHELOR';
+      const year = (j % 3) + 1;
+
+      await upsertUser(client, userId, {
+        firstName,
+        lastName,
+        email,
+        passwordHash: pw,
+        role: 'STUDENT',
+        now,
+      });
+
+      // CV file owned by the student.
+      const cvFileId = await makeUploadedFile(
+        userId,
+        `CV_${lastName}.pdf`,
+        'student-cv',
+        'student-profile',
+        profileId,
+      );
+
+      await client.query(
+        `INSERT INTO "StudentProfile" (
+           id, "userId", "universityId", "facultyId", "specializationId",
+           "degreeLevel", "studyMode", "studyYear", "expectedGraduationYear",
+           "focusAreas", "preferredRoles", "softSkills",
+           "githubUrl", "linkedinUrl", bio, "cvFileId",
+           "academicDeclarationAcceptedAt", "createdAt", "updatedAt"
+         ) VALUES ($1,$2,$3,$4,$5,$6,'FULL_TIME',$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$16,$16)
+         ON CONFLICT ("userId") DO NOTHING`,
+        [
+          profileId,
+          userId,
+          univId,
+          facId,
+          specId,
+          degree,
+          year,
+          2026 + (2 - year),
+          focusPool[j % focusPool.length],
+          rolePool[j % rolePool.length],
+          ['TEAMWORK', 'COMMUNICATION', 'PROBLEM_SOLVING'],
+          `https://github.com/${firstName.toLowerCase()}-${lastName.toLowerCase().replace(/[^a-z]/g, '')}`,
+          `https://linkedin.com/in/${firstName.toLowerCase()}-${num}`,
+          `Študent so záujmom o ${focusPool[j % focusPool.length][0].toLowerCase()}.`,
+          cvFileId,
+          now,
+        ],
+      );
+
+      // 2 skills from the pool.
+      for (let k = 0; k < 2; k++) {
+        const [name, level, months] = skillPool[(j + k) % skillPool.length];
+        await client.query(
+          `INSERT INTO "StudentSkill" (id, "studentProfileId", name, level, "experienceMonths", "isPrimary", "createdAt", "updatedAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$7)
+           ON CONFLICT DO NOTHING`,
+          [randomUUID(), profileId, name, level, months, k === 0, now],
+        );
+      }
+
+      // 1 portfolio project.
+      await client.query(
+        `INSERT INTO "StudentProject" (id, "studentProfileId", title, description, role, technologies, "projectUrl", "createdAt", "updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8)
+         ON CONFLICT DO NOTHING`,
+        [
+          randomUUID(),
+          profileId,
+          `Semestrálny projekt ${num}`,
+          'Tímový projekt vyvinutý počas štúdia, zameraný na praktickú aplikáciu naučených technológií.',
+          rolePool[j % rolePool.length][0],
+          skillPool.slice(j % 6, (j % 6) + 3).map((s) => s[0]),
+          `https://github.com/dev-fixtures/project-${num}`,
+          now,
+        ],
+      );
+
+      newStudents.push({ userId, profileId });
+    }
+
+    // ----- Portfolio projects + CVs for the original 15 students -------------
+    const curatedStudents: Array<[string, string, string]> = [
+      [IDS.student01, IDS.sp01, 'Baláž'],
+      [IDS.student02, IDS.sp02, 'Čierná'],
+      [IDS.student03, IDS.sp03, 'Dobiáš'],
+      [IDS.student04, IDS.sp04, 'Ertlová'],
+      [IDS.student05, IDS.sp05, 'Farkaš'],
+      [IDS.student06, IDS.sp06, 'Gáborová'],
+      [IDS.student07, IDS.sp07, 'Hlúpik'],
+      [IDS.student08, IDS.sp08, 'Ivánová'],
+      [IDS.student09, IDS.sp09, 'Jakubík'],
+      [IDS.student10, IDS.sp10, 'Kováčová'],
+      [IDS.student11, IDS.sp11, 'Lukáč'],
+      [IDS.student12, IDS.sp12, 'Malíková'],
+      [IDS.student13, IDS.sp13, 'Nemec'],
+      [IDS.student14, IDS.sp14, 'Oravec'],
+      [IDS.student15, IDS.sp15, 'Polák'],
+    ];
+    for (const [userId, profileId, lastName] of curatedStudents) {
+      const cvFileId = await makeUploadedFile(
+        userId,
+        `CV_${lastName}.pdf`,
+        'student-cv',
+        'student-profile',
+        profileId,
+      );
+      await client.query(
+        `UPDATE "StudentProfile" SET "cvFileId" = $1 WHERE id = $2 AND "cvFileId" IS NULL`,
+        [cvFileId, profileId],
+      );
+      await client.query(
+        `INSERT INTO "StudentProject" (id, "studentProfileId", title, description, role, technologies, "projectUrl", "createdAt", "updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8)
+         ON CONFLICT DO NOTHING`,
+        [
+          randomUUID(),
+          profileId,
+          `Portfólio projekt — ${lastName}`,
+          'Osobný projekt prezentujúci technické zručnosti a samostatnú prácu.',
+          'FULLSTACK',
+          ['TypeScript', 'React', 'PostgreSQL'],
+          `https://github.com/dev-fixtures/${lastName.toLowerCase().replace(/[^a-z]/g, '')}`,
+          now,
+        ],
+      );
+    }
+
+    // ----- 7 more teams (Zeta..Mu) from students 13..15 + new students -------
+    const unteamed = [
+      IDS.student13,
+      IDS.student14,
+      IDS.student15,
+      ...newStudents.map((s) => s.userId),
+    ];
+    const extraTeamNames = [
+      'Team Zeta',
+      'Team Eta',
+      'Team Theta',
+      'Team Iota',
+      'Team Kappa',
+      'Team Lambda',
+      'Team Mu',
+    ];
+    const extraTeams: Array<{
+      id: string;
+      leaderId: string;
+      memberIds: string[];
+    }> = [];
+    const chunkSize = Math.ceil(unteamed.length / extraTeamNames.length);
+    for (let t = 0; t < extraTeamNames.length; t++) {
+      const memberIds = unteamed.slice(
+        t * chunkSize,
+        t * chunkSize + chunkSize,
+      );
+      if (memberIds.length === 0) continue;
+      const teamId = randomUUID();
+      const leaderId = memberIds[0];
+      await client.query(
+        `INSERT INTO "Team" (id, name, "leaderId", "createdAt", "updatedAt") VALUES ($1,$2,$3,$4,$4) ON CONFLICT (id) DO NOTHING`,
+        [teamId, extraTeamNames[t], leaderId, now],
+      );
+      for (const userId of memberIds) {
+        await client.query(
+          `INSERT INTO "TeamMember" ("userId", "teamId") VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+          [userId, teamId],
+        );
+      }
+      extraTeams.push({ id: teamId, leaderId, memberIds });
+    }
+
+    // ----- 15 more backlog items across all statuses -------------------------
+    const backlogStatuses = [
+      'DRAFT',
+      'PUBLISHED',
+      'IN_PAIRING',
+      'ASSIGNED',
+      'IN_REALIZATION',
+      'CLOSED',
+      'ARCHIVED',
+    ];
+    const extraBacklogTitles: Array<[string, string, number]> = [
+      [
+        'Telemedicína portál pre ambulancie',
+        'Platforma na vzdialené konzultácie pacientov s lekármi vrátane videohovorov a e-receptov.',
+        9000,
+      ],
+      [
+        'Adaptívny e-learning systém',
+        'Vzdelávacia platforma s personalizovanými učebnými cestami a gamifikáciou.',
+        7500,
+      ],
+      [
+        'Optimalizácia rozvozových trás',
+        'Algoritmus na plánovanie a optimalizáciu trás pre flotilu dodávkových vozidiel.',
+        10000,
+      ],
+      [
+        'Cloudová zálohovacia služba',
+        'Bezpečné inkrementálne zálohovanie dát s end-to-end šifrovaním.',
+        8500,
+      ],
+      [
+        'Systém na rezerváciu termínov',
+        'Online rezervačný systém pre poskytovateľov služieb s notifikáciami.',
+        5000,
+      ],
+      [
+        'IoT monitoring kvality ovzdušia',
+        'Sieť senzorov a dashboard na sledovanie kvality ovzdušia v reálnom čase.',
+        6500,
+      ],
+      [
+        'AI nástroj na sumarizáciu dokumentov',
+        'LLM-based služba na automatickú sumarizáciu dlhých dokumentov a zmlúv.',
+        9500,
+      ],
+      [
+        'Mobilná app pre fitness tréning',
+        'Aplikácia s tréningovými plánmi, sledovaním pokroku a komunitou.',
+        6000,
+      ],
+      [
+        'Platforma pre správu udalostí',
+        'Nástroj na organizáciu podujatí, predaj lístkov a check-in účastníkov.',
+        7000,
+      ],
+      [
+        'Dashboard pre finančné reporty',
+        'Interaktívne vizualizácie firemných financií s exportom do PDF/Excel.',
+        8000,
+      ],
+      [
+        'Chatovacia podpora s prekladom',
+        'Real-time chat s automatickým prekladom medzi jazykmi pre globálnu podporu.',
+        5500,
+      ],
+      [
+        'Systém na správu skladu',
+        'Evidencia zásob s čítačkami čiarových kódov a prediktívnym objednávaním.',
+        11000,
+      ],
+      [
+        'Recenzný portál pre reštaurácie',
+        'Platforma na hodnotenie reštaurácií s rezerváciami a fotkami.',
+        4500,
+      ],
+      [
+        'Nástroj na A/B testovanie',
+        'Služba na spúšťanie a vyhodnocovanie A/B experimentov na weboch.',
+        9000,
+      ],
+      [
+        'Generátor právnych dokumentov',
+        'Šablónový systém na generovanie zmlúv a právnych dokumentov.',
+        7500,
+      ],
+    ];
+    const extraBacklogIds: string[] = [];
+    for (let b = 0; b < extraBacklogTitles.length; b++) {
+      const [title, description, budget] = extraBacklogTitles[b];
+      const org = allOrgs[b % allOrgs.length];
+      const id = randomUUID();
+      await client.query(
+        `INSERT INTO "BacklogItem" (id, "organizationId", "productOwnerUserId", title, description, budget, "expectedOutcomes", status, "createdAt", "updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          id,
+          org.id,
+          org.ownerId,
+          title,
+          description,
+          budget,
+          'Funkčné riešenie, dokumentácia, testy a nasadenie do produkčného prostredia.',
+          backlogStatuses[b % backlogStatuses.length],
+          now,
+        ],
+      );
+      extraBacklogIds.push(id);
+    }
+
+    // ----- 7 more Program A applications completing the status pipeline ------
+    if (programACallId) {
+      const paPipeline: Array<{
+        status: string;
+        mentor: boolean;
+        decided: boolean;
+      }> = [
+        { status: 'FORMALLY_VERIFIED', mentor: false, decided: false },
+        { status: 'APPROVED', mentor: true, decided: true },
+        { status: 'REJECTED', mentor: false, decided: true },
+        { status: 'ONBOARDING', mentor: true, decided: true },
+        { status: 'PAUSED', mentor: true, decided: true },
+        { status: 'COMPLETED', mentor: true, decided: true },
+        { status: 'ARCHIVED', mentor: true, decided: true },
+      ];
+      const ideaPool = [
+        {
+          problem: 'Manuálne procesy spomaľujú prácu tímov.',
+          solution: 'Automatizačná platforma s prehľadným rozhraním.',
+          category: 'Web Applications',
+          stack: ['TypeScript', 'NestJS', 'React'],
+        },
+        {
+          problem: 'Chýba prehľad o dátach v reálnom čase.',
+          solution: 'Dashboard agregujúci dáta z viacerých zdrojov.',
+          category: 'Ai And Data',
+          stack: ['Python', 'FastAPI', 'React'],
+        },
+        {
+          problem: 'Zákazníci čakajú dlho na podporu.',
+          solution: 'AI asistent na okamžité odpovede.',
+          category: 'Ai And Data',
+          stack: ['Python', 'LangChain', 'PostgreSQL'],
+        },
+        {
+          problem: 'Mobilný prístup k službe chýba.',
+          solution: 'Natívna mobilná aplikácia s offline režimom.',
+          category: 'Mobile Development',
+          stack: ['React Native', 'Expo'],
+        },
+        {
+          problem: 'Logistika je neefektívna.',
+          solution: 'Optimalizačný engine pre plánovanie trás.',
+          category: 'Software Development',
+          stack: ['Go', 'PostgreSQL'],
+        },
+        {
+          problem: 'Vzdelávanie nie je personalizované.',
+          solution: 'Adaptívny e-learning s odporúčaniami.',
+          category: 'Web Applications',
+          stack: ['TypeScript', 'Next.js'],
+        },
+        {
+          problem: 'Energetická spotreba nie je monitorovaná.',
+          solution: 'IoT dashboard so senzormi.',
+          category: 'Iot And Embedded',
+          stack: ['Python', 'MQTT', 'React'],
+        },
+      ];
+      for (let p = 0; p < extraTeams.length && p < paPipeline.length; p++) {
+        const team = extraTeams[p];
+        const cfg = paPipeline[p];
+        const appId = randomUUID();
+        const mentorId = cfg.mentor ? mentorPool[p % mentorPool.length] : null;
+        await client.query(
+          `INSERT INTO "Application" (
+             id, "callId", "teamId", "createdById", status,
+             "submittedAt", "decidedAt", "decisionById", "decisionRationale",
+             "mentorUserId", "mentorAssignedAt", "mentorAssignedById",
+             "createdAt", "updatedAt"
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13)
+           ON CONFLICT (id) DO NOTHING`,
+          [
+            appId,
+            programACallId,
+            team.id,
+            team.leaderId,
+            cfg.status,
+            daysAgo(25),
+            cfg.decided ? daysAgo(15) : null,
+            cfg.decided ? IDS.admin1 : null,
+            cfg.status === 'REJECTED'
+              ? 'Návrh nespĺňal kritériá technickej realizovateľnosti.'
+              : cfg.decided
+                ? 'Schválené hodnotiacou komisiou.'
+                : null,
+            mentorId,
+            mentorId ? daysAgo(14) : null,
+            mentorId ? IDS.admin1 : null,
+            now,
+          ],
+        );
+
+        await seedApplicationSections(
+          appId,
+          team.leaderId,
+          ideaPool[p % ideaPool.length],
+        );
+
+        // A status event and a milestone.
+        await client.query(
+          `INSERT INTO "ApplicationStatusEvent" (id, "applicationId", "fromStatus", "toStatus", "changedById", "createdAt")
+           VALUES ($1,$2,'SUBMITTED',$3,$4,$5) ON CONFLICT (id) DO NOTHING`,
+          [randomUUID(), appId, cfg.status, IDS.admin1, daysAgo(20)],
+        );
+        await client.query(
+          `INSERT INTO "ProgramAMilestone" (id, "applicationId", title, status, "dueAt", "createdAt", "updatedAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$6) ON CONFLICT (id) DO NOTHING`,
+          [
+            randomUUID(),
+            appId,
+            'Definícia MVP',
+            cfg.status === 'COMPLETED' ? 'DONE' : 'IN_PROGRESS',
+            daysAhead(10),
+            now,
+          ],
+        );
+
+        // Mentorship note + internal conversation when a mentor is assigned.
+        if (mentorId) {
+          await client.query(
+            `INSERT INTO "ProgramAMentorshipNote" (id, "applicationId", "authorId", content, "createdAt")
+             VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING`,
+            [
+              randomUUID(),
+              appId,
+              mentorId,
+              'Dobrý štart, pokračujte v plánovaných míľnikoch.',
+              now,
+            ],
+          );
+          await makeConversation({
+            channel: 'INTERNAL',
+            applicationId: appId,
+            messages: [
+              [
+                mentorId,
+                'Vitajte v programe. Kedy by sme si mohli dať prvé stretnutie?',
+              ],
+              [team.leaderId, 'Ďakujeme! Navrhujeme budúci týždeň.'],
+            ],
+          });
+        }
+      }
+
+      // Internal conversation for the curated Team Alpha application too.
+      await makeConversation({
+        channel: 'INTERNAL',
+        applicationId: IDS.paApp01,
+        messages: [
+          [
+            IDS.mentor2,
+            'Skvelá práca na prototype. Sústreďte sa na user testing.',
+          ],
+          [IDS.student01, 'Rozumieme, pripravíme plán testovania.'],
+        ],
+      });
+    }
+
+    // ----- 4 more Program B projects (variety of statuses) -------------------
+    const pbProjectConfigs: Array<{ status: string; mentorIdx: number }> = [
+      { status: 'ACTIVE', mentorIdx: 1 },
+      { status: 'BLOCKED', mentorIdx: 2 },
+      { status: 'COMPLETED', mentorIdx: 3 },
+      { status: 'CLOSED', mentorIdx: 4 },
+    ];
+    for (
+      let pi = 0;
+      pi < pbProjectConfigs.length && pi < extraTeams.length;
+      pi++
+    ) {
+      const cfg = pbProjectConfigs[pi];
+      const team = extraTeams[pi];
+      const backlogId = extraBacklogIds[pi];
+      const org = allOrgs[pi % allOrgs.length];
+      const teamAppId = randomUUID();
+      const projectId = randomUUID();
+      const mentorId = mentorPool[cfg.mentorIdx % mentorPool.length];
+
+      await client.query(
+        `INSERT INTO "ProgramBTeamApplication" (
+           id, "backlogItemId", "teamId", "createdById", motivation, status,
+           "submittedAt", "acceptedAt", "createdAt", "updatedAt"
+         ) VALUES ($1,$2,$3,$4,$5,'PROJECT_CREATED',$6,$7,$6,$6)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          teamAppId,
+          backlogId,
+          team.id,
+          team.leaderId,
+          'Náš tím má potrebné zručnosti a motiváciu doručiť tento projekt.',
+          daysAgo(22),
+          daysAgo(18),
+        ],
+      );
+
+      await client.query(
+        `INSERT INTO "ProgramBProject" (
+           id, "backlogItemId", "teamApplicationId", "teamId",
+           "productOwnerUserId", "mentorUserId", "mentorAssignedAt", "mentorAssignedById",
+           status, "acceptedByCompanyAt", "acceptedByNtiAt", "createdAt", "updatedAt"
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          projectId,
+          backlogId,
+          teamAppId,
+          team.id,
+          org.ownerId,
+          mentorId,
+          daysAgo(16),
+          IDS.admin1,
+          cfg.status,
+          daysAgo(18),
+          daysAgo(17),
+          now,
+        ],
+      );
+
+      // Milestones.
+      for (const [title, mStatus, due] of [
+        ['Analýza a návrh', 'DONE', daysAgo(10)],
+        [
+          'Implementácia jadra',
+          cfg.status === 'COMPLETED' || cfg.status === 'CLOSED'
+            ? 'DONE'
+            : 'IN_PROGRESS',
+          daysAhead(5),
+        ],
+        [
+          'Testovanie a odovzdanie',
+          cfg.status === 'COMPLETED' || cfg.status === 'CLOSED'
+            ? 'DONE'
+            : 'PLANNED',
+          daysAhead(20),
+        ],
+      ] as Array<[string, string, Date]>) {
+        await client.query(
+          `INSERT INTO "ProgramBMilestone" (id, "projectId", title, status, "dueAt", "createdAt", "updatedAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$6) ON CONFLICT (id) DO NOTHING`,
+          [randomUUID(), projectId, title, mStatus, due, now],
+        );
+      }
+
+      // PO review.
+      await client.query(
+        `INSERT INTO "ProgramBPoReview" (id, "projectId", "authorUserId", decision, comment, "createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING`,
+        [
+          randomUUID(),
+          projectId,
+          org.ownerId,
+          cfg.status === 'BLOCKED' ? 'CHANGES_REQUESTED' : 'APPROVED',
+          cfg.status === 'BLOCKED'
+            ? 'Potrebujeme doriešiť integráciu pred ďalším míľnikom.'
+            : 'Priebeh zodpovedá očakávaniam.',
+          now,
+        ],
+      );
+
+      // A project deliverable document.
+      const docFileId = await makeUploadedFile(
+        team.leaderId,
+        'deliverable.pdf',
+        'program-b-project-document',
+        'program-b-project',
+        projectId,
+      );
+      await client.query(
+        `INSERT INTO "ProgramBProjectDocument" (id, "projectId", "uploadedFileId", category, visibility, version, "isActive", "createdById", "createdAt", "updatedAt")
+         VALUES ($1,$2,$3,'DELIVERABLE','PARTICIPANTS',1,true,$4,$5,$5)
+         ON CONFLICT DO NOTHING`,
+        [randomUUID(), projectId, docFileId, team.leaderId, now],
+      );
+
+      // Both conversation channels with messages.
+      await makeConversation({
+        channel: 'PARTICIPANTS',
+        projectId,
+        messages: [
+          [
+            org.ownerId,
+            'Dobrý deň, tešíme sa na spoluprácu na tomto projekte.',
+          ],
+          [team.leaderId, 'Ďakujeme, pripravili sme prvý návrh architektúry.'],
+          [mentorId, 'Pridávam sa, dohliadnem na technickú stránku.'],
+        ],
+      });
+      await makeConversation({
+        channel: 'INTERNAL',
+        projectId,
+        messages: [
+          [mentorId, 'Interná poznámka: sledujme termín druhého míľnika.'],
+          [team.leaderId, 'Áno, sme v pláne.'],
+        ],
+      });
+    }
+
+    // Conversations for the existing curated Program B projects.
+    await makeConversation({
+      channel: 'PARTICIPANTS',
+      projectId: IDS.pbProject01,
+      messages: [
+        [ownerTechNovaDbId, 'Vitajte. Tešíme sa na onboarding systém.'],
+        [IDS.student01, 'Ďakujeme, máme hotovú analýzu požiadaviek.'],
+        [IDS.mentor1, 'Skvelé, prejdeme si ER diagram na stretnutí.'],
+      ],
+    });
+    await makeConversation({
+      channel: 'INTERNAL',
+      projectId: IDS.pbProject01,
+      messages: [
+        [IDS.mentor1, 'Interné: treba pridať indexy na FK stĺpce.'],
+        [IDS.student01, 'Zaznamenané, doplníme.'],
+      ],
+    });
+
+    console.info('[seed] extended dev fixtures created successfully');
     console.info('[seed] dev fixtures created successfully');
     console.info('[seed] --- DEV ACCOUNTS (password: Dev1234!) ---');
     console.info('[seed] admin1@dev.local / admin2@dev.local  — ADMIN');
-    console.info(
-      '[seed] mentor1@dev.local / mentor2@dev.local / mentor3@dev.local  — MENTOR',
-    );
-    console.info(
-      '[seed] evaluator1@dev.local / evaluator2@dev.local  — EVALUATOR',
-    );
+    console.info('[seed] mentor1..mentor5@dev.local  — MENTOR');
+    console.info('[seed] evaluator1..evaluator3@dev.local  — EVALUATOR');
     console.info('[seed] editor1@dev.local  — CONTENT_EDITOR');
     console.info(
       '[seed] owner@technova.dev.local / employee@technova.dev.local  — TechNova s.r.o.',
@@ -1497,7 +2521,10 @@ export const devFixturesSeed: SeedTask = {
     console.info('[seed] owner@data.dev.local  — DataDriven s.r.o.');
     console.info('[seed] owner@startup.dev.local  — StartupXYZ s.r.o.');
     console.info(
-      '[seed] student01@dev.local ... student15@dev.local  — STUDENT',
+      '[seed] owner@cloudbridge | @meditech | @eduspark | @logiflow .dev.local  — COMPANY_OWNER',
+    );
+    console.info(
+      '[seed] student01@dev.local ... student45@dev.local  — STUDENT',
     );
   },
 };

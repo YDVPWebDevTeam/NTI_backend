@@ -13,7 +13,12 @@ async function loadSeeds(): Promise<SeedTask[]> {
     callsSeed: SeedTask;
   };
 
-  return [superadminSeed, callsSeed];
+  const { universityEmailDomainsSeed } =
+    (await import('./seeds/005-university-email-domains.seed.ts')) as {
+      universityEmailDomainsSeed: SeedTask;
+    };
+
+  return [superadminSeed, callsSeed, universityEmailDomainsSeed];
 }
 
 async function main(): Promise<void> {

@@ -19,6 +19,8 @@ export const EMAIL_TEMPLATES = {
   PROGRAM_B_MENTOR_NEEDED: 'program-b-mentor-needed',
   PROGRAM_B_TEAM_ACCEPTED: 'program-b-team-accepted',
   PROGRAM_B_MENTOR_ASSIGNED: 'program-b-mentor-assigned',
+  STUDENT_EMAIL_VERIFICATION: 'student-email-verification',
+  UNIVERSITY_DOMAIN_REQUESTED: 'university-domain-requested',
 } as const;
 
 export type EmailTemplateName =
@@ -94,6 +96,14 @@ export interface EmailTemplateDataByName {
     projectId: string;
     backlogTitle: string;
     teamName: string;
+  };
+  [EMAIL_TEMPLATES.STUDENT_EMAIL_VERIFICATION]: {
+    token: string;
+  };
+  [EMAIL_TEMPLATES.UNIVERSITY_DOMAIN_REQUESTED]: {
+    domain: string;
+    requestedByEmail: string;
+    note?: string;
   };
 }
 

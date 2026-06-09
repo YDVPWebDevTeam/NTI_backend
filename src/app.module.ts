@@ -28,6 +28,7 @@ import { ProgramBCompanyOverviewModule } from './programs/program-b/company-over
 import { ReportExportProcessor } from './reports/report-export/report-export.processor';
 import { ReportsModule } from './reports/reports.module';
 import { ContactModule } from './contact/contact.module';
+import { ConversationsModule } from './conversations/conversations.module';
 
 const queueProcessorProviders =
   process.env.RUN_QUEUE_PROCESSORS === 'true'
@@ -67,6 +68,7 @@ const queueProcessorProviders =
     ProgramBCompanyOverviewModule,
     ReportsModule,
     ContactModule,
+    ConversationsModule,
   ],
   controllers: [AppController],
   providers: [

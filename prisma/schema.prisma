@@ -215,6 +215,11 @@ enum ProgramBDocumentVisibility {
   PARTICIPANTS
 }
 
+enum ConversationChannel {
+  INTERNAL
+  PARTICIPANTS
+}
+
 model User {
   id                 String  @id @default(uuid())
   firstName          String
@@ -273,6 +278,7 @@ model User {
   needsInfoRepliesCreated         NeedsInfoReply[]         @relation("NeedsInfoReplyCreatedBy")
   applicationStatusEventsChanged  ApplicationStatusEvent[] @relation("ApplicationStatusChangedBy")
   programAMentorshipNotesAuthored ProgramAMentorshipNote[] @relation("ProgramAMentorshipNoteAuthor")
+  conversationMessages            ConversationMessage[]    @relation("ConversationMessageAuthor")
 
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
@@ -308,16 +314,17 @@ model UploadedFile {
   uploadedAt         DateTime?
   failedAt           DateTime?
 
-  createdAt                  DateTime                    @default(now())
-  updatedAt                  DateTime                    @updatedAt
-  academicEvidenceFor        StudentProfile[]            @relation("StudentAcademicEvidence")
-  cvFor                      StudentProfile[]            @relation("StudentCvFile")
+  createdAt                  DateTime                        @default(now())
+  updatedAt                  DateTime                        @updatedAt
+  academicEvidenceFor        StudentProfile[]                @relation("StudentAcademicEvidence")
+  cvFor                      StudentProfile[]                @relation("StudentCvFile")
   applicationDocuments       ApplicationDocument[]
   programBTeamApplications   ProgramBTeamApplication[]
   programBBacklogDocuments   ProgramBBacklogDocument[]
   programBProjectDocuments   ProgramBProjectDocument[]
   programBTeamApplicationCvs ProgramBTeamApplicationCv[]
   reportExportJobs           ReportExportJob[]
+  conversationAttachments    ConversationMessageAttachment[]
 
   @@index([ownerId, status])
   @@index([status, uploadUrlExpiresAt])
@@ -405,6 +412,7 @@ model Application {
   mentorshipNotes    ProgramAMentorshipNote[]
   programAMilestones ProgramAMilestone[]
   programBProjects   ProgramBProject[]
+  conversations      Conversation[]
 
   status      ApplicationStatus @default(DRAFT)
   submittedAt DateTime?
@@ -826,6 +834,7 @@ model ProgramBProject {
   mentoringNotes ProgramBMentoringNote[]
   poReviews      ProgramBPoReview[]
   documents      ProgramBProjectDocument[]
+  conversations  Conversation[]
 
   @@index([teamId])
   @@index([backlogItemId])
@@ -919,6 +928,69 @@ model ProgramBMentoringNote {
   createdAt DateTime @default(now())
 
   @@index([projectId, createdAt])
+}
+
+/// A single communication channel scoped to one project anchor (Program B project
+/// or Program A application) and one ConversationChannel. Created lazily on the
+/// first message. INTERNAL = team + mentor only; PARTICIPANTS = also the client.
+model Conversation {
+  id      String              @id @default(uuid())
+  channel ConversationChannel
+
+  programBProjectId String?
+  programBProject   ProgramBProject? @relation(fields: [programBProjectId], references: [id], onDelete: Cascade)
+
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  messages ConversationMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([programBProjectId, channel])
+  @@unique([applicationId, channel])
+  @@index([programBProjectId])
+  @@index([applicationId])
+}
+
+model ConversationMessage {
+  id String @id @default(uuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  authorUserId String
+  authorUser   User   @relation("ConversationMessageAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  body String
+
+  editedAt  DateTime?
+  deletedAt DateTime? // soft delete -> rendered as a tombstone
+
+  attachments ConversationMessageAttachment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([conversationId, createdAt])
+  @@index([authorUserId])
+}
+
+model ConversationMessageAttachment {
+  id String @id @default(uuid())
+
+  messageId String
+  message   ConversationMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  uploadedFileId String
+  uploadedFile   UploadedFile @relation(fields: [uploadedFileId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, uploadedFileId])
+  @@index([messageId])
+  @@index([uploadedFileId])
 }
 
 model ProgramBPoReview {

@@ -38,8 +38,11 @@ import {
 } from '../../../common/pagination';
 import { FilesService } from '../../../files/files.service';
 import { PrismaDbClient } from '../../../infrastructure/database';
+import { QueueService } from '../../../infrastructure/queue/queue.service';
+import { EMAIL_JOBS } from '../../../infrastructure/queue/queue.types';
 import { R2StorageService } from '../../../infrastructure/storage';
 import { OrganizationRepository } from '../../../organization/organization.repository';
+import { TeamRepository } from '../../../team/team.repository';
 import { UserRepository } from '../../../user/user.repository';
 import { ProgramBProjectsRepository } from '../projects/program-b-projects.repository';
 import { ProgramBTeamApplicationRepository } from '../team-application/program-b-team-application.repository';
@@ -76,6 +79,8 @@ export class ProgramBBacklogService {
     private readonly filesService: FilesService,
     private readonly storageService: R2StorageService,
     private readonly callsRepository: CallsRepository,
+    private readonly teamRepository: TeamRepository,
+    private readonly queueService: QueueService,
   ) {}
 
   async create(
@@ -568,9 +573,15 @@ export class ProgramBBacklogService {
     user: AuthenticatedUserContext,
   ): Promise<ProgramBTeamApplication> {
     const organization = await this.ensureActiveOrganizationMember(user);
+    let acceptedTeamContext: {
+      teamName: string;
+      emails: string[];
+      backlogTitle: string;
+      organizationName: string;
+    } | null = null;
 
     try {
-      return await this.backlogRepository.transaction(async (db) => {
+      const candidate = await this.backlogRepository.transaction(async (db) => {
         const backlogItem = await this.getItemForOrganizationOrThrow(
           backlogItemId,
           organization.id,
@@ -654,12 +665,26 @@ export class ProgramBBacklogService {
           );
         }
 
+        const team = await this.loadTeamRecipients(candidate.teamId, db);
+        if (team) {
+          acceptedTeamContext = {
+            teamName: team.name,
+            emails: team.emails,
+            backlogTitle: backlogItem.title ?? '',
+            organizationName: organization.name,
+          };
+        }
+
         return this.getCandidateForBacklogOrThrow(
           backlogItem.id,
           candidate.id,
           db,
         );
       }, this.backlogLifecycleTransactionOptions);
+
+      await this.enqueueTeamAcceptedEmails(acceptedTeamContext);
+
+      return candidate;
     } catch (error) {
       if (isPrismaUniqueConstraintError(error)) {
         throw new ConflictException(
@@ -745,9 +770,15 @@ export class ProgramBBacklogService {
     user: AuthenticatedUserContext,
   ) {
     const organization = await this.ensureActiveOrganizationMember(user);
+    let mentorNeededContext: {
+      projectId: string;
+      backlogTitle: string;
+      organizationName: string;
+      teamName: string;
+    } | null = null;
 
     try {
-      return await this.backlogRepository.transaction(async (db) => {
+      const project = await this.backlogRepository.transaction(async (db) => {
         const backlogItem = await this.getItemForOrganizationOrThrow(
           backlogItemId,
           organization.id,
@@ -830,8 +861,20 @@ export class ProgramBBacklogService {
           db,
         );
 
+        const team = await this.loadTeamRecipients(candidate.teamId, db);
+        mentorNeededContext = {
+          projectId: project.id,
+          backlogTitle: backlogItem.title ?? '',
+          organizationName: organization.name,
+          teamName: team?.name ?? '',
+        };
+
         return project;
       }, this.backlogLifecycleTransactionOptions);
+
+      await this.enqueueMentorNeededEmail(mentorNeededContext);
+
+      return project;
     } catch (error) {
       if (isPrismaUniqueConstraintError(error)) {
         const existingProject =
@@ -850,6 +893,81 @@ export class ProgramBBacklogService {
 
       throw error;
     }
+  }
+
+  private async loadTeamRecipients(
+    teamId: string,
+    db?: PrismaDbClient,
+  ): Promise<{ name: string; emails: string[] } | null> {
+    const team = await this.teamRepository.findById(teamId, db);
+
+    if (!team) {
+      return null;
+    }
+
+    const emails = [
+      ...new Set(
+        [
+          team.leader?.email,
+          ...team.members.map((member) => member.user.email),
+        ].filter((email): email is string => Boolean(email)),
+      ),
+    ];
+
+    return { name: team.name, emails };
+  }
+
+  private async enqueueTeamAcceptedEmails(
+    context: {
+      teamName: string;
+      emails: string[];
+      backlogTitle: string;
+      organizationName: string;
+    } | null,
+  ): Promise<void> {
+    if (!context || context.emails.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      context.emails.map((email) =>
+        this.queueService.addEmail(EMAIL_JOBS.PROGRAM_B_TEAM_ACCEPTED, {
+          email,
+          teamName: context.teamName,
+          backlogTitle: context.backlogTitle,
+          organizationName: context.organizationName,
+        }),
+      ),
+    );
+  }
+
+  private async enqueueMentorNeededEmail(
+    context: {
+      projectId: string;
+      backlogTitle: string;
+      organizationName: string;
+      teamName: string;
+    } | null,
+  ): Promise<void> {
+    if (!context) {
+      return;
+    }
+
+    const adminEmails = ((await this.userRepository.findAdmins()) ?? []).map(
+      (admin) => admin.email,
+    );
+
+    if (adminEmails.length === 0) {
+      return;
+    }
+
+    await this.queueService.addEmail(EMAIL_JOBS.PROGRAM_B_MENTOR_NEEDED, {
+      projectId: context.projectId,
+      backlogTitle: context.backlogTitle,
+      organizationName: context.organizationName,
+      teamName: context.teamName,
+      adminEmails,
+    });
   }
 
   async createBacklogDocumentUpload(

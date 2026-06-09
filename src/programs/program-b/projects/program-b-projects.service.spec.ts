@@ -267,6 +267,7 @@ describe('ProgramBProjectsService', () => {
       userRepository as never,
       filesService as never,
       storageService as never,
+      { addEmail: jest.fn().mockResolvedValue(undefined) } as never,
     );
   });
 

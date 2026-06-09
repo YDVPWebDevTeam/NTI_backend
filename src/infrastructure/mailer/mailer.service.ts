@@ -227,4 +227,37 @@ export class MailerService {
       },
     );
   }
+
+  async sendProgramBMentorNeededEmail(
+    email: string,
+    data: EmailTemplateDataByName[typeof EMAIL_TEMPLATES.PROGRAM_B_MENTOR_NEEDED],
+  ): Promise<void> {
+    await this.sendTemplate(
+      email,
+      EMAIL_TEMPLATES.PROGRAM_B_MENTOR_NEEDED,
+      data,
+    );
+  }
+
+  async sendProgramBTeamAcceptedEmail(
+    email: string,
+    data: EmailTemplateDataByName[typeof EMAIL_TEMPLATES.PROGRAM_B_TEAM_ACCEPTED],
+  ): Promise<void> {
+    await this.sendTemplate(
+      email,
+      EMAIL_TEMPLATES.PROGRAM_B_TEAM_ACCEPTED,
+      data,
+    );
+  }
+
+  async sendProgramBMentorAssignedEmail(
+    email: string,
+    data: EmailTemplateDataByName[typeof EMAIL_TEMPLATES.PROGRAM_B_MENTOR_ASSIGNED],
+  ): Promise<void> {
+    await this.sendTemplate(
+      email,
+      EMAIL_TEMPLATES.PROGRAM_B_MENTOR_ASSIGNED,
+      data,
+    );
+  }
 }

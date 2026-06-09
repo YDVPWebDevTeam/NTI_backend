@@ -18,6 +18,9 @@ export const EMAIL_JOBS = {
   APPLICATION_APPROVED: 'application-approved',
   APPLICATION_REJECTED: 'application-rejected',
   APPLICATION_MENTOR_ASSIGNED: 'application-mentor-assigned',
+  PROGRAM_B_MENTOR_NEEDED: 'program-b-mentor-needed',
+  PROGRAM_B_TEAM_ACCEPTED: 'program-b-team-accepted',
+  PROGRAM_B_MENTOR_ASSIGNED: 'program-b-mentor-assigned',
 } as const;
 
 export type EmailJobName = (typeof EMAIL_JOBS)[keyof typeof EMAIL_JOBS];
@@ -101,6 +104,28 @@ export interface EmailJobData {
     email: string;
     applicationId: string;
     applicationTitle: string;
+  };
+
+  [EMAIL_JOBS.PROGRAM_B_MENTOR_NEEDED]: {
+    projectId: string;
+    backlogTitle: string;
+    organizationName: string;
+    teamName: string;
+    adminEmails: string[];
+  };
+
+  [EMAIL_JOBS.PROGRAM_B_TEAM_ACCEPTED]: {
+    email: string;
+    teamName: string;
+    backlogTitle: string;
+    organizationName: string;
+  };
+
+  [EMAIL_JOBS.PROGRAM_B_MENTOR_ASSIGNED]: {
+    email: string;
+    projectId: string;
+    backlogTitle: string;
+    teamName: string;
   };
 }
 

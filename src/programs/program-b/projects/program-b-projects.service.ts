@@ -26,6 +26,8 @@ import { toProgramBDocumentDto } from '../common/program-b-document.mapper';
 import { isPrismaUniqueConstraintError } from '../../../common/prisma/prisma-error.utils';
 import type { AuthenticatedUserContext } from '../../../common/types/auth-user-context.type';
 import type { PrismaDbClient } from '../../../infrastructure/database';
+import { QueueService } from '../../../infrastructure/queue/queue.service';
+import { EMAIL_JOBS } from '../../../infrastructure/queue/queue.types';
 import { R2StorageService } from '../../../infrastructure/storage';
 import { FilesService } from '../../../files';
 import { UserRepository } from '../../../user/user.repository';
@@ -69,6 +71,7 @@ export class ProgramBProjectsService {
     private readonly userRepository: UserRepository,
     private readonly filesService: FilesService,
     private readonly storageService: R2StorageService,
+    private readonly queueService: QueueService,
   ) {}
 
   async listMy(
@@ -364,54 +367,89 @@ export class ProgramBProjectsService {
   ): Promise<ProgramBProjectDetailDto> {
     this.ensureMentorAssignmentAuthor(user);
 
-    return this.projectsRepository.transaction(async (db) => {
-      const project = await this.loadProjectOrThrow(projectId, db);
+    const updatedProject = await this.projectsRepository.transaction(
+      async (db) => {
+        const project = await this.loadProjectOrThrow(projectId, db);
 
-      const mentor = await this.userRepository.findUnique(
-        { id: dto.mentorUserId },
-        db,
-      );
-
-      if (!mentor) {
-        throw new NotFoundException(
-          PROGRAM_B_PROJECTS_MESSAGES.MENTOR_USER_NOT_FOUND,
+        const mentor = await this.userRepository.findUnique(
+          { id: dto.mentorUserId },
+          db,
         );
-      }
 
-      if (
-        mentor.role !== UserRole.MENTOR ||
-        mentor.status !== UserStatus.ACTIVE
-      ) {
-        throw new BadRequestException(
-          PROGRAM_B_PROJECTS_MESSAGES.TARGET_USER_MUST_BE_ACTIVE_MENTOR,
+        if (!mentor) {
+          throw new NotFoundException(
+            PROGRAM_B_PROJECTS_MESSAGES.MENTOR_USER_NOT_FOUND,
+          );
+        }
+
+        if (
+          mentor.role !== UserRole.MENTOR ||
+          mentor.status !== UserStatus.ACTIVE
+        ) {
+          throw new BadRequestException(
+            PROGRAM_B_PROJECTS_MESSAGES.TARGET_USER_MUST_BE_ACTIVE_MENTOR,
+          );
+        }
+
+        await this.projectsRepository.updateProject(
+          project.id,
+          {
+            mentorUserId: mentor.id,
+            mentorAssignedAt: new Date(),
+            mentorAssignedById: user.id,
+          },
+          db,
         );
-      }
 
-      await this.projectsRepository.updateProject(
-        project.id,
-        {
-          mentorUserId: mentor.id,
-          mentorAssignedAt: new Date(),
-          mentorAssignedById: user.id,
-        },
-        db,
-      );
+        await this.promoteBacklogToRealizationIfNeeded(project, db);
 
-      await this.promoteBacklogToRealizationIfNeeded(project, db);
-
-      const updatedProject = await this.projectsRepository.findProjectDetail(
-        project.id,
-        db,
-      );
-
-      if (!updatedProject) {
-        throw new NotFoundException(
-          PROGRAM_B_PROJECTS_MESSAGES.PROJECT_NOT_FOUND,
+        const updatedProject = await this.projectsRepository.findProjectDetail(
+          project.id,
+          db,
         );
-      }
 
-      return this.toProjectDetailDto(updatedProject);
-    }, this.projectWriteTransactionOptions);
+        if (!updatedProject) {
+          throw new NotFoundException(
+            PROGRAM_B_PROJECTS_MESSAGES.PROJECT_NOT_FOUND,
+          );
+        }
+
+        return updatedProject;
+      },
+      this.projectWriteTransactionOptions,
+    );
+
+    await this.enqueueMentorAssignedEmails(updatedProject);
+
+    return this.toProjectDetailDto(updatedProject);
+  }
+
+  private async enqueueMentorAssignedEmails(
+    project: ProgramBProjectDetailView,
+  ): Promise<void> {
+    const recipientEmails = [
+      ...new Set(
+        [
+          project.mentorUser?.email,
+          ...(project.team?.members.map((member) => member.user.email) ?? []),
+        ].filter((email): email is string => Boolean(email)),
+      ),
+    ];
+
+    if (recipientEmails.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      recipientEmails.map((email) =>
+        this.queueService.addEmail(EMAIL_JOBS.PROGRAM_B_MENTOR_ASSIGNED, {
+          email,
+          projectId: project.id,
+          backlogTitle: project.backlogItem.title ?? '',
+          teamName: project.team?.name ?? '',
+        }),
+      ),
+    );
   }
 
   async listAssignableMentors(

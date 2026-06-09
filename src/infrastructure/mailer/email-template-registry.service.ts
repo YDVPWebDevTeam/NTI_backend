@@ -303,6 +303,56 @@ export class EmailTemplateRegistryService {
             subject: 'Mentor assigned',
           }),
       },
+      [EMAIL_TEMPLATES.PROGRAM_B_MENTOR_NEEDED]: {
+        render: (data) =>
+          this.createActionEmail({
+            title: 'A mentor needs to be assigned',
+            preheader:
+              'A Program B team was selected and the project is waiting for a mentor.',
+            intro: [
+              `${data.organizationName} selected the team ${data.teamName} for the backlog item "${data.backlogTitle}".`,
+              'The project is now active and waiting for a mentor. Open the project to assign one and start realization.',
+            ],
+            cta: {
+              label: 'Assign mentor',
+              url: `${this.configService.frontUrl}/admin/program-b/projects/${data.projectId}`,
+            },
+            subject: 'Program B project needs a mentor',
+          }),
+      },
+      [EMAIL_TEMPLATES.PROGRAM_B_TEAM_ACCEPTED]: {
+        render: (data) =>
+          this.createActionEmail({
+            title: 'Your team was selected',
+            preheader:
+              'Your team was accepted for a Program B project. Get ready to start.',
+            intro: [
+              `Great news — your team ${data.teamName} was selected by ${data.organizationName} for the backlog item "${data.backlogTitle}".`,
+              'Open your dashboard to review the project and the next steps.',
+            ],
+            cta: {
+              label: 'Open dashboard',
+              url: `${this.configService.frontUrl}/dashboard`,
+            },
+            subject: 'Your team was selected for a Program B project',
+          }),
+      },
+      [EMAIL_TEMPLATES.PROGRAM_B_MENTOR_ASSIGNED]: {
+        render: (data) =>
+          this.createActionEmail({
+            title: 'Mentor assigned',
+            preheader: 'A mentor was assigned to your Program B project.',
+            intro: [
+              `A mentor was assigned to the project for "${data.backlogTitle}" (team ${data.teamName}).`,
+              'Open your dashboard to connect with the mentor and continue the project.',
+            ],
+            cta: {
+              label: 'Open dashboard',
+              url: `${this.configService.frontUrl}/dashboard`,
+            },
+            subject: 'Mentor assigned to your Program B project',
+          }),
+      },
     };
   }
 }

@@ -129,6 +129,15 @@ describe('ProgramBBacklogService', () => {
     findOrganizationMember: jest.Mock;
     findActiveOrganizationMember: jest.Mock;
     findUnique: jest.Mock;
+    findAdmins: jest.Mock;
+  };
+
+  let teamRepository: {
+    findById: jest.Mock;
+  };
+
+  let queueService: {
+    addEmail: jest.Mock;
   };
 
   let teamApplicationRepository: {
@@ -272,6 +281,15 @@ describe('ProgramBBacklogService', () => {
       findOrganizationMember: jest.fn(),
       findActiveOrganizationMember: jest.fn(),
       findUnique: jest.fn(),
+      findAdmins: jest.fn().mockResolvedValue([]),
+    };
+
+    teamRepository = {
+      findById: jest.fn().mockResolvedValue(null),
+    };
+
+    queueService = {
+      addEmail: jest.fn().mockResolvedValue(undefined),
     };
 
     teamApplicationRepository = {
@@ -305,6 +323,8 @@ describe('ProgramBBacklogService', () => {
       filesService as never,
       storageService as never,
       { hasActiveProgramBCall: jest.fn().mockResolvedValue(true) } as never,
+      teamRepository as never,
+      queueService as never,
     );
   });
 
@@ -506,6 +526,8 @@ describe('ProgramBBacklogService', () => {
       filesService as never,
       storageService as never,
       callsRepository as never,
+      teamRepository as never,
+      queueService as never,
     );
 
     const result = await localService.listPublished(
@@ -531,6 +553,8 @@ describe('ProgramBBacklogService', () => {
       filesService as never,
       storageService as never,
       callsRepository as never,
+      teamRepository as never,
+      queueService as never,
     );
     backlogRepository.findDetailUnique.mockResolvedValue(publishedItem);
 

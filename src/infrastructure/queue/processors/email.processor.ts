@@ -161,6 +161,39 @@ export class EmailProcessor extends WorkerHost {
         data.applicationTitle,
       );
     },
+    [EMAIL_JOBS.PROGRAM_B_MENTOR_NEEDED]: async (data) => {
+      this.logger.log(`Program B project needs a mentor: ${data.projectId}`);
+
+      if (!data.adminEmails || data.adminEmails.length === 0) {
+        this.logger.warn('No admins found for PROGRAM_B_MENTOR_NEEDED email');
+        return;
+      }
+
+      await Promise.allSettled(
+        data.adminEmails.map((adminEmail) =>
+          this.mailerService.sendProgramBMentorNeededEmail(adminEmail, {
+            projectId: data.projectId,
+            backlogTitle: data.backlogTitle,
+            organizationName: data.organizationName,
+            teamName: data.teamName,
+          }),
+        ),
+      );
+    },
+    [EMAIL_JOBS.PROGRAM_B_TEAM_ACCEPTED]: async (data) => {
+      await this.mailerService.sendProgramBTeamAcceptedEmail(data.email, {
+        teamName: data.teamName,
+        backlogTitle: data.backlogTitle,
+        organizationName: data.organizationName,
+      });
+    },
+    [EMAIL_JOBS.PROGRAM_B_MENTOR_ASSIGNED]: async (data) => {
+      await this.mailerService.sendProgramBMentorAssignedEmail(data.email, {
+        projectId: data.projectId,
+        backlogTitle: data.backlogTitle,
+        teamName: data.teamName,
+      });
+    },
   };
 
   async process(job: Job<EmailJobData[EmailJobName]>): Promise<void> {

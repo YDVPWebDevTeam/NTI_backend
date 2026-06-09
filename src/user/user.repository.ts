@@ -10,6 +10,7 @@ import {
   PrismaDbClient,
 } from '../infrastructure/database/base.repository';
 import { PrismaService } from '../infrastructure/database/prisma.service';
+import { ADMIN_ROLES } from '../common/auth/role-groups';
 
 const organizationMemberSelect = {
   id: true,
@@ -86,7 +87,7 @@ export class UserRepository extends BaseRepository<
     return this.findMany(
       {
         where: {
-          role: UserRole.ADMIN,
+          role: { in: [...ADMIN_ROLES] },
           status: UserStatus.ACTIVE,
         },
       },

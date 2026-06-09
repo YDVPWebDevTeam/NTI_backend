@@ -16,6 +16,9 @@ export const EMAIL_TEMPLATES = {
   APPLICATION_APPROVED: 'application-approved',
   APPLICATION_REJECTED: 'application-rejected',
   APPLICATION_MENTOR_ASSIGNED: 'application-mentor-assigned',
+  PROGRAM_B_MENTOR_NEEDED: 'program-b-mentor-needed',
+  PROGRAM_B_TEAM_ACCEPTED: 'program-b-team-accepted',
+  PROGRAM_B_MENTOR_ASSIGNED: 'program-b-mentor-assigned',
 } as const;
 
 export type EmailTemplateName =
@@ -75,6 +78,22 @@ export interface EmailTemplateDataByName {
   [EMAIL_TEMPLATES.APPLICATION_MENTOR_ASSIGNED]: {
     applicationId: string;
     applicationTitle: string;
+  };
+  [EMAIL_TEMPLATES.PROGRAM_B_MENTOR_NEEDED]: {
+    projectId: string;
+    backlogTitle: string;
+    organizationName: string;
+    teamName: string;
+  };
+  [EMAIL_TEMPLATES.PROGRAM_B_TEAM_ACCEPTED]: {
+    teamName: string;
+    backlogTitle: string;
+    organizationName: string;
+  };
+  [EMAIL_TEMPLATES.PROGRAM_B_MENTOR_ASSIGNED]: {
+    projectId: string;
+    backlogTitle: string;
+    teamName: string;
   };
 }
 

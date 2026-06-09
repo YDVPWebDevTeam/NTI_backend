@@ -1,32 +1,40 @@
 # NTI Backend
 
-NTI Backend is a NestJS API for the NTI platform. The service uses PostgreSQL for persistence, Redis and BullMQ for background jobs, Prisma for data access, Fastify for HTTP, and Swagger for API documentation.
+NTI Backend is a NestJS API for the NTI platform. The service uses PostgreSQL for persistence, Redis and BullMQ for background jobs, Prisma for data access, Fastify for HTTP, Swagger for API docs, and Puppeteer-based rendering for PDF/export workflows.
 
 ## Overview
 
-The application is split into a few major areas:
+The codebase currently covers these major areas:
 
-- `auth`: registration, login, refresh/logout, email confirmation, password reset, and forced password changes
-- `admin`: admin-only user status management and system invitation creation
-- `organization`: organization records, status, and organization invitations
-- `team`: team lifecycle, membership, and team invitations
-- `invites`: invite validation and acceptance flows
+- `auth`: registration, login, refresh/logout, email confirmation, password reset, forced password change, and invite-based onboarding
+- `account`: authenticated account operations such as password and email change flows
+- `admin`: admin APIs for users, organizations, system invites, and academic structure
+- `organization`: organization profile, membership, invitations, access control, and organization documents
+- `team`: team lifecycle, membership, leadership transfer, and team invitations
+- `student-profile`: student profile data plus academic structure lookup APIs
+- `applications`: application lifecycle, calls, sections, evaluations, needs-info threads, eligibility signals, and document completeness
+- `programs/program-a`: mentorship and milestone support for mentored applications
+- `programs/program-b`: backlog, team application, company overview, and project execution flows
+- `reports`: dashboards, exports, audit data, and async PDF/export jobs
+- `contact`: contact form submissions
 - `files`: presigned uploads/downloads and upload tracking
-- `infrastructure`: database, config, logging, mail, queueing, hashing, storage, and PDF support
-- `worker`: background processing for queue jobs
+- `invites`: invite validation endpoints
+- `infrastructure`: config, database, logging, mail, queueing, storage, hashing, and PDF support
+- `worker`: BullMQ worker entrypoint for async processors
 
 If you are new to the codebase, start with:
 
-1. `src/main.ts` for bootstrap, global validation, CORS, and Swagger
-2. `src/app.module.ts` for the full module graph
+1. `src/main.ts` for bootstrap, global validation, CORS, cookies, and Swagger
+2. `src/app.module.ts` for the active module graph
 3. `prisma/schema.prisma` for the domain model
-4. `src/auth`, `src/files`, and `src/admin` for the highest-value business flows
+4. `src/app.controller.ts` for health endpoints
 
 ## Prerequisites
 
 - Node.js 22+
 - npm
 - Docker and Docker Compose
+- PostgreSQL and Redis if you run the app outside Compose
 
 ## Environment Setup
 
@@ -41,38 +49,61 @@ Important variables:
 | Variable | Purpose |
 | --- | --- |
 | `PORT` | HTTP port for the API |
-| `NODE_ENV` | Runtime mode |
-| `APP_ENV` | Deployment mode used for environment-specific behavior such as auth cookie policy |
-| `DATABASE_URL` | PostgreSQL connection string used by Prisma |
-| `CORS_ORIGINS` | Comma-separated list of allowed frontend origins; `*` wildcards are supported |
+| `NODE_ENV` | Nest/Node runtime mode |
+| `APP_ENV` | Cookie/CORS behavior profile (`local`, `development`, `staging`, `production`, `test`) |
+| `RUN_QUEUE_PROCESSORS` | Enables in-process queue processors inside the API app |
+| `DATABASE_URL` | PostgreSQL connection string used by Prisma and seeds |
+| `CORS_ORIGINS` | Comma-separated list of allowed frontend origins; wildcard patterns are supported |
 | `REDIS_HOST` / `REDIS_PORT` | Redis connection used by BullMQ |
-| `SMTP_*` | Email delivery configuration for confirmation/reset/invite flows |
-| `EMAIL_LOGO_URL` | Optional absolute public URL for the logo rendered in email headers |
+| `BREVO_API_KEY` / `EMAIL_FROM` | Outbound email delivery configuration |
+| `EMAIL_LOGO_URL` | Optional absolute public logo URL rendered in emails |
 | `FRONTEND_URL` | Frontend base URL used in generated links |
 | `R2_*` | Cloudflare R2 object storage configuration |
-| `FILE_UPLOAD_*` | Upload policy, presign expiry, size limit, and verification settings |
-| `FILE_DOWNLOAD_PRESIGN_EXPIRES_SECONDS` | Presigned download link lifetime for private files |
-| `JWT_*` | Access, refresh, and forced password change secrets and expirations |
-| `ARGON2_TIME_COST` | Password hashing cost used by the seed and auth flows |
-| `TOKEN_BYTE_LENGTH` | Token entropy used for generated auth/invite tokens |
-| `EMAIL_VERIFICATION_EXPIRATION_HOURS` | Confirmation link lifetime |
+| `FILE_UPLOAD_*` | Presigned upload expiry, size limits, MIME allowlist, and upload verification |
+| `FILE_DOWNLOAD_PRESIGN_EXPIRES_SECONDS` | Presigned download lifetime for private file access |
+| `ORGANIZATION_DOCUMENT_*` | Upload policy for organization documents |
+| `PUPPETEER_*` | Browser executable, headless mode, and timeout for PDF/export rendering |
+| `PDF_JOB_WAIT_TIMEOUT_MS` / `PDF_WORKER_CONCURRENCY` | Queue-backed PDF/export job behavior |
+| `JWT_*` | Access, refresh, and forced-password-change token secrets and expirations |
+| `ARGON2_TIME_COST` | Password hashing cost used by auth and seed scripts |
+| `TOKEN_BYTE_LENGTH` | Random token entropy for auth/invite flows |
+| `EMAIL_VERIFICATION_EXPIRATION_HOURS` | Email confirmation token lifetime |
+| `DEV_EMAIL_VERIFICATION_BYPASS_*` | Local-only bypass for email verification flows |
+| `FORCE_PASSWORD_CHANGE_TOKEN_EXPIRATION_MINUTES` | Forced password change token lifetime |
 | `PASSWORD_RESET_EXPIRATION_MINUTES` | Password reset token lifetime |
-| `SYSTEM_INVITATION_EXPIRATION_HOURS` | System invitation lifetime |
-| `SUPERADMIN_TEMP_PASSWORD` | Temporary password used by the seed task |
+| `SYSTEM_INVITATION_EXPIRATION_HOURS` | System invitation token lifetime |
+| `ORGANIZATION_INVITATION_EXPIRATION_DAYS` | Organization invitation token lifetime |
+| `SUPERADMIN_TEMP_PASSWORD` | Temporary password for seeded superadmin account |
 
-The full set of supported variables is defined in `src/infrastructure/config/env.schema.ts` and documented in `.env.example`.
+The authoritative schema for supported variables is `src/infrastructure/config/env.schema.ts`. `.env.example` covers the common local setup but is not the canonical source for every optional key.
 
 ## Running Locally
 
 ### Docker Compose
 
-This boots the API, worker, PostgreSQL, and Redis together:
+Compose builds the `dev` target from the single multi-stage `Dockerfile` and starts:
+
+- `app`: Nest API on `http://localhost:3001`
+- `postgres`: PostgreSQL 16 on `localhost:5432`
+- `redis`: Redis 7 on `localhost:6379`
+
+Run it with:
 
 ```bash
 docker compose up
 ```
 
-The API is available at `http://localhost:3001`.
+Important behavior:
+
+- the `app` service runs `prisma migrate deploy` before `npm run start:dev`
+- the `app` service sets `RUN_QUEUE_PROCESSORS=true`, so email/PDF/export processors run in-process by default
+- the separate `worker` Compose service exists, but it is optional and only starts when you enable the `worker` profile
+
+To start the dedicated worker locally:
+
+```bash
+docker compose --profile worker up
+```
 
 ### Manual Setup
 
@@ -85,70 +116,90 @@ npm run prisma:migrate
 npm run start:dev
 ```
 
-Run the worker in a second terminal when you need background jobs processed locally:
+Run the worker in a second terminal only when you want dedicated queue processing outside the API process:
 
 ```bash
 npm run start:worker:dev
 ```
 
+If you keep `RUN_QUEUE_PROCESSORS=false`, async jobs require the worker process.
+
+## Health and API Docs
+
+- health endpoints: `GET /` and `GET /health`
+- REST prefix: `/api/v1`
+- Swagger UI: `http://localhost:3001/api/docs`
+
+Swagger is configured for:
+
+- bearer-token fallback auth
+- `accessToken` cookie auth
+- `refreshToken` cookie auth
+- `requiresPasswordChangeToken` cookie auth
+
 ## Common Workflows
 
 ### Authentication
 
-The auth module supports:
+The auth/account stack supports:
 
 - standard registration and login
 - company-owner registration
 - invite-based registration
-- email confirmation
+- email confirmation and resend
 - access token refresh through HttpOnly cookies
 - logout and refresh-token revocation
 - forgotten password and password reset
 - forced password change for privileged accounts
+- authenticated password and email change flows
 
-Behavior that is worth knowing:
+Operational details:
 
-- access tokens are stored in an HttpOnly `accessToken` cookie
-- refresh tokens are stored in an HttpOnly `refreshToken` cookie
-- forced password changes use a short-lived `requiresPasswordChangeToken` cookie
-- admin login can require an immediate password change before the session is usable
-- `APP_ENV=local` uses `SameSite=Lax` cookies for local backend/frontend development
-- deployed environments such as `APP_ENV=development`, `staging`, or `production` use `SameSite=None; Secure`
-- if your frontend origin differs from the backend origin, that frontend must be listed in `CORS_ORIGINS` and requests must use credentials
-- wildcard origins are supported for preview deployments, for example `https://nti-*-klymenvladgmailcoms-projects.vercel.app`
+- access tokens are primarily transported in the HttpOnly `accessToken` cookie
+- refresh tokens are stored in the HttpOnly `refreshToken` cookie
+- forced password changes use `requiresPasswordChangeToken`
+- `APP_ENV=local` uses local-friendly cookie policy
+- deployed environments use cross-site secure cookie policy
+- frontend requests must use credentials and come from allowed `CORS_ORIGINS`
 
-### Files
+### Applications and Programs
 
-File uploads are designed around presigned URLs instead of streaming file bodies through the API.
+The current domain goes beyond auth/org/team management:
+
+- application calls can be managed by admins and queried publicly
+- applications support sections, history, evaluations, decisions, mentorship assignments, needs-info threads, and document tracking
+- Program A includes mentored application support plus milestones and mentorship notes
+- Program B includes backlog intake, team applications, company overview, project execution, mentoring, milestones, rewards, and project documents
+
+Supporting docs in `docs/` include `PROGRAM_A_STATUS_MAP.md` and `DEV_FIXTURES.md`.
+
+### Files and Documents
+
+File handling is built around presigned URLs rather than streaming file bodies through the API.
 
 - `POST /api/v1/files/upload-url` creates an upload record and returns a presigned upload URL
-- `POST /api/v1/files/complete` marks the upload as finished after the object exists in storage
+- `POST /api/v1/files/complete` marks the upload as finished
 - `GET /api/v1/files/:id/download-url` returns a public URL or a presigned private download URL
 
-Important file behaviors:
+There are also dedicated organization/program document flows built on top of the same storage infrastructure.
 
-- uploads are validated against configured file size and MIME type limits
-- private files use presigned download URLs
-- public files resolve to a direct public URL
-- completed uploads can optionally verify the uploaded object in storage
+### Background Jobs and PDF/Export Rendering
 
-### Background Jobs
+BullMQ and Redis handle asynchronous work such as:
 
-BullMQ and Redis handle asynchronous work such as email delivery and PDF generation.
+- email delivery
+- PDF rendering
+- report export jobs
 
-- queue registration lives in `src/infrastructure/queue`
-- processors live in `src/infrastructure/queue/processors`
-- the worker entrypoint is `src/worker.ts`
+Relevant code lives in:
 
-### PDF Generation
+- `src/infrastructure/queue`
+- `src/infrastructure/queue/processors`
+- `src/infrastructure/pdf`
+- `src/reports/report-export`
+- `src/worker.ts`
 
-The PDF module provides template-driven PDF creation and queue-backed processing.
-
-- `src/infrastructure/pdf` contains the PDF services, template registry, and worker flow
-- Puppeteer settings are controlled through `PUPPETEER_*`
-- synchronous API PDF exports and the worker both require a Chromium installation in containerized environments
-
-## Database
+## Database and Prisma
 
 Prisma is used for schema management and database access.
 
@@ -157,61 +208,47 @@ Prisma is used for schema management and database access.
 - Apply migrations in deployment: `npm run prisma:migrate:deploy`
 - Open Prisma Studio: `npm run prisma:studio`
 - Reset the local database: `npm run prisma:reset`
-- Seed the database: `npm run prisma:seed`
+- Run baseline seed data: `npm run prisma:seed`
+- Run extended dev fixtures: `npm run seed:dev`
 
-The Prisma schema and migration history live in `prisma/`.
+The Prisma schema, migrations, and seed scripts live in `prisma/`.
 
-### Domain Model Highlights
+### Seed Behavior
 
-The schema centers on:
+`npm run prisma:seed` currently runs:
 
-- `User` records with roles, account status, email confirmation, admin confirmation, and password-change flags
-- `Organization` records with status and invitations
-- `Team` records with leaders, members, locking, and archiving
-- `Invitation`, `OrgInvitation`, and `SystemInvitation` flows for controlled onboarding
-- `UploadedFile` records that track upload status, visibility, and storage keys
-- `RefreshToken`, `EmailVerificationToken`, and `PasswordResetToken` records for auth lifecycle management
+- `001-superadmin.seed.ts`
+- `002-calls.seed.ts`
 
-## Seeding
+`npm run seed:dev` additionally runs:
 
-The seed pipeline currently creates a default superadmin account if none exists.
+- `003-program-b-backlog.seed.ts`
+- `004-dev-fixtures.seed.ts`
 
-Notes:
+The seed pipeline requires:
 
-- the seed requires `DATABASE_URL`
-- `SUPERADMIN_TEMP_PASSWORD` must be set and at least 8 characters long
-- the seeded account is created with `SUPER_ADMIN` role and `mustChangePassword=true`
-
-## API Documentation
-
-Swagger UI is available at:
-
-```text
-http://localhost:3001/api/docs
-```
-
-The REST API is prefixed with:
-
-```text
-/api/v1
-```
-
-Swagger includes cookie auth for access/refresh/forced-password-change flows and optional bearer auth fallback for access tokens.
+- `DATABASE_URL`
+- `SUPERADMIN_TEMP_PASSWORD`
+- a valid `ARGON2_TIME_COST`
 
 ## Available Scripts
 
 ```bash
 npm run build
+npm run format
 npm run start
 npm run start:dev
+npm run start:debug
+npm run start:prod
 npm run start:worker
 npm run start:worker:dev
 npm run lint
-npm run format
+npm run lint:staged
 npm run typescript
 npm run test
 npm run test:watch
 npm run test:cov
+npm run test:debug
 npm run test:e2e
 npm run prisma:generate
 npm run prisma:migrate
@@ -219,91 +256,66 @@ npm run prisma:migrate:deploy
 npm run prisma:studio
 npm run prisma:reset
 npm run prisma:seed
+npm run seed:dev
 ```
 
 ## Code Quality
 
 - ESLint handles linting
 - Prettier handles formatting
-- TypeScript checks are available through `npm run typescript`
-- Husky, lint-staged, and Commitizen are configured for contributor workflow support
+- TypeScript checks run through `npm run typescript`
+- Husky, lint-staged, and Commitlint are configured for contributor workflow support
 
 ## Repository Structure
 
 ```text
 src/
-  auth/              authentication, tokens, email confirmation, password reset
-  admin/             admin user status management and system invitations
-  organization/      organization entities and invitations
-  team/              team membership and invites
-  invites/           invite validation and acceptance logic
+  account/           authenticated account operations
+  admin/             admin APIs
+  applications/      application lifecycle and calls
+  auth/              authentication and onboarding
+  contact/           contact submissions
   files/             upload/download record management
   infrastructure/    shared technical modules
-  common/            shared types, validation, and filters
+  organization/      organization and org documents
+  programs/          program A and program B flows
+  reports/           dashboards, audits, exports
+  student-profile/   student profile and academic structure
+  team/              team membership and invites
 prisma/              schema, migrations, and seed tasks
+docs/                supporting project documentation
 test/                end-to-end tests
 ```
 
 ## Notes for Contributors
 
-- `src/main.ts` is the canonical place to check app-level middleware, validation, and API docs setup
-- `src/app.module.ts` shows what the app depends on and in what order modules are wired
-- when adding or changing a public endpoint, update the matching API docs decorators and tests together
-- when changing auth or file flows, check the relevant queue, storage, and token repositories as well as the service layer
+- `src/main.ts` is the canonical place for app-level middleware, validation, CORS, cookies, and API docs setup
+- `src/app.module.ts` shows which modules are active in the API process
+- `RUN_QUEUE_PROCESSORS` determines whether processors run inside the API process
+- when adding or changing a public endpoint, update the matching Swagger decorators and tests together
+- when changing auth, storage, or reporting flows, also inspect the related repositories and queue processors
 
-## Production Deployment (Render)
+## Production Deployment
 
-If you use BullMQ for email/PDF jobs, deploy **three runtime services** on Render:
+The repository ships a single multi-stage `Dockerfile` with these targets:
 
-- one **Web Service** for the API
-- one **Background Worker** for queue processing
-- one **Redis** instance
+- `dev`
+- `worker`
+- `production`
 
-No worker URL is required. The API and worker communicate through Redis queues.
+Default `docker build .` uses the final `production` stage for the API. The worker is built from the same Dockerfile with `--target worker`; there is no separate `Dockerfile.worker` in the repository.
 
-### 1. Create/keep Redis
+### Render
 
-1. In Render, create a Redis instance (or keep your existing one).
-2. Note Redis host and port from Render.
+If you deploy queue-backed email/PDF/export jobs separately, provision:
 
-### 2. Configure the API Web Service
-
-1. Open your current API service.
-2. Make sure it builds from repo root with `Dockerfile`.
-3. Keep API start as production app (`node dist/src/main`, already in Dockerfile `CMD`).
-4. Set environment variables.
-
-Required minimum for API:
-
-- `DATABASE_URL`
-- `REDIS_HOST`
-- `REDIS_PORT`
-- all other required variables from `src/infrastructure/config/env.schema.ts` (`SMTP_*`, `R2_*`, `JWT_*`, `FRONTEND_URL`, etc.)
+- one web service for the API
+- one background worker built from `Dockerfile` target `worker`
+- one Redis instance
 
 Notes:
 
-- API container runs Prisma migrations on startup via Dockerfile command.
-- API container must include Chromium because `GET /api/v1/reports/export?...&format=pdf` can render synchronously in the web service.
-- Keep migrations in API only; do not run them in worker.
-
-### 3. Create a Worker Background Service
-
-1. In Render, click **New +** -> **Background Worker**.
-2. Select the same repository and branch as the API.
-3. Set Dockerfile path to `Dockerfile.worker`.
-4. Worker command is already in Dockerfile: `node dist/src/worker`.
-5. Add environment variables.
-
-Required minimum for worker:
-
-- `DATABASE_URL`
-- `REDIS_HOST`
-- `REDIS_PORT`
-- `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium`
-- same required app config values used by loaded modules (`SMTP_*`, `R2_*`, `JWT_*`, etc.)
-
-### 4. Verify both services use the same infrastructure
-
-1. API and worker must point to the same Redis.
-2. API and worker must point to the same Postgres database.
-3. Deploy API and worker.
+- the API production container runs Prisma migrations on startup
+- API and worker must point to the same PostgreSQL and Redis instances
+- both runtimes need the required app config from `src/infrastructure/config/env.schema.ts`
+- Puppeteer/Chromium settings must be present anywhere PDF/export rendering is expected

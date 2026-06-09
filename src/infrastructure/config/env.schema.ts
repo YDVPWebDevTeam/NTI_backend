@@ -57,7 +57,9 @@ const baseEnvSchema = z.object({
     .default(10 * 1024 * 1024),
   FILE_UPLOAD_ALLOWED_MIME_TYPES: z
     .string()
-    .default('image/jpeg,image/png,image/webp,application/pdf'),
+    .default(
+      'image/jpeg,image/png,image/webp,image/gif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.oasis.opendocument.text,application/vnd.oasis.opendocument.spreadsheet,application/rtf,text/plain',
+    ),
   FILE_UPLOAD_VERIFY_OBJECT_ON_COMPLETE: z
     .enum(['true', 'false'])
     .default('false')

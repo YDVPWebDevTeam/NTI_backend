@@ -27,7 +27,17 @@ const MIME_EXTENSION_MAP: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  'image/gif': 'gif',
   'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    'docx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.oasis.opendocument.text': 'odt',
+  'application/vnd.oasis.opendocument.spreadsheet': 'ods',
+  'application/rtf': 'rtf',
+  'text/plain': 'txt',
 };
 
 type CreateServerGeneratedFileInput = {

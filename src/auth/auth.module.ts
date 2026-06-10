@@ -22,6 +22,7 @@ import { InvitesModule } from '../invites/invites.module';
 import { RolesGuard } from './guards/roles.guard';
 import { AuthRegistrationService } from './auth-registration.service';
 import { OrganizationModule } from '../organization/organization.module';
+import { UniversityEmailDomainRepository } from '../university-email-domain/university-email-domain.repository';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { OrganizationModule } from '../organization/organization.module';
     AuthCookieService,
     AuthService,
     AuthRegistrationService,
+    UniversityEmailDomainRepository,
     EmailChangeTokenRepository,
     EmailChangeTokenService,
     EmailVerificationRepository,

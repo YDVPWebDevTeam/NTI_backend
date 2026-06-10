@@ -83,6 +83,13 @@ export class ConversationAccessService {
     this.assertProgramBChannelReadable(project, channel, user);
 
     if (
+      channel === ConversationChannel.PARTICIPANTS &&
+      !this.canWriteProgramBParticipants(project, user)
+    ) {
+      throw new ForbiddenException(CONVERSATIONS_MESSAGES.NO_ACCESS_TO_CHANNEL);
+    }
+
+    if (
       project.status === ProgramBProjectStatus.CLOSED &&
       !isAdminRole(user.role)
     ) {
@@ -177,6 +184,17 @@ export class ConversationAccessService {
     }
 
     return isTeamMember(project.team, user.id);
+  }
+
+  private canWriteProgramBParticipants(
+    project: ProgramBProjectAnchorView,
+    user: AuthenticatedUserContext,
+  ): boolean {
+    if (isAdminRole(user.role)) return true;
+    if (user.role === UserRole.MENTOR && project.mentorUserId === user.id) {
+      return true;
+    }
+    return this.isProgramBClientMember(project, user);
   }
 
   private isProgramBClientMember(

@@ -3,9 +3,6 @@ import type { SeedTask } from '../types';
 
 const DEV_PASSWORD = 'Dev1234!';
 
-// ---------------------------------------------------------------------------
-// Deterministic IDs so re-runs stay idempotent
-// ---------------------------------------------------------------------------
 const IDS = {
   // Universities
   univSTU: randomUUID(),

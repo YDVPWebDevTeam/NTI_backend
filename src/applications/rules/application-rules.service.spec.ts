@@ -6,6 +6,10 @@ jest.mock('../../team/team.repository', () => ({
   TeamRepository: class TeamRepository {},
 }));
 
+jest.mock('../applications.repository', () => ({
+  ApplicationsRepository: class ApplicationsRepository {},
+}));
+
 import {
   BadRequestException,
   ConflictException,
@@ -23,6 +27,9 @@ describe('ApplicationRulesService', () => {
   let teamRepository: {
     findPublicById: jest.Mock;
   };
+  let applicationsRepository: {
+    findActiveApplicationForTeam: jest.Mock;
+  };
 
   beforeEach(() => {
     callsRepository = {
@@ -33,9 +40,14 @@ describe('ApplicationRulesService', () => {
       findPublicById: jest.fn(),
     };
 
+    applicationsRepository = {
+      findActiveApplicationForTeam: jest.fn().mockResolvedValue(null),
+    };
+
     service = new ApplicationRulesService(
       callsRepository as never,
       teamRepository as never,
+      applicationsRepository as never,
     );
   });
 
@@ -186,6 +198,29 @@ describe('ApplicationRulesService', () => {
       name: 'Archived Team',
       leaderId: 'user-1',
       archivedAt: new Date('2026-04-01T00:00:00.000Z'),
+    });
+
+    await expect(
+      service.validateApplicationCreationRules('call-1', 'team-1', 'user-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('throws conflict when team already has an active application', async () => {
+    callsRepository.findById.mockResolvedValue({
+      id: 'call-1',
+      status: CallStatus.OPEN,
+      opensAt: null,
+      closesAt: null,
+    });
+    teamRepository.findPublicById.mockResolvedValue({
+      id: 'team-1',
+      name: 'Test Team',
+      leaderId: 'user-1',
+      archivedAt: null,
+    });
+    applicationsRepository.findActiveApplicationForTeam.mockResolvedValue({
+      id: 'app-existing',
+      status: 'SUBMITTED',
     });
 
     await expect(

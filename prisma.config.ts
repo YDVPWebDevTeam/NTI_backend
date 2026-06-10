@@ -7,10 +7,6 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
-    // Seed runner is TypeScript and executed directly by Node:
-    // - --experimental-strip-types: execute .ts files without precompiling.
-    // - --experimental-specifier-resolution=node: resolve seed module imports
-    //   predictably in this ESM/CJS mixed project setup.
     seed: 'node --experimental-strip-types --experimental-specifier-resolution=node prisma/seed/main.ts',
   },
   datasource: {

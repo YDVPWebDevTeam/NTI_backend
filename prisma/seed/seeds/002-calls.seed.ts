@@ -36,10 +36,6 @@ export const callsSeed: SeedTask = {
     ];
 
     for (const call of calls) {
-      // Fetch every call of this type (oldest first) so we can converge on a
-      // single canonical row. Earlier non-idempotent seed runs could leave
-      // duplicate calls of the same type behind; "UPDATE ... LIMIT 1" never
-      // cleaned those up, which surfaced as duplicate open-call cards in the UI.
       const existingCalls = await context.client.query<CallRow>(
         'SELECT id FROM "Call" WHERE type = $1 ORDER BY "createdAt" ASC',
         [call.type],
@@ -53,9 +49,6 @@ export const callsSeed: SeedTask = {
           [call.title, call.status, call.opensAt, call.closesAt, canonical.id],
         );
 
-        // Remove stray duplicates of the same type, but only when they carry no
-        // applications — deleting a Call cascades to its applications, so we
-        // never drop a call that real data depends on.
         for (const duplicate of duplicates) {
           const linkedApplications = await context.client.query<{
             count: string;

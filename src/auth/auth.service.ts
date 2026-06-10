@@ -10,6 +10,8 @@ import { randomUUID } from 'node:crypto';
 import type { StringValue } from 'ms';
 import { User } from '../../generated/prisma/client';
 import { UserRole, UserStatus } from '../../generated/prisma/enums';
+import { UniversityEmailDomainStatus } from '../../generated/prisma/enums';
+import { UniversityEmailDomainRepository } from '../university-email-domain/university-email-domain.repository';
 import { ConfigService } from '../infrastructure/config';
 import { HashingService } from '../infrastructure/hashing';
 import { RefreshTokenService } from './refresh-token/refresh-token.service';
@@ -73,6 +75,7 @@ export class AuthService {
     private readonly queueService: QueueService,
     private readonly authRegistrationService: AuthRegistrationService,
     private readonly organizationInviteService: OrganizationInviteService,
+    private readonly universityEmailDomainRepository: UniversityEmailDomainRepository,
   ) {
     this.refreshTokenValidityDays = parseInt(
       this.configService.jwtRefreshExpirationDays,
@@ -216,6 +219,17 @@ export class AuthService {
       throw new UnauthorizedException(AUTH_MESSAGES.USER_NOT_FOUND);
     }
 
+    let isUniversityEmail = false;
+    if (user.role === UserRole.STUDENT) {
+      const domain = user.email
+        .slice(user.email.lastIndexOf('@') + 1)
+        .toLowerCase();
+      const domainRecord =
+        await this.universityEmailDomainRepository.findByDomain(domain);
+      isUniversityEmail =
+        domainRecord?.status === UniversityEmailDomainStatus.APPROVED;
+    }
+
     const confirmedUser = await this.usersService.transaction(
       async (transaction) => {
         const updatedUser = await this.usersService.update(
@@ -224,6 +238,10 @@ export class AuthService {
             isEmailConfirmed: true,
             status:
               user.role === UserRole.STUDENT ? UserStatus.ACTIVE : user.status,
+            ...(isUniversityEmail && {
+              studentEmail: user.email.trim().toLowerCase(),
+              isStudentEmailConfirmed: true,
+            }),
           },
           transaction,
         );
@@ -241,7 +259,6 @@ export class AuthService {
   async resendConfirmationEmail(email: string): Promise<void> {
     const user = await this.usersService.findByEmail(email);
 
-    // Avoid revealing whether the account exists or has already been confirmed.
     if (!user || user.isEmailConfirmed) {
       return;
     }
@@ -456,7 +473,6 @@ export class AuthService {
     const expiresIn =
       `${this.configService.forcePasswordChangeTokenExpirationMinutes}m` as StringValue;
 
-    // Use a dedicated secret so this token cannot be replayed as a normal Bearer access token.
     return this.jwtService.signAsync(payload, {
       secret: this.configService.jwtForcePasswordChangeSecret,
       expiresIn,

@@ -35,6 +35,13 @@ jest.mock('../organization/organization.repository', () => ({
   OrganizationRepository: class OrganizationRepository {},
 }));
 
+jest.mock(
+  '../university-email-domain/university-email-domain.repository',
+  () => ({
+    UniversityEmailDomainRepository: class UniversityEmailDomainRepository {},
+  }),
+);
+
 jest.mock('../infrastructure/queue', () => ({
   EMAIL_JOBS: {
     PASSWORD_RESET: 'password-reset',
@@ -68,6 +75,8 @@ import { RefreshTokenService } from './refresh-token/refresh-token.service';
 import { ResetTokenService } from './reset-token/reset-token.service';
 import { AuthRegistrationService } from './auth-registration.service';
 import { OrganizationInviteService } from 'src/organization/organization-invite.service';
+import { UniversityEmailDomainRepository } from '../university-email-domain/university-email-domain.repository';
+import { UniversityEmailDomainStatus } from '../../generated/prisma/enums';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -106,6 +115,9 @@ describe('AuthService', () => {
   };
   let organizations: {
     findUnique: jest.Mock;
+  };
+  let universityEmailDomains: {
+    findByDomain: jest.Mock;
   };
   let queueService: {
     addEmail: jest.Mock;
@@ -189,6 +201,9 @@ describe('AuthService', () => {
     organizations = {
       findUnique: jest.fn(),
     };
+    universityEmailDomains = {
+      findByDomain: jest.fn().mockResolvedValue(null),
+    };
     jwtService = {
       signAsync: jest
         .fn()
@@ -229,6 +244,7 @@ describe('AuthService', () => {
         {} as never,
         {} as never,
       ),
+      universityEmailDomains as unknown as UniversityEmailDomainRepository,
     );
   });
 
@@ -697,6 +713,66 @@ describe('AuthService', () => {
         isEmailConfirmed: true,
         status: UserStatus.PENDING,
       },
+      transactionClient,
+    );
+  });
+
+  it('auto-confirms student email when registration email is a university domain', async () => {
+    const universityStudent = { ...unconfirmedUser, email: 'jan@ukf.sk' };
+    const confirmedStudent = {
+      ...universityStudent,
+      status: UserStatus.ACTIVE,
+    };
+
+    emailVerification.validateTokenOrThrow.mockResolvedValue({
+      id: 'verification-uni',
+      userId: universityStudent.id,
+      token: 'verification-token',
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+      acceptedAt: null,
+    });
+    users.findById.mockResolvedValue(universityStudent);
+    users.update.mockResolvedValue(confirmedStudent);
+    universityEmailDomains.findByDomain.mockResolvedValue({
+      domain: 'ukf.sk',
+      status: UniversityEmailDomainStatus.APPROVED,
+    });
+
+    await service.confirmEmail('verification-token');
+
+    expect(universityEmailDomains.findByDomain).toHaveBeenCalledWith('ukf.sk');
+    expect(users.update).toHaveBeenCalledWith(
+      universityStudent.id,
+      {
+        isEmailConfirmed: true,
+        status: UserStatus.ACTIVE,
+        studentEmail: 'jan@ukf.sk',
+        isStudentEmailConfirmed: true,
+      },
+      transactionClient,
+    );
+  });
+
+  it('does not auto-confirm student email when registration email is not a university domain', async () => {
+    emailVerification.validateTokenOrThrow.mockResolvedValue({
+      id: 'verification-1',
+      userId: user.id,
+      token: 'verification-token',
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+      acceptedAt: null,
+    });
+    users.findById.mockResolvedValue(unconfirmedUser);
+    users.update.mockResolvedValue({
+      ...unconfirmedUser,
+      status: UserStatus.ACTIVE,
+    });
+    universityEmailDomains.findByDomain.mockResolvedValue(null);
+
+    await service.confirmEmail('verification-token');
+
+    expect(users.update).toHaveBeenCalledWith(
+      user.id,
+      { isEmailConfirmed: true, status: UserStatus.ACTIVE },
       transactionClient,
     );
   });

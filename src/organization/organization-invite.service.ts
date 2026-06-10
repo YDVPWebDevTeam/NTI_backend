@@ -363,12 +363,6 @@ export class OrganizationInviteService {
     });
   }
 
-  /**
-   * Loads an invitation that is acceptable for a brand-new user registration
-   * (used by AuthService inside its own user-creation transaction). Keeps all
-   * invite/organization invariants inside the organization domain so AuthService
-   * no longer reaches into organization repositories directly.
-   */
   async loadAcceptableInviteForRegistration(
     token: string,
     tx: PrismaDbClient,

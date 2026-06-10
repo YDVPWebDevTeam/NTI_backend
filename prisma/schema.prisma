@@ -937,9 +937,6 @@ model ProgramBMentoringNote {
   @@index([projectId, createdAt])
 }
 
-/// A single communication channel scoped to one project anchor (Program B project
-/// or Program A application) and one ConversationChannel. Created lazily on the
-/// first message. INTERNAL = team + mentor only; PARTICIPANTS = also the client.
 model Conversation {
   id      String              @id @default(uuid())
   channel ConversationChannel
@@ -973,7 +970,7 @@ model ConversationMessage {
   body String
 
   editedAt  DateTime?
-  deletedAt DateTime? // soft delete -> rendered as a tombstone
+  deletedAt DateTime?
 
   attachments ConversationMessageAttachment[]
 

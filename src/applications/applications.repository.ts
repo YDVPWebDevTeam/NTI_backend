@@ -213,6 +213,29 @@ export class ApplicationsRepository extends BaseRepository<
     });
   }
 
+  findActiveApplicationForTeam(
+    teamId: string,
+    db?: PrismaDbClient,
+  ): Promise<Pick<Application, 'id' | 'status'> | null> {
+    return (db ?? this.prisma.client).application.findFirst({
+      where: {
+        teamId,
+        status: {
+          notIn: [
+            ApplicationStatus.DRAFT,
+            ApplicationStatus.REJECTED,
+            ApplicationStatus.ARCHIVED,
+            ApplicationStatus.COMPLETED,
+          ],
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+  }
+
   findActiveByTeamAndCall(
     teamId: string,
     callId: string,

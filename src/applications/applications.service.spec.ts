@@ -250,7 +250,6 @@ describe('ApplicationsService', () => {
     },
   };
 
-  // A complete evaluation containing all three required criterion codes.
   const completeEvaluation = {
     id: 'eval-1',
     applicationId: 'application-1',

@@ -8,6 +8,8 @@ export const APPLICATIONS_MESSAGES = {
   VERSION_NOT_FOUND_IN_HISTORY: 'Version not found in history',
   ACTIVE_APPLICATION_ALREADY_EXISTS:
     'An active application for this team and call already exists',
+  TEAM_ALREADY_HAS_ACTIVE_APPLICATION:
+    'Team already has an active application in another program. Complete or wait for the current participation to end before applying again.',
   APPLICATION_IS_MISSING_DOCUMENTS: 'Application is missing required documents',
   APPLICATION_ALREADY_DECIDED: 'Application is already decided',
   APPLICATION_DECISION_CHANGED_CONCURRENTLY:

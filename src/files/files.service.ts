@@ -167,11 +167,6 @@ export class FilesService {
     return this.createDownloadUrlForFile(file, disposition);
   }
 
-  /**
-   * Builds a read URL for an already-resolved file record without enforcing
-   * file ownership. Callers are responsible for authorizing access to the
-   * owning entity first (e.g. application document access checks).
-   */
   async createDownloadUrlForFile(
     file: {
       id: string;
